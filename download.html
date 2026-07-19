@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>TARYAM Cyber - تثبيت التطبيق</title>
+<meta name="theme-color" content="#00e5a0" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<link rel="icon" href="icons/favicon-32.png" />
+<link rel="manifest" href="manifest.json" />
+<style>
+  :root{
+    --bg:#090b0d;
+    --panel:#12161a;
+    --panel2:#181d22;
+    --border:#233029;
+    --text:#e8faf1;
+    --muted:#8aa39a;
+    --accent:#00e5a0;
+    --accent2:#00b380;
+    --gold:#fbbc04;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:radial-gradient(circle at 50% 0%, #0d2a20 0%, var(--bg) 60%);
+    color:var(--text);
+    font-family:"Segoe UI",Tahoma,"Cairo",system-ui,sans-serif;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+    padding:20px;
+  }
+  .card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:20px;
+    padding:36px 28px;
+    max-width:420px;
+    width:100%;
+    text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .logo{
+    width:88px;height:88px;border-radius:22px;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:flex;align-items:center;justify-content:center;
+    margin:0 auto 18px;
+    font-size:40px;
+    box-shadow:0 8px 24px rgba(0,229,160,.35);
+  }
+  h1{font-size:22px;margin:0 0 6px;}
+  p.sub{color:var(--muted);font-size:14px;margin:0 0 26px;line-height:1.7;}
+  .btn{
+    display:block;
+    width:100%;
+    padding:16px;
+    border:none;
+    border-radius:14px;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    color:#04140d;
+    font-size:17px;
+    font-weight:700;
+    text-decoration:none;
+    box-shadow:0 8px 24px rgba(0,229,160,.4);
+    transition:transform .15s;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  .btn:active{transform:scale(.97);}
+  .meta{
+    display:flex;
+    justify-content:space-between;
+    margin-top:20px;
+    font-size:12px;
+    color:var(--muted);
+    border-top:1px solid var(--border);
+    padding-top:16px;
+  }
+  .note{
+    margin-top:20px;
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:12px 14px;
+    font-size:12.5px;
+    color:var(--muted);
+    text-align:right;
+    line-height:1.8;
+  }
+  .note b{color:var(--gold);}
+  footer{
+    margin-top:22px;
+    font-size:12px;
+    color:var(--muted);
+  }
+  a.link{color:var(--accent2);text-decoration:none;}
+  .steps{
+    display:none;
+    text-align:right;
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:14px 16px;
+    margin-top:16px;
+    font-size:13px;
+    line-height:2;
+  }
+  .steps.show{display:block;}
+  .steps b{color:var(--accent);}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">🛡️</div>
+    <h1>TARYAM Cyber</h1>
+    <p class="sub">أدوات أمن سيبراني احترافية — ثبّت التطبيق على جهازك للوصول السريع مثل أي تطبيق عادي</p>
+
+    <button class="btn" id="installBtn">📲 تثبيت التطبيق</button>
+
+    <div class="meta">
+      <span>الحجم: أقل من 5 MB</span>
+      <span>Android / iPhone</span>
+    </div>
+
+    <div class="steps" id="iosSteps">
+      📱 <b>لأجهزة iPhone:</b><br>
+      1. اضغط زر <b>المشاركة</b> ⬆️ بالمتصفح (Safari)<br>
+      2. اختر <b>"إضافة إلى الشاشة الرئيسية"</b><br>
+      3. اضغط <b>"إضافة"</b> — وبكذا يصير التطبيق جاهز على جهازك 🎉
+    </div>
+
+    <div class="steps" id="androidSteps">
+      🤖 <b>لأجهزة أندرويد (إذا ما ظهر التثبيت تلقائي):</b><br>
+      1. اضغط قائمة المتصفح <b>⋮</b><br>
+      2. اختر <b>"تثبيت التطبيق"</b> أو <b>"إضافة إلى الشاشة الرئيسية"</b><br>
+      3. أكّد التثبيت 🎉
+    </div>
+
+    <div class="note">
+      ⚠️ <b>ملاحظة:</b> التطبيق يعمل مباشرة من المتصفح (PWA) بدون الحاجة لأي متجر تطبيقات — آمن 100%.
+    </div>
+
+    <footer>by عمران &middot; <a class="link" href="index.html">فتح التطبيق</a></footer>
+  </div>
+
+<script>
+  let deferredPrompt = null;
+  const installBtn = document.getElementById('installBtn');
+  const iosSteps = document.getElementById('iosSteps');
+  const androidSteps = document.getElementById('androidSteps');
+
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+  });
+
+  window.addEventListener('appinstalled', () => {
+    installBtn.textContent = '✅ تم التثبيت';
+    installBtn.disabled = true;
+  });
+
+  installBtn.addEventListener('click', async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        installBtn.textContent = '✅ تم التثبيت';
+      }
+      deferredPrompt = null;
+      return;
+    }
+    if (isIOS) {
+      iosSteps.classList.add('show');
+    } else {
+      androidSteps.classList.add('show');
+    }
+  });
+
+  if (navigator.standalone || window.matchMedia('(display-mode: standalone)').matches) {
+    installBtn.textContent = '✅ التطبيق مثبت بالفعل';
+    installBtn.disabled = true;
+  }
+</script>
+</body>
+</html>
