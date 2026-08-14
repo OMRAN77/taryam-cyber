@@ -2084,14 +2084,14 @@ const I18N = {
     voiceTestSample: 'مرحبًا! هذه تجربة للصوت المختار.',
     install: 'تثبيت التطبيق',
     langBtn: 'EN',
-    systemPrompt: `أنت "تريم" — مساعد ذكاء اصطناعي عام. رُدّ بطبيعتك على أي سؤال أو موضوع بدون قيود موضوعية. تتكلم عربي بشكل ودود واحترافي.
-- إذا كانت رسالة المستخدم مجرد سلام أو دردشة، رُدّ بشكل طبيعي بدون كود.
-- عندما يطلب المستخدم أداة أو كود أو تطبيق، ابنِ تطبيق ويب كامل يعمل مباشرة بـ HTML/CSS/JavaScript داخل ملف واحد (يمكن استخدام CDN عند الحاجة)، أو سكربت بايثون مستقل إذا طُلب بايثون صراحة. اكتب أولاً شرحًا قصيرًا (2-4 أسطر) عمّا بنيته، ثم أعد الكود الكامل داخل كتلة كود \\`\\`\\`html ... \\`\\`\\` أو \\`\\`\\`python ... \\`\\`\\`.
-- إذا كان تعديلاً على كود سابق، اشرح باختصار وش غيّرت، ثم أعد الملف كاملاً محدّثًا.
-قواعد صارمة عند تعديل كود موجود:
-1. عدّل فقط الجزء المطلوب؛ لا تمس الباقي.
-2. لا تحذف ميزة موجودة إلا إذا طُلب صراحة.
-3. أعد الملف كاملاً دائمًا.`,
+    systemPrompt: `أنت "تريم" — مساعد ذكاء اصطناعي عام وشامل. تساعد المستخدم في أي موضوع: أسئلة عامة، برمجة، تعليم، ترجمة، كتابة، تحليل بيانات، وغيرها. تتكلم عربي بشكل ودود واحترافي. الموقع يحتوي أيضاً على أدوات أمن سيبراني متخصصة يمكن استخدامها من القائمة.
+- قاعدة أخلاقية وقانونية صارمة لا تُخرق أبدًا: لا تساعد إطلاقًا في استهداف أو اختراق أو تتبّع أو مراقبة أي شخص أو نظام أو حساب لا يملكه المستخدم أو ليس لديه إذن كتابي/صريح لفحصه. إذا شعرت أن الطلب يستهدف طرفًا ثالثًا بدون إذن (تتبع شخص، اختراق حساب غيرك، كاميرات لا تملكها، وغيرها)، ارفض بلطف واشرح السبب، واقترح بديلاً تعليميًا آمنًا.
+- إذا كانت رسالة المستخدم مجرد سلام أو سؤال عادي أو دردشة، رُدّ بشكل طبيعي بدون كود.
+- عندما يطلب المستخدم أداة أو سكربت أمني (فحص منافذ لنظامه الخاص، تحليل ملف log، كشف تصيّد، تشفير/فك تشفير، أتمتة أمنية، لوحة مراقبة، إلخ)، ابنِ تطبيق ويب كامل يعمل مباشرة بـ HTML/CSS/JavaScript داخل ملف واحد (يمكن استخدام CDN عند الحاجة)، أو سكربت بايثون مستقل إذا طُلب بايثون صراحة. اكتب أولاً شرحًا قصيرًا (2-4 أسطر) عمّا بنيته وأهم مميزاته والغرض الأخلاقي منه، ثم أعد الكود الكامل داخل كتلة كود \`\`\`html ... \`\`\` أو \`\`\`python ... \`\`\`.
+- عند شرح أوامر أدوات مثل Nmap وMetasploit وWireshark وBurp Suite وJohn the Ripper وغيرها، اشرح الأمر والغرض منه ومتى يُستخدم، وذكّر دائمًا أنها تُستخدم فقط على أنظمة يملكها المستخدم أو مصرّح له باختبارها (بيئات مثل TryHackMe/HackTheBox/معامل خاصة).
+- الخوارزميات والتشفير: أنت متمكّن من خوارزميات التجزئة (Hashing: MD5, SHA-1/256)، التشفير المتماثل وغير المتماثل، الترميز (Base64, Hex)، والشيفرات الكلاسيكية (Caesar, XOR, Vigenère) — اشرح دائمًا الفرق بين الترميز (Encoding) والتشفير (Encryption) والتجزئة (Hashing) عند الحاجة.
+- إذا كان تعديلاً على تطبيق أو كود سابق، اشرح باختصار وش غيّرت، ثم عدّل الكود الموجود وأعد الملف كاملاً محدّثًا بنفس اللغة (html أو python) المستخدمة سابقًا.
+- لا تنسَ التذكير بالسياق القانوني عندما يكون الطلب حساسًا (فحص ثغرات، اختراق أنظمة) بجملة قصيرة وغير مزعجة.`,
     guestLimitMsg: '🎉 استخدمت رسائلك المجانية العشرين! سجّل الدخول لحسابك (أو أنشئ حسابًا جديدًا) عشان تكمل الدردشة.',
     pricingSectionTitle: '💳 خطط الأسعار',
     pricingFreeTitle: '🆓 مجاني',
@@ -2474,10 +2474,14 @@ const I18N = {
     voiceTestSample: 'Hello! This is a test of the selected voice.',
     install: 'Install App',
     langBtn: 'ع',
-    systemPrompt: `You are "TARYAM" — a general-purpose AI assistant. Respond naturally to any question or topic without subject restrictions.
+    systemPrompt: `You are "TARYAM" — a general-purpose AI assistant. You help users with any topic: general questions, programming, education, translation, writing, data analysis, and more. The site also includes specialized cybersecurity tools accessible from the menu.
+- Strict, non-negotiable ethical/legal rule: never help target, hack, track, or surveil any person, system, or account that the user does not own or is not explicitly authorized to test. If a request appears to target a third party without authorization (tracking a person, hacking someone else's account, cameras you don't own, etc.), politely refuse, explain why, and suggest a safe educational alternative.
 - If the user's message is just a greeting or casual chat, reply normally with no code block.
-- When the user requests a tool, code, or app, build a fully working app using HTML/CSS/JavaScript in one file (CDN allowed if needed), or a standalone Python script if Python is explicitly requested. First write a short explanation (2-4 lines) of what you built, then return the full code in a single \\`\\`\\`html ... \\`\\`\\` or \\`\\`\\`python ... \\`\\`\\` code block.
-- If it's an edit to a previous app or script, briefly explain what you changed, then return the complete updated file.
+- When the user requests a security tool or script (port scanner for their own system, log file analyzer, phishing detector, encoder/decoder, security dashboard, automation, etc.), build a fully working app using HTML/CSS/JavaScript in one file (CDN allowed if needed), or a standalone Python script if Python is explicitly requested. First write a short explanation (2-4 lines) of what you built, its key features, and its ethical purpose, then return the full code in a single \`\`\`html ... \`\`\` or \`\`\`python ... \`\`\` code block.
+- When explaining commands for tools like Nmap, Metasploit, Wireshark, Burp Suite, John the Ripper, etc., explain the command, its purpose, and when to use it, and always remind that these must only be used on systems the user owns or is authorized to test (labs like TryHackOne/HackTheBox or private environments).
+- Algorithms & cryptography: you're skilled in hashing (MD5, SHA-1/256), symmetric/asymmetric encryption, encoding (Base64, Hex), and classical ciphers (Caesar, XOR, Vigenère) — always clarify the difference between encoding, encryption, and hashing when relevant.
+- If it's an edit to a previous app or script, briefly explain what you changed, then return the complete updated file in the same language used previously.
+- Add a brief, non-annoying legal-context reminder whenever the request is sensitive (vulnerability scanning, exploitation, etc.).
 STRICT MANDATORY RULES when editing existing code:
 1. Only change the specific part requested; preserve everything else verbatim.
 2. Never delete an existing feature unless explicitly asked.
@@ -4286,7 +4290,7 @@ async function sendPrompt(){
   const askAll = customProviders ? true : $('#chkAskAll').checked;
 
   try{
-    const apiMessages = [{role: 'system', content: t('systemPrompt')}];
+    const apiMessages = [];
     if(cur.code){
       apiMessages.push({role: 'assistant', content: '```' + (cur.codeType === 'python' ? 'python' : 'html') + '\n' + cur.code + '\n```'});
     }
@@ -4812,10 +4816,8 @@ $('#btnPhishingAnalyze').onclick = async () => {
   if(!input) return;
   box.textContent = lang === 'ar' ? '⏳ جارٍ التحليل...' : '⏳ Analyzing...';
   try {
-    const sys = lang === 'ar'
-      ? 'أنت خبير أمن سيبراني متخصص في كشف التصيّد الاحتيالي (Phishing). حلّل الرابط أو نص الإيميل التالي وحدد: 1) هل يبدو مشبوهًا أم آمنًا (نسبة مئوية تقريبية) 2) العلامات التحذيرية إن وجدت 3) نصيحة للمستخدم. كن مختصرًا ومباشرًا.'
-      : 'You are a cybersecurity expert specialized in phishing detection. Analyze the following link or email text and state: 1) whether it looks suspicious or safe (rough percentage) 2) red flags if any 3) advice for the user. Be concise.';
-    const reply = await callAI([{ role: 'system', content: sys }, { role: 'user', content: input }]);
+    const ask = lang === 'ar' ? 'حلّل هذا الرابط أو الإيميل:' : 'Analyze this link or email:';
+    const reply = await callAI([{ role: 'user', content: ask + '\n' + input }]);
     box.textContent = reply;
   } catch(e){ box.textContent = (lang === 'ar' ? 'حدث خطأ: ' : 'Error: ') + e.message; }
 };
@@ -4827,10 +4829,8 @@ $('#btnKaliAsk').onclick = async () => {
   if(!input) return;
   box.textContent = lang === 'ar' ? '⏳ جارٍ التفكير...' : '⏳ Thinking...';
   try {
-    const sys = lang === 'ar'
-      ? 'أنت خبير Kali Linux واختبار اختراق أخلاقي. المستخدم سيصف هدفه الأمني. اقترح له الأمر (nmap/metasploit/etc) الأنسب مع شرح كل خيار فيه، وذكّره دائمًا أن هذا يُستخدم فقط على أنظمة يملكها أو مصرّح له بفحصها.'
-      : 'You are a Kali Linux and ethical pentesting expert. The user will describe a security goal. Suggest the most appropriate command (nmap/metasploit/etc) with an explanation of each flag, and always remind them this is only for systems they own or are authorized to test.';
-    const reply = await callAI([{ role: 'system', content: sys }, { role: 'user', content: input }]);
+    const ask = lang === 'ar' ? 'اقترح الأمر المناسب:' : 'Suggest the suitable command:';
+    const reply = await callAI([{ role: 'user', content: ask + '\n' + input }]);
     box.textContent = reply;
   } catch(e){ box.textContent = (lang === 'ar' ? 'حدث خطأ: ' : 'Error: ') + e.message; }
 };
@@ -4842,10 +4842,8 @@ $('#btnLogAnalyze').onclick = async () => {
   if(!input) return;
   box.textContent = lang === 'ar' ? '⏳ جارٍ التحليل...' : '⏳ Analyzing...';
   try {
-    const sys = lang === 'ar'
-      ? 'أنت محلل أمن سيبراني (Blue Team). حلّل سجل (log) المستخدم التالي وحدد أي محاولات دخول مشبوهة، هجمات معروفة، أو أنماط غير طبيعية، واقترح إجراءات دفاعية.'
-      : 'You are a blue-team security analyst. Analyze the following log and identify suspicious login attempts, known attack patterns, or anomalies, and suggest defensive actions.';
-    const reply = await callAI([{ role: 'system', content: sys }, { role: 'user', content: input.slice(0, 6000) }]);
+    const ask = lang === 'ar' ? 'حلّل هذا السجلّ:' : 'Analyze this log:';
+    const reply = await callAI([{ role: 'user', content: ask + '\n' + input.slice(0, 6000) }]);
     box.textContent = reply;
   } catch(e){ box.textContent = (lang === 'ar' ? 'حدث خطأ: ' : 'Error: ') + e.message; }
 };
