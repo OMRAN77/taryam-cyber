@@ -161,6 +161,27 @@
   html[dir="rtl"] .msg.user{border-bottom-right-radius:14px; border-bottom-left-radius:4px;}
   .msg.assistant{background:var(--assistant-bubble, var(--panel)); border:1px solid var(--border); align-self:flex-start; border-bottom-left-radius:4px; backdrop-filter:blur(8px);}
   html[dir="rtl"] .msg.assistant{border-bottom-left-radius:14px; border-bottom-right-radius:4px;}
+  /* Rendered-markdown chat messages */
+  .md h1,.md h2,.md h3,.md h4,.md h5,.md h6{margin:10px 0 6px; line-height:1.4; color:var(--accent2);}
+  .md h1{font-size:17px;} .md h2{font-size:16px;} .md h3{font-size:15px;} .md h4,.md h5,.md h6{font-size:14px;}
+  .md p{margin:6px 0;}
+  .md ul,.md ol{margin:6px 0; padding-inline-start:22px;}
+  .md li{margin:3px 0;}
+  .md strong{color:var(--accent, inherit); font-weight:800;}
+  .md code{background:rgba(127,127,127,.16); border-radius:5px; padding:1px 5px; font-family:monospace; font-size:12.5px; direction:ltr; unicode-bidi:embed;}
+  .md pre{background:rgba(0,0,0,.28); border:1px solid var(--border); border-radius:9px; padding:10px 12px; overflow-x:auto; margin:8px 0; direction:ltr; text-align:left;}
+  .md pre code{background:none; padding:0;}
+  .md hr{border:none; border-top:1px solid var(--border); margin:10px 0;}
+  .md blockquote{border-inline-start:3px solid var(--accent2); margin:6px 0; padding:2px 10px; opacity:.85;}
+  .md .md-tablewrap{overflow-x:auto; margin:8px 0;}
+  .md table{border-collapse:collapse; font-size:12.5px; min-width:60%;}
+  .md th,.md td{border:1px solid var(--border); padding:5px 9px; text-align:start;}
+  .md th{background:rgba(127,127,127,.14); font-weight:800;}
+  .md a{color:var(--accent2); word-break:break-all;}
+  .msg details.md-sources{margin-top:10px; border-top:1px dashed var(--border); padding-top:8px;}
+  .msg details.md-sources summary{cursor:pointer; font-size:12px; color:var(--muted); user-select:none;}
+  .msg details.md-sources .md-source{margin-top:10px; border:1px solid var(--border); border-radius:10px; padding:8px 12px;}
+  .msg details.md-sources .md-source-label{font-size:11px; font-weight:800; margin-bottom:4px;}
   .tts-word{transition:background-color .15s ease, color .15s ease; border-radius:4px;}
   .tts-word.active{background:var(--msg-accent, var(--accent2)); color:#08110f; padding:1px 2px; box-shadow:0 0 0 2px var(--msg-accent, var(--accent2));}
   #inputbar{padding:14px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:8px; position:relative;}
@@ -484,9 +505,13 @@
 
   <div id="chatcol">
     <div id="messages"></div>
-    <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); padding:0 14px 8px;">
+    <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); padding:0 14px 4px;">
       <input type="checkbox" id="chkAskAll" style="width:auto;">
       <span data-i18n="askAllLabel">اسأل كل المزوّدين معًا (مقارنة)</span>
+    </label>
+    <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); padding:0 14px 8px;">
+      <input type="checkbox" id="chkMerge" style="width:auto;">
+      <span data-i18n="mergeLabel">🧠 ادمج إجابات الجميع في جواب واحد قوي</span>
     </label>
     <div id="attachStrip"></div>
     <div id="inputbar">
@@ -1015,14 +1040,17 @@
     </div>
 
     <div class="secToolPanel" data-panel="vt" style="display:none;">
-      <p class="hint" data-i18n="toolVtDesc">افحص Hash ملف (MD5/SHA1/SHA256) أو رابط للتحقق من سمعته عبر أكثر من 70 محرك حماية (VirusTotal).</p>
+      <p class="hint" data-i18n="toolVtDesc">حلّل ملفًا (يُحسب بصمته داخل متصفحك دون رفعه) أو افحص Hash/رابط للتحقق من سمعته عبر أكثر من 70 محرك حماية (VirusTotal).</p>
       <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
         <select id="vtMode" style="flex:1; min-width:140px;">
+          <option value="file" data-i18n="vtModeFile">تحليل ملف (رفع)</option>
           <option value="hash" data-i18n="vtModeHash">فحص Hash ملف</option>
           <option value="url" data-i18n="vtModeUrl">فحص رابط</option>
         </select>
-        <input type="text" id="vtValue" placeholder="الصق الـ Hash أو الرابط هنا..." style="flex:2; min-width:180px;">
+        <input type="text" id="vtValue" placeholder="الصق الـ Hash أو الرابط هنا..." style="flex:2; min-width:180px; display:none;">
+        <input type="file" id="vtFile" style="flex:2; min-width:180px;">
       </div>
+      <p class="hint" id="vtFileNote" data-i18n="vtFileNote" style="font-size:12px; opacity:.75; margin:-2px 0 8px;">🔒 لا يُرفع الملف إلى أي خادم — تُحسب البصمة (SHA-256) محليًا في متصفحك ثم يُفحص الـ Hash فقط.</p>
       <button class="btn primary" id="btnVtRun" data-i18n="toolVtRun">فحص</button>
       <div id="vtResult" class="secToolAiResult"></div>
     </div>
@@ -2041,6 +2069,12 @@ const I18N = {
     fetchModelsFail: 'تعذّر جلب قائمة الموديلات، تأكد من إدخال مفتاح Claude صحيح أولاً.',
     fetchModelsEmpty: 'لم يتم العثور على أي موديلات متاحة لهذا المفتاح.',
     askAllLabel: 'اسأل كل المزوّدين معًا (مقارنة)',
+    mergeLabel: '🧠 ادمج إجابات الجميع في جواب واحد قوي',
+    mergedLabel: '🧠 الجواب المدمَج',
+    merging: '🧠 جارٍ دمج إجابات المزوّدين في جواب واحد قوي...',
+    mergeContributors: 'دُمِجت إجابات: ',
+    mergeFailedNote: '⚠️ لم يستجب (خطأ مؤقت): ',
+    mergeSourcesLabel: 'عرض إجابات المزوّدين الفردية',
     askAllProvidersLabel: 'المزوّدون المشمولون في "اسأل الكل"',
     includeOpenAI: 'OpenAI / OpenRouter',
     includeGemini: 'Google Gemini',
@@ -2152,9 +2186,10 @@ const I18N = {
     darkgptFieldHashedPassword: 'كلمة مرور مشفّرة', darkgptFieldIp: 'عنوان IP', darkgptFieldName: 'الاسم',
     darkgptFieldPhone: 'رقم الهاتف', darkgptFieldDomain: 'النطاق (Domain)', darkgptFieldAddress: 'العنوان', darkgptFieldVin: 'رقم الشاصي (VIN)',
     toolVtNav: 'فحص ملفات/روابط',
-    toolVtDesc: 'افحص Hash ملف (MD5/SHA1/SHA256) أو رابط للتحقق من سمعته عبر أكثر من 70 محرك حماية (VirusTotal).',
+    toolVtDesc: 'حلّل ملفًا (يُحسب بصمته داخل متصفحك دون رفعه) أو افحص Hash/رابط للتحقق من سمعته عبر أكثر من 70 محرك حماية (VirusTotal).',
     toolVtRun: 'فحص',
-    vtModeHash: 'فحص Hash ملف', vtModeUrl: 'فحص رابط',
+    vtModeFile: 'تحليل ملف (رفع)', vtModeHash: 'فحص Hash ملف', vtModeUrl: 'فحص رابط',
+    vtFileNote: '🔒 لا يُرفع الملف إلى أي خادم — تُحسب البصمة (SHA-256) محليًا في متصفحك ثم يُفحص الـ Hash فقط.',
     toolReconNav: 'استطلاع نطاق',
     toolReconDesc: 'استطلاع نطاق كامل: كل السبدومينات المكتشفة عبر سجلات الشهادات العامة + جميع سجلات DNS (A, AAAA, MX, TXT, NS, CNAME).',
     toolReconRun: 'استطلاع',
@@ -2283,9 +2318,10 @@ const I18N = {
     darkgptFieldHashedPassword: 'Hashed Password', darkgptFieldIp: 'IP Address', darkgptFieldName: 'Name',
     darkgptFieldPhone: 'Phone', darkgptFieldDomain: 'Domain', darkgptFieldAddress: 'Address', darkgptFieldVin: 'VIN',
     toolVtNav: 'File/URL Scan',
-    toolVtDesc: 'Check a file hash (MD5/SHA1/SHA256) or a URL against 70+ security engines (VirusTotal).',
+    toolVtDesc: 'Analyze a file (its fingerprint is computed in your browser without uploading it) or check a hash/URL against 70+ security engines (VirusTotal).',
     toolVtRun: 'Scan',
-    vtModeHash: 'Scan File Hash', vtModeUrl: 'Scan URL',
+    vtModeFile: 'Analyze File (upload)', vtModeHash: 'Scan File Hash', vtModeUrl: 'Scan URL',
+    vtFileNote: '🔒 The file is never uploaded to any server — its SHA-256 fingerprint is computed locally in your browser and only the hash is checked.',
     toolReconNav: 'Domain Recon',
     toolReconDesc: 'Full domain recon: all subdomains discovered via public certificate transparency logs + all DNS records (A, AAAA, MX, TXT, NS, CNAME).',
     toolReconRun: 'Recon',
@@ -2430,6 +2466,12 @@ const I18N = {
     perplexityApiKeyLabel: 'Perplexity API Key',
     perplexityModelLabel: 'Perplexity Model Name',
     askAllLabel: 'Ask all providers together (compare)',
+    mergeLabel: '🧠 Merge everyone\'s answers into one strong answer',
+    mergedLabel: '🧠 Merged answer',
+    merging: '🧠 Merging provider answers into one strong answer...',
+    mergeContributors: 'Merged from: ',
+    mergeFailedNote: '⚠️ Did not respond (temporary error): ',
+    mergeSourcesLabel: 'Show individual provider answers',
     attachTitle: 'Attach a file or image',
     emojiTitle: 'Emoji',
     projectsListTitle: 'Projects list',
@@ -2632,6 +2674,114 @@ function renderHistory(){
   });
 }
 
+// ===== Lightweight, safe Markdown renderer for chat messages =====
+// AI replies arrive as Markdown (###, **, tables, lists...). Rendering it
+// keeps answers organized instead of showing raw symbols. All input is
+// HTML-escaped first, so model output can never inject markup or scripts.
+function mdEscape(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function mdInline(s){
+  let out = mdEscape(s);
+  // Protect inline code spans from further formatting using private-use
+  // sentinel characters (\uE000/\uE001) that cannot appear in escaped text.
+  const codes = [];
+  out = out.replace(/`([^`\n]+)`/g, (_, c) => { codes.push(c); return '\uE000' + (codes.length - 1) + '\uE001'; });
+  out = out.replace(/\*\*([^*\n][^*]*?)\*\*/g, '<strong>$1</strong>');
+  out = out.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+  // Only http(s) links become anchors; everything else stays plain text.
+  out = out.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  out = out.replace(/\uE000(\d+)\uE001/g, (_, i) => '<code>' + codes[+i] + '</code>');
+  return out;
+}
+function mdLooksLike(text){
+  return /(^|\n)#{1,6}\s|\*\*[^*]|(^|\n)\s*[-*•]\s+\S|(^|\n)\s*\d+[.)]\s+\S|\|[^\n]*\|[^\n]*\n\s*\|?[\s:|-]*-{3,}|```|(^|\n)>\s/.test(text);
+}
+function mdToHtml(text){
+  const lines = String(text).replace(/\r\n?/g, '\n').split('\n');
+  const html = [];
+  let i = 0;
+  const isTableRow = l => /^\s*\|.*\|\s*$/.test(l) || (/\|/.test(l) && l.split('|').length >= 3);
+  const isTableSep = l => /^\s*\|?[\s:|-]+\|[\s:|-]+\|?\s*$/.test(l) && /-{3,}/.test(l);
+  while(i < lines.length){
+    const line = lines[i];
+    if(/^\s*$/.test(line)){ i++; continue; }
+    // Fenced code block
+    const fence = line.match(/^\s*```(\w*)\s*$/);
+    if(fence){
+      const buf = [];
+      i++;
+      while(i < lines.length && !/^\s*```\s*$/.test(lines[i])){ buf.push(lines[i]); i++; }
+      i++; // skip closing fence
+      html.push('<pre><code>' + mdEscape(buf.join('\n')) + '</code></pre>');
+      continue;
+    }
+    // Heading
+    const h = line.match(/^\s*(#{1,6})\s+(.*)$/);
+    if(h){ html.push('<h' + h[1].length + '>' + mdInline(h[2].replace(/\s*#+\s*$/, '')) + '</h' + h[1].length + '>'); i++; continue; }
+    // Horizontal rule
+    if(/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)){ html.push('<hr>'); i++; continue; }
+    // Table (header row + separator row)
+    if(isTableRow(line) && i + 1 < lines.length && isTableSep(lines[i + 1])){
+      const splitRow = l => l.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(c => c.trim());
+      const head = splitRow(line);
+      i += 2;
+      const rows = [];
+      while(i < lines.length && isTableRow(lines[i]) && !/^\s*$/.test(lines[i])){ rows.push(splitRow(lines[i])); i++; }
+      let tbl = '<div class="md-tablewrap"><table><thead><tr>' + head.map(c => '<th>' + mdInline(c) + '</th>').join('') + '</tr></thead><tbody>';
+      rows.forEach(r => { tbl += '<tr>' + r.map(c => '<td>' + mdInline(c) + '</td>').join('') + '</tr>'; });
+      tbl += '</tbody></table></div>';
+      html.push(tbl);
+      continue;
+    }
+    // Blockquote
+    if(/^\s*>\s?/.test(line)){
+      const buf = [];
+      while(i < lines.length && /^\s*>\s?/.test(lines[i])){ buf.push(lines[i].replace(/^\s*>\s?/, '')); i++; }
+      html.push('<blockquote>' + buf.map(mdInline).join('<br>') + '</blockquote>');
+      continue;
+    }
+    // Unordered list
+    if(/^\s*[-*•]\s+\S/.test(line)){
+      const buf = [];
+      while(i < lines.length && /^\s*[-*•]\s+\S/.test(lines[i])){ buf.push(lines[i].replace(/^\s*[-*•]\s+/, '')); i++; }
+      html.push('<ul>' + buf.map(item => '<li>' + mdInline(item) + '</li>').join('') + '</ul>');
+      continue;
+    }
+    // Ordered list
+    if(/^\s*\d+[.)]\s+\S/.test(line)){
+      const buf = [];
+      const start = (line.match(/^\s*(\d+)/) || [])[1] || '1';
+      while(i < lines.length && /^\s*\d+[.)]\s+\S/.test(lines[i])){ buf.push(lines[i].replace(/^\s*\d+[.)]\s+/, '')); i++; }
+      html.push('<ol start="' + start + '">' + buf.map(item => '<li>' + mdInline(item) + '</li>').join('') + '</ol>');
+      continue;
+    }
+    // Paragraph: consecutive plain lines
+    const buf = [line];
+    i++;
+    while(i < lines.length && !/^\s*$/.test(lines[i])
+      && !/^\s*(#{1,6}\s|```|>\s?|[-*•]\s+\S|\d+[.)]\s+\S)/.test(lines[i])
+      && !(isTableRow(lines[i]) && i + 1 < lines.length && isTableSep(lines[i + 1]))
+      && !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i])){
+      buf.push(lines[i]); i++;
+    }
+    html.push('<p>' + buf.map(mdInline).join('<br>') + '</p>');
+  }
+  return html.join('');
+}
+// Strip markdown symbols so text-to-speech reads clean sentences, not "hash hash".
+function mdStripForSpeech(text){
+  return String(text)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^\s*#{1,6}\s+/gm, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1$2')
+    .replace(/`([^`\n]+)`/g, '$1')
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1')
+    .replace(/^\s*(-{3,}|\*{3,}|_{3,})\s*$/gm, '')
+    .replace(/\|/g, ' ');
+}
+
 function renderMessages(keepScroll){
   const prevScrollTop = keepScroll ? messagesEl.scrollTop : null;
   messagesEl.innerHTML = '';
@@ -2658,12 +2808,46 @@ function renderMessages(keepScroll){
     const textDiv = document.createElement('div');
     if(pColor) textDiv.style.setProperty('--msg-accent', pColor);
     let msgWordEls = null;
-    if(m.role !== 'user' && m.content){
+    if(m.role !== 'user' && m.content && mdLooksLike(m.content)){
+      // Markdown reply: render it formatted (headings, lists, tables...)
+      // instead of showing raw ### / ** symbols. No word-level TTS highlight
+      // in this mode, but the speak button still works on the plain text.
+      textDiv.className = 'md';
+      textDiv.innerHTML = mdToHtml(m.content);
+    } else if(m.role !== 'user' && m.content){
       msgWordEls = buildSpokenWordSpans(textDiv, m.content);
     } else {
       textDiv.textContent = m.content;
     }
     div.appendChild(textDiv);
+    // Merged-answer messages carry the individual provider answers: show them
+    // in a collapsed section so the chat stays clean but nothing is lost.
+    if(m.sources && m.sources.length){
+      const det = document.createElement('details');
+      det.className = 'md-sources';
+      const sum = document.createElement('summary');
+      sum.textContent = '📚 ' + t('mergeSourcesLabel') + ' (' + m.sources.length + ')';
+      det.appendChild(sum);
+      m.sources.forEach(src => {
+        const box = document.createElement('div');
+        box.className = 'md-source';
+        const lbl = document.createElement('div');
+        lbl.className = 'md-source-label';
+        lbl.style.color = getProviderColors()[src.label] || 'var(--accent2)';
+        lbl.textContent = src.label;
+        box.appendChild(lbl);
+        const body = document.createElement('div');
+        if(mdLooksLike(src.text)){
+          body.className = 'md';
+          body.innerHTML = mdToHtml(src.text);
+        } else {
+          body.textContent = src.text;
+        }
+        box.appendChild(body);
+        det.appendChild(box);
+      });
+      div.appendChild(det);
+    }
     if(m.attachments && m.attachments.length){
       const wrap = document.createElement('div');
       wrap.className = 'msg-attachments';
@@ -2701,7 +2885,7 @@ function renderMessages(keepScroll){
         }
         speakBtn._speaking = true;
         speakBtn.textContent = t('stopSpeakBtn');
-        speakSmart(m.content, null, () => { speakBtn.textContent = t('speakBtn'); speakBtn._speaking = false; }, true, msgWordEls);
+        speakSmart(mdStripForSpeech(m.content), null, () => { speakBtn.textContent = t('speakBtn'); speakBtn._speaking = false; }, true, msgWordEls);
       };
       div.appendChild(speakBtn);
     }
@@ -3940,6 +4124,19 @@ async function callAI(messages){
 }
 
 $('#btnSend').onclick = sendPrompt;
+// Both chat toggles persist across visits. Merge defaults ON, so checking
+// "ask all" gives one strong merged answer out of the box; checking "merge"
+// also turns on "ask all" since merging needs multiple providers.
+$('#chkAskAll').checked = localStorage.getItem('aiapp_askall') === 'true';
+$('#chkMerge').checked = localStorage.getItem('aiapp_merge') !== 'false';
+$('#chkMerge').addEventListener('change', () => {
+  if($('#chkMerge').checked) $('#chkAskAll').checked = true;
+  localStorage.setItem('aiapp_merge', $('#chkMerge').checked ? 'true' : 'false');
+  localStorage.setItem('aiapp_askall', $('#chkAskAll').checked ? 'true' : 'false');
+});
+$('#chkAskAll').addEventListener('change', () => {
+  localStorage.setItem('aiapp_askall', $('#chkAskAll').checked ? 'true' : 'false');
+});
 $('#prompt').addEventListener('keydown', e => {
   if(e.key === 'Enter' && !e.shiftKey){
     e.preventDefault();
@@ -4288,13 +4485,24 @@ async function sendPrompt(){
   // "ask all". If nothing is pinned, fall back to the ask-all checkbox.
   const customProviders = (cur.continueProviders && cur.continueProviders.length) ? cur.continueProviders.slice() : null;
   const askAll = customProviders ? true : $('#chkAskAll').checked;
+  // Merge mode (default on) fuses every provider's reply into one strong
+  // answer; it only applies when asking multiple providers.
+  const mergeMode = askAll && $('#chkMerge').checked;
 
   try{
     const apiMessages = [];
     if(cur.code){
       apiMessages.push({role: 'assistant', content: '```' + (cur.codeType === 'python' ? 'python' : 'html') + '\n' + cur.code + '\n```'});
     }
-    cur.messages.filter(m => !m.providerLabel).forEach(m => apiMessages.push({role: m.role, content: (m.apiText !== undefined ? m.apiText : m.content), images: m.apiImages}));
+    // Keep the conversation context strong across turns: include normal
+    // assistant replies AND merged answers in the history sent to providers.
+    // Only the per-provider "ask all" compare replies are excluded (sending 9
+    // near-duplicate answers each turn would bloat and confuse the context).
+    cur.messages.filter(m => !m.askAllReply).forEach(m => {
+      const content = (m.apiText !== undefined ? m.apiText : m.content);
+      if(!content && !(m.apiImages && m.apiImages.length)) return; // some providers reject empty messages
+      apiMessages.push({role: m.role, content, images: m.apiImages});
+    });
 
     if(askAll){
       // All 9 providers now run server-side with the owner's keys, except
@@ -4332,22 +4540,102 @@ async function sendPrompt(){
       const results = await Promise.allSettled(
         providers.map(p => callProviderAI(p.key, apiMessages))
       );
-      let autoApplied = false;
+
+      // Collect the providers that answered successfully / failed.
+      const good = [];
+      const failed = [];
       results.forEach((result, i) => {
-        const label = providers[i].label;
-        if(result.status === 'fulfilled'){
-          const { code, explanation } = extractReply(result.value);
-          const msg = {role: 'assistant', content: explanation || (code ? t('buildSuccess') : ''), providerLabel: label, askAllReply: true, code};
-          if(code && !autoApplied){
-            cur.code = code;
-            msg.autoApplied = true;
-            autoApplied = true;
-          }
-          cur.messages.push(msg);
+        if(result.status === 'fulfilled' && result.value && String(result.value).trim()){
+          good.push({ label: providers[i].label, key: providers[i].key, text: String(result.value) });
         } else {
-          cur.messages.push({role: 'assistant', content: '⚠️ ' + label + ': ' + result.reason.message, providerLabel: label, askAllReply: true});
+          failed.push(providers[i].label);
         }
       });
+
+      if(mergeMode && good.length >= 2){
+        // === Merge mode: fuse every provider's answer into ONE strong answer ===
+        thinkingDiv.textContent = t('merging');
+        const userQuestion = apiText || text;
+        const answersBlock = good.map((g, i) => `### ${lang === 'ar' ? 'إجابة' : 'Answer'} ${i + 1} — ${g.label}\n${g.text}`).join('\n\n');
+        const synthInstruction =
+          'أنت خبير مُركِّب للإجابات (answer synthesizer). فيما يلي سؤال المستخدم، ثم عدة إجابات من نماذج ذكاء اصطناعي مختلفة على نفس السؤال. '
+          + 'مهمتك: دمجها في إجابة واحدة قوية ومتكاملة ودقيقة تتفوّق على كل إجابة على حدة. '
+          + 'ادمج أفضل ما في كل إجابة، احذف التكرار، صحّح الأخطاء، وحُلّ التناقضات (رجّح ما تتفق عليه الأغلبية أو ما هو أدق تقنيًا). '
+          + 'لا تذكر أسماء النماذج ولا تقل "الإجابة الأولى/الثانية"، ولا تقارن بينها — قدّم إجابة نهائية واحدة مباشرة ومنظّمة. '
+          + 'أجب بنفس لغة سؤال المستخدم. إن كانت الإجابات تتضمّن كودًا، أخرج نسخة واحدة مُحسّنة داخل كتلة كود واحدة.\n\n'
+          + 'You are an expert answer synthesizer. Merge the following AI answers into a single, strong, comprehensive and accurate final answer that is better than any individual one. '
+          + 'Combine the best of each, remove redundancy, fix errors, resolve contradictions, never mention the model names or compare them, and reply in the same language as the user\'s question. If the answers contain code, output one improved consolidated code block.\n\n'
+          + '===== ' + (lang === 'ar' ? 'سؤال المستخدم' : "User's question") + ' =====\n' + userQuestion
+          + '\n\n===== ' + (lang === 'ar' ? 'الإجابات المطلوب دمجها' : 'Answers to merge') + ' =====\n' + answersBlock;
+
+        // Pick a capable synthesizer among the providers that actually answered
+        // (so the merge step itself won't fail on a missing key).
+        const preferOrder = ['claude', 'openai', 'openrouter', 'gemini', 'deepseek', 'mistral', 'groq', 'cohere', 'perplexity'];
+        const goodKeys = good.map(g => g.key);
+        const synthKey = preferOrder.find(k => goodKeys.includes(k)) || good[0].key;
+
+        // Give the synthesizer the full conversation history (minus the last
+        // user turn, which is embedded in the instruction) so follow-up
+        // questions produce coherent, context-aware merged answers.
+        const synthMessages = apiMessages.slice(0, -1).concat([{ role: 'user', content: synthInstruction }]);
+        let merged = null;
+        try{
+          merged = await callProviderAI(synthKey, synthMessages);
+        }catch(e){ merged = null; }
+
+        if(merged && String(merged).trim()){
+          const { code, explanation } = extractReply(String(merged));
+          if(code) cur.code = code;
+          const contributors = good.map(g => g.label).join('، ');
+          let note = '\n\n— ' + t('mergeContributors') + contributors + ' (' + good.length + ')';
+          if(failed.length) note += '\n' + t('mergeFailedNote') + failed.join('، ');
+          cur.messages.push({
+            role: 'assistant',
+            content: (explanation || (code ? t('buildSuccess') : '')) + note,
+            code,
+            providerLabel: t('mergedLabel'),
+            autoApplied: !!code,
+            // Cap stored source size so long answers can't blow the localStorage quota.
+            sources: good.map(g => ({ label: g.label, text: g.text.slice(0, 15000) })),
+          });
+        } else {
+          // Synthesis failed — fall back to showing the individual answers.
+          good.forEach(g => {
+            const { code, explanation } = extractReply(g.text);
+            cur.messages.push({role: 'assistant', content: explanation || (code ? t('buildSuccess') : ''), providerLabel: g.label, askAllReply: true, code});
+          });
+        }
+      } else if(mergeMode && good.length === 1){
+        // Only one provider answered — nothing to merge; show it directly
+        // with a compact note about who failed (no giant error messages).
+        const g = good[0];
+        const { code, explanation } = extractReply(g.text);
+        if(code) cur.code = code;
+        let content = explanation || (code ? t('buildSuccess') : '');
+        if(failed.length) content += '\n\n— ' + t('mergeFailedNote') + failed.join('، ');
+        cur.messages.push({role: 'assistant', content, code, providerLabel: g.label, autoApplied: !!code});
+      } else if(mergeMode){
+        // Every provider failed.
+        cur.messages.push({role: 'assistant', content: '⚠️ ' + t('mergeFailedNote') + failed.join('، ')});
+      } else {
+        // === Compare mode (or only one provider answered): one message each ===
+        let autoApplied = false;
+        results.forEach((result, i) => {
+          const label = providers[i].label;
+          if(result.status === 'fulfilled'){
+            const { code, explanation } = extractReply(result.value);
+            const msg = {role: 'assistant', content: explanation || (code ? t('buildSuccess') : ''), providerLabel: label, askAllReply: true, code};
+            if(code && !autoApplied){
+              cur.code = code;
+              msg.autoApplied = true;
+              autoApplied = true;
+            }
+            cur.messages.push(msg);
+          } else {
+            cur.messages.push({role: 'assistant', content: '⚠️ ' + label + ': ' + result.reason.message, providerLabel: label, askAllReply: true});
+          }
+        });
+      }
     } else {
       const reply = await callAI(apiMessages);
       const { code, explanation } = extractReply(reply);
@@ -4368,7 +4656,7 @@ async function sendPrompt(){
         const assistantDivs = messagesEl.querySelectorAll('.msg.assistant');
         const lastDiv = assistantDivs[assistantDivs.length - 1];
         const wordEls = lastDiv ? Array.from(lastDiv.querySelectorAll('.tts-word')) : null;
-        speakSmart(lastMsg.content, null, null, false, wordEls);
+        speakSmart(mdStripForSpeech(lastMsg.content), null, null, false, wordEls);
       }
     }
     // On mobile, once code is generated, auto-open the preview drawer so the
@@ -4943,16 +5231,72 @@ $('#btnDarkgptSearch').onclick = async () => {
   } catch(e){ box.textContent = (lang === 'ar' ? 'حدث خطأ: ' : 'Error: ') + e.message; }
 };
 
+// Toggle between text input (hash/url) and file picker (file mode).
+function vtSyncMode(){
+  const mode = $('#vtMode').value;
+  const isFile = mode === 'file';
+  $('#vtValue').style.display = isFile ? 'none' : '';
+  $('#vtFile').style.display = isFile ? '' : 'none';
+  $('#vtFileNote').style.display = isFile ? '' : 'none';
+}
+$('#vtMode').addEventListener('change', vtSyncMode);
+vtSyncMode();
+
+// Compute a file's SHA-256 fingerprint entirely in the browser (the file
+// bytes never leave the device — only the resulting hash is sent for lookup).
+async function vtHashFile(file){
+  const buf = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function vtFormatBytes(n){
+  if(!n && n !== 0) return '';
+  const units = ['B','KB','MB','GB'];
+  let i = 0, v = n;
+  while(v >= 1024 && i < units.length - 1){ v /= 1024; i++; }
+  return (i === 0 ? v : v.toFixed(1)) + ' ' + units[i];
+}
+
 $('#btnVtRun').onclick = async () => {
   const mode = $('#vtMode').value;
-  const value = $('#vtValue').value.trim();
   const box = $('#vtResult');
-  if(!value) return;
-  box.textContent = lang === 'ar' ? '⏳ جارٍ الفحص...' : '⏳ Scanning...';
+  let value;
+  let filePrefix = '';
+
+  if(mode === 'file'){
+    const file = ($('#vtFile').files || [])[0];
+    if(!file){
+      box.textContent = lang === 'ar' ? '⚠️ اختر ملفًا أولًا.' : '⚠️ Select a file first.';
+      return;
+    }
+    if(!(window.crypto && crypto.subtle)){
+      box.textContent = lang === 'ar'
+        ? '⚠️ حساب البصمة محليًا يتطلب اتصالًا آمنًا (HTTPS).'
+        : '⚠️ Local fingerprinting requires a secure (HTTPS) connection.';
+      return;
+    }
+    box.textContent = lang === 'ar' ? '⏳ جارٍ حساب بصمة الملف محليًا...' : '⏳ Computing file fingerprint locally...';
+    try {
+      value = await vtHashFile(file);
+    } catch(e){
+      box.textContent = (lang === 'ar' ? 'تعذّر حساب البصمة: ' : 'Could not compute fingerprint: ') + e.message;
+      return;
+    }
+    filePrefix = (lang === 'ar'
+      ? `📄 الملف: ${file.name}\n📦 الحجم: ${vtFormatBytes(file.size)}${file.type ? '\n🏷️ النوع: ' + file.type : ''}\n🔑 SHA-256: ${value}\n\n`
+      : `📄 File: ${file.name}\n📦 Size: ${vtFormatBytes(file.size)}${file.type ? '\n🏷️ Type: ' + file.type : ''}\n🔑 SHA-256: ${value}\n\n`);
+  } else {
+    value = $('#vtValue').value.trim();
+    if(!value) return;
+  }
+
+  box.textContent = filePrefix + (lang === 'ar' ? '⏳ جارٍ الفحص...' : '⏳ Scanning...');
   try {
+    // File mode reuses the hash lookup (the server only ever receives the hash).
     const res = await fetch('/api/virustotal', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode, value, guestId: window.getGuestId() })
+      body: JSON.stringify({ mode: mode === 'file' ? 'hash' : mode, value, guestId: window.getGuestId() })
     });
     const data = await res.json();
     if(data.notConfigured){
@@ -4963,7 +5307,12 @@ $('#btnVtRun').onclick = async () => {
     if(data.error){ box.textContent = '⚠️ ' + data.error; return; }
     if(data.pending){ box.textContent = '⏳ ' + data.message; return; }
     if(data.verdict === 'not_found'){
-      box.textContent = (lang === 'ar' ? 'ℹ️ ' : 'ℹ️ ') + data.message + (typeof data.remaining === 'number' ? (lang === 'ar' ? `\n(بقي لك ${data.remaining} فحوصات اليوم)` : `\n(${data.remaining} scans left today)`) : '');
+      const notFoundMsg = mode === 'file'
+        ? (lang === 'ar'
+            ? 'ℹ️ لم يُعثر على هذا الملف في قاعدة بيانات VirusTotal (لم يُفحص من قبل). هذا لا يعني أنه آمن بالضرورة.'
+            : 'ℹ️ This file was not found in the VirusTotal database (never scanned before). This does not necessarily mean it is safe.')
+        : ((lang === 'ar' ? 'ℹ️ ' : 'ℹ️ ') + data.message);
+      box.textContent = filePrefix + notFoundMsg + (typeof data.remaining === 'number' ? (lang === 'ar' ? `\n\n(بقي لك ${data.remaining} فحوصات اليوم)` : `\n\n(${data.remaining} scans left today)`) : '');
       return;
     }
     const verdictIcon = data.verdict === 'malicious' ? '🚨' : data.verdict === 'suspicious' ? '⚠️' : data.verdict === 'clean' ? '✅' : 'ℹ️';
@@ -4973,7 +5322,7 @@ $('#btnVtRun').onclick = async () => {
     const statsLine = lang === 'ar'
       ? `خبيث: ${s.malicious||0} | مشبوه: ${s.suspicious||0} | آمن: ${s.harmless||0} | غير مكتشف: ${s.undetected||0}`
       : `Malicious: ${s.malicious||0} | Suspicious: ${s.suspicious||0} | Harmless: ${s.harmless||0} | Undetected: ${s.undetected||0}`;
-    box.textContent = (lang === 'ar'
+    box.textContent = filePrefix + (lang === 'ar'
       ? `${verdictIcon} النتيجة: ${verdictLabelAr}\n${statsLine}`
       : `${verdictIcon} Verdict: ${verdictLabelEn}\n${statsLine}`)
       + (typeof data.remaining === 'number' ? (lang === 'ar' ? `\n\n(بقي لك ${data.remaining} فحوصات اليوم)` : `\n\n(${data.remaining} scans left today)`) : '');

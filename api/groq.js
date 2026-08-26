@@ -44,20 +44,49 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const upstream = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const callGroq = (useModel) => fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + apiKey,
       },
       body: JSON.stringify({
-        model: model || 'llama-3.3-70b-versatile',
+        model: useModel,
         messages,
         temperature: 0.7,
       }),
     });
 
-    const data = await upstream.text();
+    let upstream = await callGroq(model || 'llama-3.3-70b-versatile');
+    let data = await upstream.text();
+
+    // Groq decommissions models over time (model_not_found 404). Instead of
+    // failing, auto-discover a currently-available chat model and retry once.
+    if (upstream.status === 404 && /model_not_found|does not exist/i.test(data)) {
+      try {
+        const listRes = await fetch('https://api.groq.com/openai/v1/models', {
+          headers: { Authorization: 'Bearer ' + apiKey },
+        });
+        if (listRes.ok) {
+          const list = await listRes.json();
+          const ids = ((list && list.data) || []).map((m) => m.id)
+            .filter((id) => !/whisper|tts|guard|embed/i.test(id));
+          const fallback =
+            ids.find((id) => /llama.*versatile/i.test(id)) ||
+            ids.find((id) => /llama.*instant/i.test(id)) ||
+            ids.find((id) => /llama/i.test(id)) ||
+            ids.find((id) => /qwen|mixtral|gemma|deepseek|gpt/i.test(id)) ||
+            ids[0];
+          if (fallback) {
+            upstream = await callGroq(fallback);
+            data = await upstream.text();
+          }
+        }
+      } catch (e) {
+        // keep the original 404 response
+      }
+    }
+
     res.status(upstream.status).setHeader('Content-Type', 'application/json').send(data);
   } catch (e) {
     res.status(500).json({ error: 'Proxy error: ' + (e && e.message ? e.message : String(e)) });
