@@ -484,9 +484,13 @@
 
   <div id="chatcol">
     <div id="messages"></div>
-    <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); padding:0 14px 8px;">
+    <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); padding:0 14px 4px;">
       <input type="checkbox" id="chkAskAll" style="width:auto;">
       <span data-i18n="askAllLabel">اسأل كل المزوّدين معًا (مقارنة)</span>
+    </label>
+    <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); padding:0 14px 8px;">
+      <input type="checkbox" id="chkMerge" style="width:auto;">
+      <span data-i18n="mergeLabel">🧠 ادمج إجابات الجميع في جواب واحد قوي</span>
     </label>
     <div id="attachStrip"></div>
     <div id="inputbar">
@@ -2044,6 +2048,10 @@ const I18N = {
     fetchModelsFail: 'تعذّر جلب قائمة الموديلات، تأكد من إدخال مفتاح Claude صحيح أولاً.',
     fetchModelsEmpty: 'لم يتم العثور على أي موديلات متاحة لهذا المفتاح.',
     askAllLabel: 'اسأل كل المزوّدين معًا (مقارنة)',
+    mergeLabel: '🧠 ادمج إجابات الجميع في جواب واحد قوي',
+    mergedLabel: '🧠 الجواب المدمَج',
+    merging: '🧠 جارٍ دمج إجابات المزوّدين في جواب واحد قوي...',
+    mergeContributors: 'دُمِجت إجابات: ',
     askAllProvidersLabel: 'المزوّدون المشمولون في "اسأل الكل"',
     includeOpenAI: 'OpenAI / OpenRouter',
     includeGemini: 'Google Gemini',
@@ -2435,6 +2443,10 @@ const I18N = {
     perplexityApiKeyLabel: 'Perplexity API Key',
     perplexityModelLabel: 'Perplexity Model Name',
     askAllLabel: 'Ask all providers together (compare)',
+    mergeLabel: '🧠 Merge everyone\'s answers into one strong answer',
+    mergedLabel: '🧠 Merged answer',
+    merging: '🧠 Merging provider answers into one strong answer...',
+    mergeContributors: 'Merged from: ',
     attachTitle: 'Attach a file or image',
     emojiTitle: 'Emoji',
     projectsListTitle: 'Projects list',
@@ -3945,6 +3957,10 @@ async function callAI(messages){
 }
 
 $('#btnSend').onclick = sendPrompt;
+// Merge mode requires asking every provider, so keep the two toggles coherent:
+// checking "merge" turns on "ask all"; turning off "ask all" turns off "merge".
+$('#chkMerge').addEventListener('change', () => { if($('#chkMerge').checked) $('#chkAskAll').checked = true; });
+$('#chkAskAll').addEventListener('change', () => { if(!$('#chkAskAll').checked) $('#chkMerge').checked = false; });
 $('#prompt').addEventListener('keydown', e => {
   if(e.key === 'Enter' && !e.shiftKey){
     e.preventDefault();
@@ -4292,14 +4308,25 @@ async function sendPrompt(){
   // chatting with a custom subset of providers without needing to re-check
   // "ask all". If nothing is pinned, fall back to the ask-all checkbox.
   const customProviders = (cur.continueProviders && cur.continueProviders.length) ? cur.continueProviders.slice() : null;
-  const askAll = customProviders ? true : $('#chkAskAll').checked;
+  // Merge mode always asks every provider, then fuses their replies into one
+  // strong answer — so it implies "ask all".
+  const mergeMode = $('#chkMerge').checked;
+  const askAll = customProviders ? true : ($('#chkAskAll').checked || mergeMode);
 
   try{
     const apiMessages = [];
     if(cur.code){
       apiMessages.push({role: 'assistant', content: '```' + (cur.codeType === 'python' ? 'python' : 'html') + '\n' + cur.code + '\n```'});
     }
-    cur.messages.filter(m => !m.providerLabel).forEach(m => apiMessages.push({role: m.role, content: (m.apiText !== undefined ? m.apiText : m.content), images: m.apiImages}));
+    // Keep the conversation context strong across turns: include normal
+    // assistant replies AND merged answers in the history sent to providers.
+    // Only the per-provider "ask all" compare replies are excluded (sending 9
+    // near-duplicate answers each turn would bloat and confuse the context).
+    cur.messages.filter(m => !m.askAllReply).forEach(m => {
+      const content = (m.apiText !== undefined ? m.apiText : m.content);
+      if(!content && !(m.apiImages && m.apiImages.length)) return; // some providers reject empty messages
+      apiMessages.push({role: m.role, content, images: m.apiImages});
+    });
 
     if(askAll){
       // All 9 providers now run server-side with the owner's keys, except
@@ -4337,22 +4364,80 @@ async function sendPrompt(){
       const results = await Promise.allSettled(
         providers.map(p => callProviderAI(p.key, apiMessages))
       );
-      let autoApplied = false;
+
+      // Collect the providers that answered successfully.
+      const good = [];
       results.forEach((result, i) => {
-        const label = providers[i].label;
-        if(result.status === 'fulfilled'){
-          const { code, explanation } = extractReply(result.value);
-          const msg = {role: 'assistant', content: explanation || (code ? t('buildSuccess') : ''), providerLabel: label, askAllReply: true, code};
-          if(code && !autoApplied){
-            cur.code = code;
-            msg.autoApplied = true;
-            autoApplied = true;
-          }
-          cur.messages.push(msg);
-        } else {
-          cur.messages.push({role: 'assistant', content: '⚠️ ' + label + ': ' + result.reason.message, providerLabel: label, askAllReply: true});
+        if(result.status === 'fulfilled' && result.value && String(result.value).trim()){
+          good.push({ label: providers[i].label, key: providers[i].key, text: String(result.value) });
         }
       });
+
+      if(mergeMode && good.length >= 2){
+        // === Merge mode: fuse every provider's answer into ONE strong answer ===
+        thinkingDiv.textContent = t('merging');
+        const userQuestion = apiText || text;
+        const answersBlock = good.map((g, i) => `### ${lang === 'ar' ? 'إجابة' : 'Answer'} ${i + 1} — ${g.label}\n${g.text}`).join('\n\n');
+        const synthInstruction =
+          'أنت خبير مُركِّب للإجابات (answer synthesizer). فيما يلي سؤال المستخدم، ثم عدة إجابات من نماذج ذكاء اصطناعي مختلفة على نفس السؤال. '
+          + 'مهمتك: دمجها في إجابة واحدة قوية ومتكاملة ودقيقة تتفوّق على كل إجابة على حدة. '
+          + 'ادمج أفضل ما في كل إجابة، احذف التكرار، صحّح الأخطاء، وحُلّ التناقضات (رجّح ما تتفق عليه الأغلبية أو ما هو أدق تقنيًا). '
+          + 'لا تذكر أسماء النماذج ولا تقل "الإجابة الأولى/الثانية"، ولا تقارن بينها — قدّم إجابة نهائية واحدة مباشرة ومنظّمة. '
+          + 'أجب بنفس لغة سؤال المستخدم. إن كانت الإجابات تتضمّن كودًا، أخرج نسخة واحدة مُحسّنة داخل كتلة كود واحدة.\n\n'
+          + 'You are an expert answer synthesizer. Merge the following AI answers into a single, strong, comprehensive and accurate final answer that is better than any individual one. '
+          + 'Combine the best of each, remove redundancy, fix errors, resolve contradictions, never mention the model names or compare them, and reply in the same language as the user\'s question. If the answers contain code, output one improved consolidated code block.\n\n'
+          + '===== ' + (lang === 'ar' ? 'سؤال المستخدم' : "User's question") + ' =====\n' + userQuestion
+          + '\n\n===== ' + (lang === 'ar' ? 'الإجابات المطلوب دمجها' : 'Answers to merge') + ' =====\n' + answersBlock;
+
+        // Pick a capable synthesizer among the providers that actually answered
+        // (so the merge step itself won't fail on a missing key).
+        const preferOrder = ['claude', 'openai', 'openrouter', 'gemini', 'deepseek', 'mistral', 'groq', 'cohere', 'perplexity'];
+        const goodKeys = good.map(g => g.key);
+        const synthKey = preferOrder.find(k => goodKeys.includes(k)) || good[0].key;
+
+        let merged = null;
+        try{
+          merged = await callProviderAI(synthKey, [{ role: 'user', content: synthInstruction }]);
+        }catch(e){ merged = null; }
+
+        if(merged && String(merged).trim()){
+          const { code, explanation } = extractReply(String(merged));
+          if(code) cur.code = code;
+          const contributors = good.map(g => g.label).join('، ');
+          const note = '\n\n— ' + t('mergeContributors') + contributors + ' (' + good.length + ')';
+          cur.messages.push({
+            role: 'assistant',
+            content: (explanation || (code ? t('buildSuccess') : '')) + note,
+            code,
+            providerLabel: t('mergedLabel'),
+            autoApplied: !!code,
+          });
+        } else {
+          // Synthesis failed — fall back to showing the individual answers.
+          good.forEach(g => {
+            const { code, explanation } = extractReply(g.text);
+            cur.messages.push({role: 'assistant', content: explanation || (code ? t('buildSuccess') : ''), providerLabel: g.label, askAllReply: true, code});
+          });
+        }
+      } else {
+        // === Compare mode (or only one provider answered): one message each ===
+        let autoApplied = false;
+        results.forEach((result, i) => {
+          const label = providers[i].label;
+          if(result.status === 'fulfilled'){
+            const { code, explanation } = extractReply(result.value);
+            const msg = {role: 'assistant', content: explanation || (code ? t('buildSuccess') : ''), providerLabel: label, askAllReply: true, code};
+            if(code && !autoApplied){
+              cur.code = code;
+              msg.autoApplied = true;
+              autoApplied = true;
+            }
+            cur.messages.push(msg);
+          } else {
+            cur.messages.push({role: 'assistant', content: '⚠️ ' + label + ': ' + result.reason.message, providerLabel: label, askAllReply: true});
+          }
+        });
+      }
     } else {
       const reply = await callAI(apiMessages);
       const { code, explanation } = extractReply(reply);
