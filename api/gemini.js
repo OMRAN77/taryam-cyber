@@ -50,11 +50,19 @@ module.exports = async (req, res) => {
     const reqBody = { contents };
     if (systemInstruction) reqBody.systemInstruction = systemInstruction;
 
-    const upstream = await fetch(endpoint, {
+    const callGemini = () => fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(reqBody),
     });
+
+    let upstream = await callGemini();
+    // Gemini's free tier throws transient 503 "high demand" errors; one short
+    // retry resolves most of them instead of surfacing an error to the user.
+    if (upstream.status === 503 || upstream.status === 529) {
+      await new Promise((r) => setTimeout(r, 1200));
+      upstream = await callGemini();
+    }
 
     const data = await upstream.text();
     res.status(upstream.status).setHeader('Content-Type', 'application/json').send(data);
