@@ -1015,14 +1015,17 @@
     </div>
 
     <div class="secToolPanel" data-panel="vt" style="display:none;">
-      <p class="hint" data-i18n="toolVtDesc">افحص Hash ملف (MD5/SHA1/SHA256) أو رابط للتحقق من سمعته عبر أكثر من 70 محرك حماية (VirusTotal).</p>
+      <p class="hint" data-i18n="toolVtDesc">حلّل ملفًا (يُحسب بصمته داخل متصفحك دون رفعه) أو افحص Hash/رابط للتحقق من سمعته عبر أكثر من 70 محرك حماية (VirusTotal).</p>
       <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
         <select id="vtMode" style="flex:1; min-width:140px;">
+          <option value="file" data-i18n="vtModeFile">تحليل ملف (رفع)</option>
           <option value="hash" data-i18n="vtModeHash">فحص Hash ملف</option>
           <option value="url" data-i18n="vtModeUrl">فحص رابط</option>
         </select>
-        <input type="text" id="vtValue" placeholder="الصق الـ Hash أو الرابط هنا..." style="flex:2; min-width:180px;">
+        <input type="text" id="vtValue" placeholder="الصق الـ Hash أو الرابط هنا..." style="flex:2; min-width:180px; display:none;">
+        <input type="file" id="vtFile" style="flex:2; min-width:180px;">
       </div>
+      <p class="hint" id="vtFileNote" data-i18n="vtFileNote" style="font-size:12px; opacity:.75; margin:-2px 0 8px;">🔒 لا يُرفع الملف إلى أي خادم — تُحسب البصمة (SHA-256) محليًا في متصفحك ثم يُفحص الـ Hash فقط.</p>
       <button class="btn primary" id="btnVtRun" data-i18n="toolVtRun">فحص</button>
       <div id="vtResult" class="secToolAiResult"></div>
     </div>
@@ -2152,9 +2155,10 @@ const I18N = {
     darkgptFieldHashedPassword: 'كلمة مرور مشفّرة', darkgptFieldIp: 'عنوان IP', darkgptFieldName: 'الاسم',
     darkgptFieldPhone: 'رقم الهاتف', darkgptFieldDomain: 'النطاق (Domain)', darkgptFieldAddress: 'العنوان', darkgptFieldVin: 'رقم الشاصي (VIN)',
     toolVtNav: 'فحص ملفات/روابط',
-    toolVtDesc: 'افحص Hash ملف (MD5/SHA1/SHA256) أو رابط للتحقق من سمعته عبر أكثر من 70 محرك حماية (VirusTotal).',
+    toolVtDesc: 'حلّل ملفًا (يُحسب بصمته داخل متصفحك دون رفعه) أو افحص Hash/رابط للتحقق من سمعته عبر أكثر من 70 محرك حماية (VirusTotal).',
     toolVtRun: 'فحص',
-    vtModeHash: 'فحص Hash ملف', vtModeUrl: 'فحص رابط',
+    vtModeFile: 'تحليل ملف (رفع)', vtModeHash: 'فحص Hash ملف', vtModeUrl: 'فحص رابط',
+    vtFileNote: '🔒 لا يُرفع الملف إلى أي خادم — تُحسب البصمة (SHA-256) محليًا في متصفحك ثم يُفحص الـ Hash فقط.',
     toolReconNav: 'استطلاع نطاق',
     toolReconDesc: 'استطلاع نطاق كامل: كل السبدومينات المكتشفة عبر سجلات الشهادات العامة + جميع سجلات DNS (A, AAAA, MX, TXT, NS, CNAME).',
     toolReconRun: 'استطلاع',
@@ -2283,9 +2287,10 @@ const I18N = {
     darkgptFieldHashedPassword: 'Hashed Password', darkgptFieldIp: 'IP Address', darkgptFieldName: 'Name',
     darkgptFieldPhone: 'Phone', darkgptFieldDomain: 'Domain', darkgptFieldAddress: 'Address', darkgptFieldVin: 'VIN',
     toolVtNav: 'File/URL Scan',
-    toolVtDesc: 'Check a file hash (MD5/SHA1/SHA256) or a URL against 70+ security engines (VirusTotal).',
+    toolVtDesc: 'Analyze a file (its fingerprint is computed in your browser without uploading it) or check a hash/URL against 70+ security engines (VirusTotal).',
     toolVtRun: 'Scan',
-    vtModeHash: 'Scan File Hash', vtModeUrl: 'Scan URL',
+    vtModeFile: 'Analyze File (upload)', vtModeHash: 'Scan File Hash', vtModeUrl: 'Scan URL',
+    vtFileNote: '🔒 The file is never uploaded to any server — its SHA-256 fingerprint is computed locally in your browser and only the hash is checked.',
     toolReconNav: 'Domain Recon',
     toolReconDesc: 'Full domain recon: all subdomains discovered via public certificate transparency logs + all DNS records (A, AAAA, MX, TXT, NS, CNAME).',
     toolReconRun: 'Recon',
@@ -4943,16 +4948,72 @@ $('#btnDarkgptSearch').onclick = async () => {
   } catch(e){ box.textContent = (lang === 'ar' ? 'حدث خطأ: ' : 'Error: ') + e.message; }
 };
 
+// Toggle between text input (hash/url) and file picker (file mode).
+function vtSyncMode(){
+  const mode = $('#vtMode').value;
+  const isFile = mode === 'file';
+  $('#vtValue').style.display = isFile ? 'none' : '';
+  $('#vtFile').style.display = isFile ? '' : 'none';
+  $('#vtFileNote').style.display = isFile ? '' : 'none';
+}
+$('#vtMode').addEventListener('change', vtSyncMode);
+vtSyncMode();
+
+// Compute a file's SHA-256 fingerprint entirely in the browser (the file
+// bytes never leave the device — only the resulting hash is sent for lookup).
+async function vtHashFile(file){
+  const buf = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function vtFormatBytes(n){
+  if(!n && n !== 0) return '';
+  const units = ['B','KB','MB','GB'];
+  let i = 0, v = n;
+  while(v >= 1024 && i < units.length - 1){ v /= 1024; i++; }
+  return (i === 0 ? v : v.toFixed(1)) + ' ' + units[i];
+}
+
 $('#btnVtRun').onclick = async () => {
   const mode = $('#vtMode').value;
-  const value = $('#vtValue').value.trim();
   const box = $('#vtResult');
-  if(!value) return;
-  box.textContent = lang === 'ar' ? '⏳ جارٍ الفحص...' : '⏳ Scanning...';
+  let value;
+  let filePrefix = '';
+
+  if(mode === 'file'){
+    const file = ($('#vtFile').files || [])[0];
+    if(!file){
+      box.textContent = lang === 'ar' ? '⚠️ اختر ملفًا أولًا.' : '⚠️ Select a file first.';
+      return;
+    }
+    if(!(window.crypto && crypto.subtle)){
+      box.textContent = lang === 'ar'
+        ? '⚠️ حساب البصمة محليًا يتطلب اتصالًا آمنًا (HTTPS).'
+        : '⚠️ Local fingerprinting requires a secure (HTTPS) connection.';
+      return;
+    }
+    box.textContent = lang === 'ar' ? '⏳ جارٍ حساب بصمة الملف محليًا...' : '⏳ Computing file fingerprint locally...';
+    try {
+      value = await vtHashFile(file);
+    } catch(e){
+      box.textContent = (lang === 'ar' ? 'تعذّر حساب البصمة: ' : 'Could not compute fingerprint: ') + e.message;
+      return;
+    }
+    filePrefix = (lang === 'ar'
+      ? `📄 الملف: ${file.name}\n📦 الحجم: ${vtFormatBytes(file.size)}${file.type ? '\n🏷️ النوع: ' + file.type : ''}\n🔑 SHA-256: ${value}\n\n`
+      : `📄 File: ${file.name}\n📦 Size: ${vtFormatBytes(file.size)}${file.type ? '\n🏷️ Type: ' + file.type : ''}\n🔑 SHA-256: ${value}\n\n`);
+  } else {
+    value = $('#vtValue').value.trim();
+    if(!value) return;
+  }
+
+  box.textContent = filePrefix + (lang === 'ar' ? '⏳ جارٍ الفحص...' : '⏳ Scanning...');
   try {
+    // File mode reuses the hash lookup (the server only ever receives the hash).
     const res = await fetch('/api/virustotal', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode, value, guestId: window.getGuestId() })
+      body: JSON.stringify({ mode: mode === 'file' ? 'hash' : mode, value, guestId: window.getGuestId() })
     });
     const data = await res.json();
     if(data.notConfigured){
@@ -4963,7 +5024,12 @@ $('#btnVtRun').onclick = async () => {
     if(data.error){ box.textContent = '⚠️ ' + data.error; return; }
     if(data.pending){ box.textContent = '⏳ ' + data.message; return; }
     if(data.verdict === 'not_found'){
-      box.textContent = (lang === 'ar' ? 'ℹ️ ' : 'ℹ️ ') + data.message + (typeof data.remaining === 'number' ? (lang === 'ar' ? `\n(بقي لك ${data.remaining} فحوصات اليوم)` : `\n(${data.remaining} scans left today)`) : '');
+      const notFoundMsg = mode === 'file'
+        ? (lang === 'ar'
+            ? 'ℹ️ لم يُعثر على هذا الملف في قاعدة بيانات VirusTotal (لم يُفحص من قبل). هذا لا يعني أنه آمن بالضرورة.'
+            : 'ℹ️ This file was not found in the VirusTotal database (never scanned before). This does not necessarily mean it is safe.')
+        : ((lang === 'ar' ? 'ℹ️ ' : 'ℹ️ ') + data.message);
+      box.textContent = filePrefix + notFoundMsg + (typeof data.remaining === 'number' ? (lang === 'ar' ? `\n\n(بقي لك ${data.remaining} فحوصات اليوم)` : `\n\n(${data.remaining} scans left today)`) : '');
       return;
     }
     const verdictIcon = data.verdict === 'malicious' ? '🚨' : data.verdict === 'suspicious' ? '⚠️' : data.verdict === 'clean' ? '✅' : 'ℹ️';
@@ -4973,7 +5039,7 @@ $('#btnVtRun').onclick = async () => {
     const statsLine = lang === 'ar'
       ? `خبيث: ${s.malicious||0} | مشبوه: ${s.suspicious||0} | آمن: ${s.harmless||0} | غير مكتشف: ${s.undetected||0}`
       : `Malicious: ${s.malicious||0} | Suspicious: ${s.suspicious||0} | Harmless: ${s.harmless||0} | Undetected: ${s.undetected||0}`;
-    box.textContent = (lang === 'ar'
+    box.textContent = filePrefix + (lang === 'ar'
       ? `${verdictIcon} النتيجة: ${verdictLabelAr}\n${statsLine}`
       : `${verdictIcon} Verdict: ${verdictLabelEn}\n${statsLine}`)
       + (typeof data.remaining === 'number' ? (lang === 'ar' ? `\n\n(بقي لك ${data.remaining} فحوصات اليوم)` : `\n\n(${data.remaining} scans left today)`) : '');
