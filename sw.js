@@ -1,4 +1,4 @@
-const CACHE_NAME = 'taryam-cyber-v1';
+const CACHE_NAME = 'taryam-aether-v2';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -35,18 +35,17 @@ function isStaticAsset(url) {
     url.pathname.endsWith('.jpg') ||
     url.pathname.endsWith('.svg') ||
     url.pathname.endsWith('.ico') ||
+    url.pathname.endsWith('.woff2') ||
     url.pathname.endsWith('manifest.json')
   );
 }
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
-  if (req.method !== 'GET') return; // never touch POST/PUT (auth, AI calls)
+  if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
 
-  // API calls: always go to network. If offline, return a friendly JSON
-  // error instead of letting the request fail with a generic network error.
   if (isApiRequest(url)) {
     event.respondWith(
       fetch(req).catch(
@@ -60,8 +59,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets (icons, manifest): cache-first, they rarely change and
-  // this keeps the app instant + fully usable offline.
   if (isStaticAsset(url)) {
     event.respondWith(
       caches.match(req).then(
@@ -77,8 +74,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // App shell / navigation: network-first so updates land immediately,
-  // falling back to the cached shell whenever there's no connection.
   event.respondWith(
     fetch(req)
       .then((res) => {
