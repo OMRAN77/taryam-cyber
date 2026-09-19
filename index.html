@@ -2059,4 +2059,982 @@ document.addEventListener('click', (e) => {
 /* ═══ 15. SETTINGS DIALOG ═══ */
 function openDialogSafe(dlg){
   if(dlg.hasAttribute('open')) return;
-  if(typeof dlg.showModal === 'function')
+  if(typeof dlg.showModal === 'function'){ try { dlg.showModal(); return; } catch(e){} }
+  dlg.setAttribute('open', ''); dlg.style.display = 'block';
+}
+function closeDialogSafe(dlg){
+  if(typeof dlg.close === 'function'){ try { dlg.close(); } catch(e){} }
+  dlg.removeAttribute('open'); dlg.style.display = '';
+}
+window.toggleSettingsSection = function(id){
+  const c = document.getElementById(id + 'Content');
+  const a = document.getElementById(id + 'Arrow');
+  if(!c) return;
+  const isOpen = c.style.display === 'block';
+  ['langSection','apiKeysSection','themeSection','voiceSection','aboutSection'].forEach(sid => {
+    const cc = document.getElementById(sid + 'Content');
+    const aa = document.getElementById(sid + 'Arrow');
+    if(cc) cc.style.display = 'none';
+    if(aa) aa.style.transform = 'rotate(0)';
+  });
+  if(!isOpen){ c.style.display = 'block'; if(a) a.style.transform = 'rotate(90deg)'; }
+};
+
+// Build provider cards dynamically
+function buildProviderCards(){
+  const container = $('#providersContainer');
+  if(!container) return;
+  container.innerHTML = '';
+  PROVIDER_ORDER.forEach(k => {
+    const p = PROVIDERS[k];
+    const card = document.createElement('div');
+    card.className = 'provider-card';
+    card.style.borderInlineStartColor = p.color;
+    card.innerHTML = `
+      <h4>
+        <span style="color:${p.color};font-weight:800">${p.name}${k === 'deepseek' ? ' ⭐' : ''}</span>
+        <span class="include-toggle"><input type="checkbox" id="chkInclude_${k}" style="width:auto"> ${isAr() ? 'ضِمن اسأل الكل' : 'In Ask All'}</span>
+      </h4>
+      <label style="margin-top:0">${t('apiKeyLabel')}</label>
+      <input type="password" id="inputKey_${k}" placeholder="اتركه فارغًا لاستخدام proxy الخادم">
+      <label>${t('modelLabel')}</label>
+      <input type="text" id="inputModel_${k}" placeholder="${p.defaultModel}">
+    `;
+    container.appendChild(card);
+    setTimeout(() => {
+      const keyInput = document.getElementById('inputKey_' + k);
+      const modelInput = document.getElementById('inputModel_' + k);
+      const chk = document.getElementById('chkInclude_' + k);
+      if(keyInput) keyInput.value = localStorage.getItem(p.keyVar) || '';
+      if(modelInput) modelInput.value = localStorage.getItem(p.modelVar) || '';
+      if(chk) chk.checked = localStorage.getItem('aiapp_include_' + k) !== 'false';
+    }, 0);
+  });
+}
+
+$('#btnSettings').onclick = () => {
+  ['langSection','apiKeysSection','themeSection','voiceSection','aboutSection'].forEach(sid => {
+    const c = document.getElementById(sid + 'Content');
+    const a = document.getElementById(sid + 'Arrow');
+    if(c) c.style.display = 'none';
+    if(a) a.style.transform = 'rotate(0)';
+  });
+  $('#provider').value = localStorage.getItem('aiapp_provider') || 'deepseek';
+  buildProviderCards();
+  const th = getTheme();
+  $('#themeAccent').value = th.accent;
+  $('#themeText').value = th.text;
+  $('#themeBg').value = th.bg;
+  $('#themeUserBubble').value = th.userBubble;
+  $('#themeAssistantBubble').value = th.assistantBubble;
+  $('#voiceGenderPref').value = localStorage.getItem('aiapp_voice_gender') || '';
+  $('#chkCloudVoice').checked = localStorage.getItem('aiapp_cloud_voice') === 'true';
+  $('#cloudVoicePick').value = localStorage.getItem('aiapp_cloud_voice_name') || 'onyx';
+  openDialogSafe($('#settingsDialog'));
+};
+
+$('#btnSaveSettings').onclick = () => {
+  localStorage.setItem('aiapp_provider', $('#provider').value);
+  PROVIDER_ORDER.forEach(k => {
+    const p = PROVIDERS[k];
+    const keyVal = document.getElementById('inputKey_' + k)?.value.trim() || '';
+    const modelVal = document.getElementById('inputModel_' + k)?.value.trim() || '';
+    const includeVal = document.getElementById('chkInclude_' + k)?.checked;
+    localStorage.setItem(p.keyVar, keyVal);
+    localStorage.setItem(p.modelVar, modelVal);
+    localStorage.setItem('aiapp_include_' + k, includeVal ? 'true' : 'false');
+  });
+  const th = {
+    accent: $('#themeAccent').value || '#00e5a0',
+    text: $('#themeText').value || '#eef0f6',
+    bg: $('#themeBg').value || '#0a0b10',
+    userBubble: $('#themeUserBubble').value || '#00e5a0',
+    assistantBubble: $('#themeAssistantBubble').value || '#161622'
+  };
+  localStorage.setItem('aiapp_theme', JSON.stringify(th));
+  applyTheme();
+  localStorage.setItem('aiapp_voice_gender', $('#voiceGenderPref').value);
+  localStorage.setItem('aiapp_cloud_voice', $('#chkCloudVoice').checked ? 'true' : 'false');
+  localStorage.setItem('aiapp_cloud_voice_name', $('#cloudVoicePick').value);
+  closeDialogSafe($('#settingsDialog'));
+  renderMessages(true);
+};
+
+$('#btnCancelSettings').onclick = () => closeDialogSafe($('#settingsDialog'));
+$('#btnResetColors').onclick = () => {
+  localStorage.removeItem('aiapp_theme');
+  applyTheme();
+  $('#themeAccent').value = '#00e5a0';
+  $('#themeText').value = '#eef0f6';
+  $('#themeBg').value = '#0a0b10';
+  $('#themeUserBubble').value = '#00e5a0';
+  $('#themeAssistantBubble').value = '#161622';
+};
+
+/* ═══ 16. VOICE ═══ */
+let currentCloudAudio = null;
+function stopAllSpeaking(){
+  try { window.speechSynthesis?.cancel(); } catch(e){}
+  if(currentCloudAudio){ try { currentCloudAudio.pause(); } catch(e){} currentCloudAudio = null; }
+}
+function pickVoice(isArabic){
+  const voices = 'speechSynthesis' in window ? window.speechSynthesis.getVoices() : [];
+  if(!voices.length) return null;
+  const arabicVoices = voices.filter(v => v.lang?.toLowerCase().startsWith(isArabic ? 'ar' : 'en'));
+  return arabicVoices[0] || voices[0];
+}
+async function speakSmart(text, onStart, onEnd, verbose){
+  if(!text) return;
+  stopAllSpeaking();
+  const cloudOn = localStorage.getItem('aiapp_cloud_voice') === 'true';
+  const noDevice = !('speechSynthesis' in window);
+  if(cloudOn || noDevice){
+    try {
+      const voice = localStorage.getItem('aiapp_cloud_voice_name') || 'onyx';
+      const res = await fetch('/api/tts', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ voice, text: text.slice(0, 4000) })
+      });
+      if(!res.ok) throw new Error('TTS failed');
+      const blob = await res.blob();
+      const audio = new Audio(URL.createObjectURL(blob));
+      currentCloudAudio = audio;
+      if(onStart) onStart();
+      audio.onended = () => { if(onEnd) onEnd(); };
+      await audio.play();
+      return;
+    } catch(e){ if(verbose) console.warn('Cloud TTS failed:', e); }
+  }
+  if(!('speechSynthesis' in window)){ if(onEnd) onEnd(); return; }
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = /[\u0600-\u06FF]/.test(text) ? 'ar-SA' : 'en-US';
+  const v = pickVoice(/[\u0600-\u06FF]/.test(text));
+  if(v) utter.voice = v;
+  utter.onend = () => { if(onEnd) onEnd(); };
+  utter.onerror = () => { if(onEnd) onEnd(); };
+  if(onStart) onStart();
+  window.speechSynthesis.speak(utter);
+}
+
+$('#btnVoiceChat').onclick = () => {
+  const on = !$('#btnVoiceChat').classList.contains('active');
+  $('#btnVoiceChat').classList.toggle('active', on);
+  localStorage.setItem('aiapp_voice_chat_mode', on ? 'true' : 'false');
+};
+if(localStorage.getItem('aiapp_voice_chat_mode') === 'true') $('#btnVoiceChat').classList.add('active');
+$('#btnStop').onclick = () => {
+  stopAllSpeaking();
+  if(isListening && mediaRecorder) mediaRecorder.stop();
+};
+$('#btnTestVoice').onclick = () => {
+  speakSmart(isAr() ? 'مرحبًا، هذا اختبار للصوت.' : 'Hello, this is a voice test.', null, null, true);
+};
+
+// Mic (MediaRecorder + server Whisper)
+let mediaRecorder = null, recordedChunks = [], micStream = null, isListening = false;
+async function startRecording(){
+  micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  let mime = '';
+  for(const c of ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg']){
+    if(window.MediaRecorder?.isTypeSupported?.(c)){ mime = c; break; }
+  }
+  mediaRecorder = mime ? new MediaRecorder(micStream, { mimeType: mime }) : new MediaRecorder(micStream);
+  recordedChunks = [];
+  mediaRecorder.ondataavailable = e => { if(e.data?.size) recordedChunks.push(e.data); };
+  mediaRecorder.start();
+  isListening = true;
+  $('#btnMic').classList.add('recording');
+}
+async function stopRecordingAndTranscribe(){
+  if(!mediaRecorder) return;
+  const mime = mediaRecorder.mimeType || 'audio/webm';
+  const done = new Promise(res => { mediaRecorder.onstop = res; });
+  mediaRecorder.stop();
+  await done;
+  if(micStream) micStream.getTracks().forEach(t => t.stop());
+  micStream = null;
+  isListening = false;
+  $('#btnMic').classList.remove('recording');
+  $('#btnMic').classList.add('transcribing');
+  try {
+    const blob = new Blob(recordedChunks, { type: mime });
+    if(blob.size < 500){ $('#btnMic').classList.remove('transcribing'); return; }
+    const reader = new FileReader();
+    const b64 = await new Promise(res => { reader.onloadend = () => res(String(reader.result).split(',')[1] || ''); reader.readAsDataURL(blob); });
+    const res = await fetch('/api/stt', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ audioBase64: b64, mimeType: mime, lang, token: authGet('aiapp_auth_token'), guestId: window.getGuestId() })
+    });
+    const data = await res.json();
+    $('#btnMic').classList.remove('transcribing');
+    if(!res.ok){ alert(data?.error || 'فشل التحويل'); return; }
+    const transcript = (data.text || '').trim();
+    if(!transcript) return;
+    const promptEl = $('#prompt');
+    promptEl.value = (promptEl.value ? promptEl.value + ' ' : '') + transcript;
+    if($('#btnVoiceChat').classList.contains('active')) sendPrompt();
+  } catch(e){ $('#btnMic').classList.remove('transcribing'); alert('خطأ في التسجيل'); }
+}
+$('#btnMic').onclick = async () => {
+  if(!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder){ alert('غير مدعوم'); return; }
+  if(isListening){ stopRecordingAndTranscribe(); return; }
+  try { await startRecording(); } catch(e){ alert('تعذّر الوصول للميكروفون'); }
+};
+
+/* ═══ 17. ATTACHMENTS ═══ */
+let pendingAttachments = [];
+const MAX_TEXT = 20000;
+function renderAttachStrip(){
+  const strip = $('#attachStrip');
+  strip.innerHTML = '';
+  pendingAttachments.forEach((a, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'attach-chip';
+    if(a.isImage){ const img = document.createElement('img'); img.src = a.dataUrl; chip.appendChild(img); }
+    const n = document.createElement('span'); n.className = 'name'; n.textContent = a.name; chip.appendChild(n);
+    const rm = document.createElement('span'); rm.className = 'rm'; rm.textContent = '✕';
+    rm.onclick = () => { pendingAttachments.splice(i, 1); renderAttachStrip(); };
+    chip.appendChild(rm);
+    strip.appendChild(chip);
+  });
+}
+const IMG_MAX = 1280;
+async function resizeImage(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        let { width, height } = img;
+        const scale = Math.min(1, IMG_MAX / Math.max(width, height));
+        width = Math.round(width * scale); height = Math.round(height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        const keepPng = file.type === 'image/png';
+        const dataUrl = canvas.toDataURL(keepPng ? 'image/png' : 'image/jpeg', 0.72);
+        URL.revokeObjectURL(url);
+        res({ dataUrl, mime: keepPng ? 'image/png' : 'image/jpeg' });
+      } catch(e){ URL.revokeObjectURL(url); rej(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('load fail')); };
+    img.src = url;
+  });
+}
+$('#btnAttach').onclick = () => $('#attachInput').click();
+$('#attachInput').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files || []);
+  for(const file of files){
+    try {
+      if(file.type.startsWith('image/')){
+        const r = await resizeImage(file).catch(async () => {
+          const reader = new FileReader();
+          const dataUrl = await new Promise(res => { reader.onload = () => res(reader.result); reader.readAsDataURL(file); });
+          return { dataUrl, mime: file.type };
+        });
+        pendingAttachments.push({ name: file.name, isImage: true, mime: r.mime, dataUrl: r.dataUrl });
+      } else {
+        let text = await file.text();
+        if(text.length > MAX_TEXT) text = text.slice(0, MAX_TEXT) + '\n... (truncated)';
+        pendingAttachments.push({ name: file.name, isImage: false, text });
+      }
+    } catch(err){ console.error(err); }
+  }
+  renderAttachStrip();
+  e.target.value = '';
+});
+
+/* ═══ 18. EMOJI ═══ */
+const EMOJIS = ['😀','😁','😂','🤣','😊','😇','🙂','😉','😍','🥰','😘','😋','😜','🤪','😎','🤓','🧐','🤔','🤨','😐','😑','😶','🙄','😏','😣','😥','😮','🤐','😯','😪','😴','😌','😷','🤒','🤕','🤢','🤮','🥵','🥶','😵','🤯','🥳','😕','😟','🙁','😲','😳','🥺','😦','😨','😰','😢','😭','😱','😖','😞','😓','😩','😤','😡','😠','🤬','😈','💀','💩','🤡','👻','👽','🤖','🎃','😺','😸','❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','💕','💞','💓','💗','💖','💘','💝','💯','💢','💥','💫','💦','💨','💣','👍','👎','👏','🙌','🙏','👋','🤝','💪','✌️','🤞','🤟','🤘','👌','✊','👊','🎉','🎊','🎁','🔥','⭐','🌟','✨','💐','🌹','🌸','🍕','🍔','🍟','🍰','🎂','☕','⚽','🏀','🎮','📱','💻','📸','🎵','🎶','✅','❌','⚠️'];
+const emojiPicker = $('#emojiPicker');
+emojiPicker.innerHTML = EMOJIS.map(e => `<span class="em">${e}</span>`).join('');
+emojiPicker.addEventListener('click', e => {
+  const target = e.target.closest('.em');
+  if(!target) return;
+  const p = $('#prompt');
+  const s = p.selectionStart ?? p.value.length;
+  p.value = p.value.slice(0, s) + target.textContent + p.value.slice(p.selectionEnd ?? s);
+  p.focus();
+  p.setSelectionRange(s + target.textContent.length, s + target.textContent.length);
+});
+$('#btnEmoji').onclick = (e) => { e.stopPropagation(); emojiPicker.classList.toggle('open'); };
+document.addEventListener('click', (e) => {
+  if(emojiPicker.classList.contains('open') && !emojiPicker.contains(e.target) && e.target.id !== 'btnEmoji') emojiPicker.classList.remove('open');
+});
+
+/* ═══ 19. NEW PROJECT / DOWNLOAD / LOGIN GUARD ═══ */
+$('#btnNew').onclick = () => {
+  const id = 'p_' + Date.now();
+  state.projects.push({ id, title: t('defaultProjectTitle'), messages: [], code:'' });
+  state.currentId = id;
+  saveState();
+  renderAll();
+};
+$('#btnDownload').onclick = () => {
+  const cur = getCurrent();
+  if(!cur?.code) return;
+  const isPy = cur.codeType === 'python';
+  const blob = new Blob([cur.code], { type: isPy ? 'text/x-python' : 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (cur.title || 'app') + (isPy ? '.py' : '.html');
+  a.click();
+};
+$('#btnRunPython').onclick = () => {
+  const cur = getCurrent();
+  if(cur?.code) runPythonCode(cur.code);
+};
+$('#btnSend').onclick = sendPrompt;
+$('#prompt').addEventListener('keydown', e => {
+  if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendPrompt(); }
+});
+
+// Checkboxes
+$('#chkAskAll').checked = localStorage.getItem('aiapp_askall') === 'true';
+$('#chkMerge').checked = localStorage.getItem('aiapp_merge') !== 'false';
+$('#chkMerge').addEventListener('change', () => {
+  if($('#chkMerge').checked) $('#chkAskAll').checked = true;
+  localStorage.setItem('aiapp_merge', $('#chkMerge').checked ? 'true' : 'false');
+  localStorage.setItem('aiapp_askall', $('#chkAskAll').checked ? 'true' : 'false');
+});
+$('#chkAskAll').addEventListener('change', () => localStorage.setItem('aiapp_askall', $('#chkAskAll').checked ? 'true' : 'false'));
+
+/* ═══ 20. RESIZERS ═══ */
+function setupResizer(resizer, panel, { min, max, key }){
+  const saved = parseInt(localStorage.getItem(key) || '', 10);
+  if(saved >= min && saved <= max) panel.style.width = saved + 'px';
+  let startX = 0, startW = 0, dragging = false;
+  const rtl = () => document.documentElement.dir === 'rtl';
+  function onMove(x){
+    let d = x - startX; if(rtl()) d = -d;
+    panel.style.width = Math.max(min, Math.min(max, startW + d)) + 'px';
+  }
+  function onUp(){
+    if(!dragging) return;
+    dragging = false;
+    resizer.classList.remove('dragging');
+    document.body.style.userSelect = '';
+    localStorage.setItem(key, parseInt(panel.style.width, 10));
+    window.removeEventListener('mousemove', mm);
+    window.removeEventListener('mouseup', onUp);
+  }
+  const mm = e => onMove(e.clientX);
+  resizer.addEventListener('mousedown', e => {
+    if(window.innerWidth <= 860) return;
+    dragging = true; startX = e.clientX; startW = panel.getBoundingClientRect().width;
+    resizer.classList.add('dragging'); document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', mm); window.addEventListener('mouseup', onUp);
+  });
+}
+setupResizer($('#resizer1'), $('#sidebar'), { min:180, max:420, key:'panelWidthSidebar' });
+setupResizer($('#resizer2'), $('#chatcol'), { min:280, max:620, key:'panelWidthChat' });
+
+/* ═══ 21. OFFLINE BANNER ═══ */
+(function(){
+  const banner = $('#offlineBanner');
+  let hideTimer = null;
+  function setOffline(){ clearTimeout(hideTimer); banner.style.background = '#b45309'; banner.style.display = 'block'; }
+  function setOnline(){
+    if(banner.style.display === 'none') return;
+    banner.style.background = '#16a34a';
+    banner.querySelector('span').textContent = t('backOnlineBanner');
+    hideTimer = setTimeout(() => banner.style.display = 'none', 2500);
+  }
+  window.addEventListener('offline', setOffline);
+  window.addEventListener('online', setOnline);
+  if(!navigator.onLine) setOffline();
+})();
+
+/* ═══ 22. SERVICE WORKER & INSTALL ═══ */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault(); deferredPrompt = e;
+});
+$('#btnInstall').onclick = async () => {
+  if(deferredPrompt){ deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; }
+  else alert(isAr() ? 'افتح قائمة المتصفح واختر "تثبيت التطبيق"' : 'Open browser menu and choose "Install app"');
+};
+
+/* ═══ 23. SECURITY TOOLS ═══ */
+const secToolsDialog = $('#secToolsDialog');
+$('#btnSecTools').onclick = () => { secToolsDialog.showModal(); closeHeaderMenu(); };
+$('#btnCloseSecTools').onclick = () => secToolsDialog.close();
+$$('.secToolNavBtn').forEach(btn => {
+  btn.onclick = () => {
+    $$('.secToolNavBtn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const tool = btn.getAttribute('data-tool');
+    $$('.secToolPanel').forEach(p => { p.style.display = p.getAttribute('data-panel') === tool ? '' : 'none'; });
+  };
+});
+
+// EXIF
+$('#exifFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  const box = $('#exifResult');
+  if(!file){ box.textContent = ''; return; }
+  box.textContent = '⏳ جارٍ التحليل...';
+  try {
+    const buf = await file.arrayBuffer();
+    const view = new DataView(buf);
+    const result = { 'File name': file.name, 'Size': (file.size / 1024).toFixed(1) + ' KB', 'Type': file.type };
+    if(view.getUint16(0, false) !== 0xFFD8){
+      box.textContent = JSON.stringify(result, null, 2) + '\n\n⚠️ ليست صورة JPEG.';
+      return;
+    }
+    // Quick scan for common ASCII strings in EXIF range
+    const bytes = new Uint8Array(buf, 0, Math.min(buf.byteLength, 65536));
+    let ascii = '';
+    const findings = {};
+    for(let i = 0; i < bytes.length - 5; i++){
+      const b = bytes[i];
+      if(b >= 32 && b < 127) ascii += String.fromCharCode(b);
+      else {
+        if(ascii.length >= 4 && /^(Canon|Nikon|Apple|Samsung|HUAWEI|Xiaomi|Google|Adobe|Photoshop|iPhone|Android|EXIF|GPS)/i.test(ascii)){
+          findings['Tag'] = ascii.slice(0, 60);
+        }
+        ascii = '';
+      }
+    }
+    Object.assign(result, findings);
+    box.textContent = JSON.stringify(result, null, 2);
+  } catch(err){ box.textContent = '⚠️ ' + err.message; }
+});
+
+// Crypto
+function caesar(str, shift, decode){
+  const s = decode ? (26 - ((shift % 26) + 26) % 26) % 26 : ((shift % 26) + 26) % 26;
+  return str.replace(/[a-zA-Z]/g, c => {
+    const base = c <= 'Z' ? 65 : 97;
+    return String.fromCharCode(((c.charCodeAt(0) - base + s) % 26) + base);
+  });
+}
+function xorBytes(input, key){
+  const enc = new TextEncoder().encode(input);
+  const ke = new TextEncoder().encode(key);
+  const out = new Uint8Array(enc.length);
+  for(let i = 0; i < enc.length; i++) out[i] = enc[i] ^ ke[i % ke.length];
+  return out;
+}
+function bytesToB64(bytes){ return btoa(String.fromCharCode(...bytes)); }
+function b64ToBytes(b64){ return Uint8Array.from(atob(b64), c => c.charCodeAt(0)); }
+function runCrypto(mode){
+  const algo = $('#cryptoAlgo').value;
+  const key = $('#cryptoKey').value;
+  const input = $('#cryptoInput').value;
+  let out = '';
+  try {
+    if(algo === 'caesar') out = caesar(input, parseInt(key || '0', 10), mode === 'decode');
+    else if(algo === 'rot13') out = caesar(input, 13, false);
+    else if(algo === 'xor'){
+      if(mode === 'encode') out = bytesToB64(xorBytes(input, key || 'secret'));
+      else out = new TextDecoder().decode(xorBytes(new TextDecoder().decode(b64ToBytes(input)), key || 'secret'));
+    }
+    else if(algo === 'base64') out = mode === 'encode' ? btoa(unescape(encodeURIComponent(input))) : decodeURIComponent(escape(atob(input)));
+  } catch(e){ out = '⚠️ خطأ: ' + e.message; }
+  $('#cryptoOutput').value = out;
+}
+$('#btnCryptoEncode').onclick = () => runCrypto('encode');
+$('#btnCryptoDecode').onclick = () => runCrypto('decode');
+
+// AI-powered tools
+$('#btnPhishingAnalyze').onclick = async () => {
+  const input = $('#phishingInput').value.trim();
+  if(!input) return;
+  const box = $('#phishingResult');
+  box.textContent = '⏳ جارٍ التحليل...';
+  try {
+    const reply = await callProvider('deepseek', [{ role:'user', content:'حلّل هذا الرابط/الإيميل المشبوه وأخبرني هل هو تصيّد:\n' + input }]);
+    box.textContent = reply;
+  } catch(e){ box.textContent = '⚠️ ' + e.message; }
+};
+$('#btnLogAnalyze').onclick = async () => {
+  const input = $('#logInput').value.trim();
+  if(!input) return;
+  const box = $('#logResult');
+  box.textContent = '⏳ جارٍ التحليل...';
+  try {
+    const reply = await callProvider('deepseek', [{ role:'user', content:'حلّل هذا الـ log وابحث عن أنشطة مشبوهة:\n' + input.slice(0, 6000) }]);
+    box.textContent = reply;
+  } catch(e){ box.textContent = '⚠️ ' + e.message; }
+};
+
+// Breach check
+$('#btnBreachCheck').onclick = async () => {
+  const email = $('#breachEmail').value.trim();
+  if(!email) return;
+  const box = $('#breachResult');
+  box.textContent = '⏳ جارٍ الفحص...';
+  try {
+    const res = await fetch('/api/hibp?email=' + encodeURIComponent(email));
+    const data = await res.json();
+    if(data.notConfigured){ box.textContent = '🚧 قريبًا'; return; }
+    if(data.error){ box.textContent = '⚠️ ' + data.error; return; }
+    if(!data.breaches?.length) box.textContent = '✅ لا تسريبات معروفة.';
+    else box.textContent = '⚠️ وُجد في ' + data.breaches.length + ' تسريب:\n\n' + data.breaches.map(b => `• ${b.Name} (${b.BreachDate})`).join('\n');
+  } catch(e){ box.textContent = '⚠️ ' + e.message; }
+};
+
+// VirusTotal
+$('#vtMode').addEventListener('change', () => {
+  const isFile = $('#vtMode').value === 'file';
+  $('#vtValue').style.display = isFile ? 'none' : 'block';
+  $('#vtFile').style.display = isFile ? 'block' : 'none';
+  $('#vtFileNote').style.display = isFile ? 'block' : 'none';
+});
+$('#vtMode').dispatchEvent(new Event('change'));
+$('#btnVtRun').onclick = async () => {
+  const mode = $('#vtMode').value;
+  const box = $('#vtResult');
+  let value;
+  if(mode === 'file'){
+    const file = $('#vtFile').files[0];
+    if(!file){ box.textContent = '⚠️ اختر ملفًا'; return; }
+    box.textContent = '⏳ حساب SHA-256...';
+    const buf = await file.arrayBuffer();
+    const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buf))).map(b => b.toString(16).padStart(2, '0')).join('');
+    value = hash;
+  } else value = $('#vtValue').value.trim();
+  if(!value) return;
+  box.textContent = '⏳ الفحص...';
+  try {
+    const res = await fetch('/api/virustotal', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ mode: mode === 'file' ? 'hash' : mode, value, guestId: window.getGuestId() })
+    });
+    const data = await res.json();
+    if(data.notConfigured){ box.textContent = '🚧 قريبًا'; return; }
+    if(data.error){ box.textContent = '⚠️ ' + data.error; return; }
+    const icon = data.verdict === 'malicious' ? '🚨' : data.verdict === 'clean' ? '✅' : '⚠️';
+    const s = data.stats || {};
+    box.textContent = `${icon} النتيجة: ${data.verdict}\nخبيث: ${s.malicious || 0} | نظيف: ${s.harmless || 0}`;
+  } catch(e){ box.textContent = '⚠️ ' + e.message; }
+};
+
+// Recon
+$('#btnReconRun').onclick = async () => {
+  const domain = $('#reconDomain').value.trim();
+  if(!domain) return;
+  const box = $('#reconResult');
+  box.textContent = '⏳ استطلاع...';
+  try {
+    const res = await fetch('/api/recon', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ domain, guestId: window.getGuestId() })
+    });
+    const data = await res.json();
+    if(data.error){ box.textContent = '⚠️ ' + data.error; return; }
+    const lines = [];
+    lines.push(`🌍 ${data.domain}`);
+    lines.push('\n📡 DNS:');
+    Object.entries(data.dns || {}).forEach(([k, v]) => { if(v?.length) lines.push(`  ${k}: ${v.map(x => typeof x === 'object' ? x.exchange || JSON.stringify(x) : x).join(', ')}`); });
+    lines.push(`\n🔍 Subdomains (${data.subdomainCount}):`);
+    (data.subdomains || []).slice(0, 100).forEach(s => lines.push('  • ' + s));
+    box.textContent = lines.join('\n');
+  } catch(e){ box.textContent = '⚠️ ' + e.message; }
+};
+
+// WebScan
+$('#btnWebscanRun').onclick = async () => {
+  const mode = $('#webscanMode').value;
+  const value = $('#webscanValue').value.trim();
+  if(!value) return;
+  const box = $('#webscanResult');
+  box.textContent = '⏳ فحص...';
+  try {
+    const res = await fetch('/api/webscan', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ mode, value, guestId: window.getGuestId() })
+    });
+    const data = await res.json();
+    if(data.error){ box.textContent = '⚠️ ' + data.error; return; }
+    if(mode === 'headers'){
+      const lines = [`🛡️ Grade: ${data.grade} (${data.score}/100)`, ''];
+      (data.details || []).forEach(d => lines.push((d.present ? '✅' : '❌') + ' ' + d.label));
+      box.textContent = lines.join('\n');
+    } else {
+      box.textContent = `🔒 ${data.host}\nIssuer: ${data.issuer || '—'}\nValid until: ${data.validTo || '—'}\nDays left: ${data.daysLeft}\nProtocol: ${data.protocol || '—'}`;
+    }
+  } catch(e){ box.textContent = '⚠️ ' + e.message; }
+};
+
+// JWT
+$('#btnJwtRun').onclick = async () => {
+  const token = $('#jwtInput').value.trim();
+  if(!token) return;
+  const box = $('#jwtResult');
+  box.textContent = '⏳ تحليل...';
+  try {
+    const parts = token.split('.');
+    if(parts.length !== 3){ box.textContent = '⚠️ JWT غير صالح'; return; }
+    const header = JSON.parse(atob(parts[0].replace(/-/g, '+').replace(/_/g, '/')));
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    const lines = ['📋 Header:', JSON.stringify(header, null, 2), '', '📦 Payload:', JSON.stringify(payload, null, 2)];
+    if(payload.exp){
+      const exp = new Date(payload.exp * 1000);
+      lines.push('', `⏰ Expires: ${exp.toISOString()} (${expired ? 'منتهي' : 'صالح'})`);
+    }
+    box.textContent = lines.join('\n');
+  } catch(e){ box.textContent = '⚠️ ' + e.message; }
+};
+
+// Hash ID
+$('#btnHashidRun').onclick = async () => {
+  const hash = $('#hashidInput').value.trim();
+  if(!hash) return;
+  const box = $('#hashidResult');
+  const guesses = [];
+  if(/^[a-f0-9]{32}$/i.test(hash)) guesses.push('MD5');
+  if(/^[a-f0-9]{40}$/i.test(hash)) guesses.push('SHA-1');
+  if(/^[a-f0-9]{64}$/i.test(hash)) guesses.push('SHA-256');
+  if(/^\$2[aby]\$/.test(hash)) guesses.push('bcrypt');
+  box.textContent = guesses.length ? `🔎 ${guesses.join(', ')}` : '⚠️ نوع غير معروف';
+};
+
+// IP Rep
+$('#btnIprepCheck').onclick = async () => {
+  const ip = $('#iprepIp').value.trim();
+  if(!ip) return;
+  const box = $('#iprepResult');
+  box.textContent = '⏳ فحص...';
+  try {
+    const res = await fetch('/api/iprep', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ ip, guestId: window.getGuestId() })
+    });
+    const data = await res.json();
+    if(data.notConfigured){ box.textContent = '🚧 قريبًا'; return; }
+    if(data.error){ box.textContent = '⚠️ ' + data.error; return; }
+    const score = data.abuseScore || 0;
+    const icon = score >= 75 ? '🚨' : score >= 25 ? '⚠️' : '✅';
+    box.textContent = `${icon} ${data.ip}\nAbuse Score: ${score}%\nReports: ${data.totalReports || 0}\nISP: ${data.isp || '—'}\nCountry: ${data.countryName || '—'}`;
+  } catch(e){ box.textContent = '⚠️ ' + e.message; }
+};
+
+// CTF (hash-based flags for security)
+const CTF_CHALLENGES = [
+  { id:1, title:'Base64', clue:'VEFSWUFNe2Jhc2U2NF9pc19lYXN5fQ==', flagHash:null },
+  { id:2, title:'Caesar', clue:'WDUBDP{fdhvdu_lv_ixq}', flagHash:null },
+  { id:3, title:'ROT13', clue:'GNELNZ{ebg13_pynffvp}', flagHash:null },
+  { id:4, title:'Hex', clue:'54 41 52 59 41 4d 7b 68 65 78 7d', flagHash:null }
+];
+// Pre-compute SHA-256 hashes
+async function sha256(str){
+  const buf = new TextEncoder().encode(str);
+  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buf))).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+const CTF_FLAGS = {
+  1: 'TARYAM{base64_is_easy}',
+  2: 'TARYAM{caesar_is_fun}',
+  3: 'TARYAM{rot13_classic}',
+  4: 'TARYAM{hex}'
+};
+(async () => { for(const c of CTF_CHALLENGES) c.flagHash = await sha256(CTF_FLAGS[c.id]); })();
+
+async function renderCTF(){
+  const box = $('#ctfList');
+  if(!box) return;
+  const solved = JSON.parse(localStorage.getItem('taryam_ctf_solved') || '[]');
+  box.innerHTML = CTF_CHALLENGES.map(ch => `
+    <div class="ctf-item ${solved.includes(ch.id) ? 'solved' : ''}">
+      <div style="font-weight:700;margin-bottom:6px">${ch.title} ${solved.includes(ch.id) ? '✅' : ''}</div>
+      <div style="font-family:monospace;font-size:12px;margin-bottom:8px;word-break:break-all">${ch.clue}</div>
+      <div style="display:flex;gap:6px">
+        <input type="text" placeholder="TARYAM{...}" class="ctfFlagInput" data-id="${ch.id}" style="flex:1">
+        <button class="btn ctfCheckBtn" data-id="${ch.id}">تحقق</button>
+      </div>
+    </div>
+  `).join('');
+  box.querySelectorAll('.ctfCheckBtn').forEach(btn => {
+    btn.onclick = async () => {
+      const id = parseInt(btn.getAttribute('data-id'), 10);
+      const input = box.querySelector(`.ctfFlagInput[data-id="${id}"]`);
+      const hash = await sha256(input.value.trim());
+      const ch = CTF_CHALLENGES.find(c => c.id === id);
+      if(hash === ch.flagHash){
+        const arr = JSON.parse(localStorage.getItem('taryam_ctf_solved') || '[]');
+        if(!arr.includes(id)) arr.push(id);
+        localStorage.setItem('taryam_ctf_solved', JSON.stringify(arr));
+        renderCTF();
+      } else alert('❌ غير صحيح');
+    };
+  });
+}
+renderCTF();
+
+/* ═══ 24. CLOCK ═══ */
+let clockInterval = null;
+function updateHeaderClock(){
+  const el = $('#headerClockTime');
+  if(!el) return;
+  el.textContent = new Intl.DateTimeFormat(isAr() ? 'ar-SA-u-nu-latn' : 'en-US', {
+    hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true
+  }).format(new Date());
+}
+updateHeaderClock();
+setInterval(updateHeaderClock, 1000);
+
+function updateClockDialog(){
+  const now = new Date();
+  $('#clockGregorianTime').textContent = new Intl.DateTimeFormat(isAr() ? 'ar-SA-u-nu-latn' : 'en-US', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true }).format(now);
+  $('#clockGregorianDate').textContent = new Intl.DateTimeFormat(isAr() ? 'ar-SA-u-nu-latn' : 'en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' }).format(now);
+  try {
+    $('#clockHijriDate').textContent = '🕌 ' + new Intl.DateTimeFormat(isAr() ? 'ar-SA-u-ca-islamic-umalqura-nu-latn' : 'en-US-u-ca-islamic-umalqura', { year:'numeric', month:'long', day:'numeric' }).format(now);
+  } catch(e){ $('#clockHijriDate').textContent = '🕌 —'; }
+}
+$('#btnClock').onclick = () => {
+  updateClockDialog();
+  if(clockInterval) clearInterval(clockInterval);
+  clockInterval = setInterval(updateClockDialog, 1000);
+  openDialogSafe($('#clockDialog'));
+};
+$('#btnCloseClock').onclick = () => {
+  closeDialogSafe($('#clockDialog'));
+  if(clockInterval){ clearInterval(clockInterval); clockInterval = null; }
+};
+
+/* ═══ 25. BACKGROUNDS (compact) ═══ */
+(function(){
+  function rnd(a, b){ return a + Math.random() * (b - a); }
+  function fade(ctx, w, h, c){ ctx.fillStyle = c; ctx.fillRect(0, 0, w, h); }
+  function fxNetwork(ctx, w, h, t, S, c){
+    if(!S.pts) S.pts = Array.from({ length: Math.max(18, Math.floor(w*h/22000)) }, () => ({ x:rnd(0,w), y:rnd(0,h), vx:rnd(-0.25,0.25), vy:rnd(-0.25,0.25) }));
+    fade(ctx, w, h, 'rgba(5,8,10,0.35)');
+    S.pts.forEach(p => { p.x += p.vx; p.y += p.vy; if(p.x<0||p.x>w) p.vx*=-1; if(p.y<0||p.y>h) p.vy*=-1; });
+    for(let i = 0; i < S.pts.length; i++) for(let j = i+1; j < S.pts.length; j++){
+      const dx = S.pts[i].x - S.pts[j].x, dy = S.pts[i].y - S.pts[j].y, d = Math.sqrt(dx*dx+dy*dy);
+      if(d < 120){ ctx.strokeStyle = c + ',' + ((1-d/120)*0.5) + ')'; ctx.beginPath(); ctx.moveTo(S.pts[i].x, S.pts[i].y); ctx.lineTo(S.pts[j].x, S.pts[j].y); ctx.stroke(); }
+    }
+    ctx.fillStyle = c + ',0.9)';
+    S.pts.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 2.2, 0, 7); ctx.fill(); });
+  }
+  function fxMatrix(ctx, w, h, t, S, c){
+    const fs = 16;
+    if(!S.drops || S.w !== w){ S.w = w; S.cols = Math.floor(w/fs); S.drops = new Array(S.cols).fill(0).map(() => Math.random() * h/fs); }
+    fade(ctx, w, h, 'rgba(3,6,4,0.1)');
+    if(!S.fontSet){ ctx.font = fs + 'px monospace'; S.fontSet = true; }
+    ctx.fillStyle = c + ',0.9)';
+    const chars = 'アイウエオカキクケコ0123456789ABCDEF';
+    for(let i = 0; i < S.cols; i++){
+      ctx.fillText(chars[Math.floor(Math.random()*chars.length)], i*fs, S.drops[i]*fs);
+      if(S.drops[i]*fs > h && Math.random() > 0.975) S.drops[i] = 0;
+      S.drops[i]++;
+    }
+  }
+  function fxRadar(ctx, w, h, t, S, c){
+    fade(ctx, w, h, 'rgba(5,8,10,0.18)');
+    const cx = w/2, cy = h/2, r = Math.max(w, h)*0.55;
+    ctx.strokeStyle = c + ',0.25)'; ctx.lineWidth = 1;
+    for(let i = 1; i <= 4; i++){ ctx.beginPath(); ctx.arc(cx, cy, r*i/4, 0, 7); ctx.stroke(); }
+    if(!S.a) S.a = 0; S.a += 0.025;
+    if(ctx.createConicGradient){
+      const g = ctx.createConicGradient(S.a, cx, cy);
+      g.addColorStop(0, c + ',0.55)'); g.addColorStop(0.1, c + ',0)'); g.addColorStop(1, c + ',0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+    }
+    ctx.strokeStyle = c + ',1)'; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + r*Math.cos(S.a), cy + r*Math.sin(S.a)); ctx.stroke();
+  }
+  function fxHex(ctx, w, h, t, S, c){
+    fade(ctx, w, h, 'rgba(5,8,10,0.25)');
+    if(!S.hx) S.hx = Array.from({ length: 9 }, () => ({ x:rnd(0,w), y:rnd(0,h), s:rnd(14,30), sp:rnd(0.2,0.6), ph:rnd(0,7) }));
+    S.hx.forEach(hx => {
+      hx.y -= hx.sp; if(hx.y < -40) hx.y = h + 40;
+      const pulse = 0.5 + 0.5*Math.sin(t*1.5 + hx.ph);
+      ctx.strokeStyle = c + ',' + (0.35 + 0.4*pulse) + ')'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      for(let i = 0; i < 6; i++){ const a = Math.PI/3*i; const x = hx.x + hx.s*Math.cos(a), y = hx.y + hx.s*Math.sin(a); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.closePath(); ctx.stroke();
+    });
+  }
+  function fxParticles(ctx, w, h, t, S, c){
+    fade(ctx, w, h, 'rgba(5,8,10,0.2)');
+    if(!S.pp) S.pp = Array.from({ length: 70 }, () => ({ x:rnd(0,w), y:rnd(0,h), vx:rnd(-0.4,0.4), vy:rnd(-0.4,0.4), r:rnd(0.6,2.2) }));
+    S.pp.forEach(p => {
+      p.x += p.vx; p.y += p.vy;
+      if(p.x < 0) p.x = w; if(p.x > w) p.x = 0; if(p.y < 0) p.y = h; if(p.y > h) p.y = 0;
+      ctx.fillStyle = c + ',0.8)'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+    });
+  }
+  function fxGlobe(ctx, w, h, t, S, c){
+    fade(ctx, w, h, 'rgba(5,8,10,0.3)');
+    const cx = w/2, cy = h/2, R = Math.min(w, h)*0.3;
+    ctx.strokeStyle = c + ',0.55)'; ctx.lineWidth = 1;
+    const rot = t*0.3;
+    for(let la = -2; la <= 2; la++){
+      ctx.beginPath();
+      for(let lo = 0; lo <= 64; lo++){
+        const u = lo/64*Math.PI*2 + rot;
+        const y = la/2.5*R;
+        const rr = Math.sqrt(Math.max(0, R*R - y*y));
+        const x = cx + rr*Math.cos(u), yy = cy + y*0.6;
+        lo ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy);
+      }
+      ctx.stroke();
+    }
+    for(let lo = 0; lo < 8; lo++){
+      const ang = lo/8*Math.PI*2 + rot*0.6;
+      ctx.beginPath();
+      for(let la = 0; la <= 32; la++){
+        const v = la/32*Math.PI - Math.PI/2;
+        const x = cx + R*Math.cos(v)*Math.cos(ang), y = cy + R*Math.sin(v)*0.6;
+        la ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+  function fxTunnel(ctx, w, h, t, S, c){
+    fade(ctx, w, h, 'rgba(5,8,10,0.35)');
+    if(!S.rings) S.rings = Array.from({ length: 16 }, (_, i) => i/16);
+    S.rings = S.rings.map(z => { z += 0.006; return z > 1 ? 0 : z; });
+    const cx = w/2, cy = h/2;
+    S.rings.forEach(z => {
+      ctx.strokeStyle = c + ',' + (1-z)*0.7 + ')'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx, cy, z*Math.max(w, h)*0.7, 0, 7); ctx.stroke();
+    });
+  }
+  function fxWaveform(ctx, w, h, t, S, c){
+    fade(ctx, w, h, 'rgba(5,8,10,0.35)');
+    const bars = 64, bw = w/bars;
+    for(let i = 0; i < bars; i++){
+      const v = (0.3 + 0.7*Math.abs(Math.sin(t*2 + i*0.35) + 0.3*Math.sin(t*5 + i)))*h*0.35;
+      ctx.fillStyle = c + ',' + (0.4 + 0.5*Math.abs(Math.sin(i*0.3 + t))) + ')';
+      ctx.fillRect(i*bw + 1, h/2 - v/2, bw - 2, v);
+    }
+  }
+  function fxVirus(ctx, w, h, t, S, c){
+    fade(ctx, w, h, 'rgba(5,8,10,0.25)');
+    if(!S.vc) S.vc = Array.from({ length: 10 }, () => ({ x:rnd(0,w), y:rnd(0,h), r:rnd(14,26), ph:rnd(0,7), vx:rnd(-0.2,0.2), vy:rnd(-0.2,0.2) }));
+    S.vc.forEach(cc => {
+      cc.x += cc.vx; cc.y += cc.vy;
+      if(cc.x < 0 || cc.x > w) cc.vx *= -1;
+      if(cc.y < 0 || cc.y > h) cc.vy *= -1;
+      const rr = cc.r + 4*Math.sin(t*2 + cc.ph);
+      ctx.strokeStyle = c + ',0.6)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(cc.x, cc.y, rr, 0, 7); ctx.stroke();
+      for(let i = 0; i < 8; i++){
+        const ang = i/8*Math.PI*2 + t;
+        ctx.beginPath(); ctx.arc(cc.x + (rr + 6)*Math.cos(ang), cc.y + (rr + 6)*Math.sin(ang), 2.5, 0, 7); ctx.fillStyle = c + ',0.7)'; ctx.fill();
+      }
+    });
+  }
+  const BGS = [
+    { id:'net-green', nameAr:'شبكة عقد', nameEn:'Node Network', color:'rgba(0,229,160', fx:fxNetwork },
+    { id:'matrix', nameAr:'مطر الشفرة', nameEn:'Matrix Rain', color:'rgba(0,255,65', fx:fxMatrix },
+    { id:'radar', nameAr:'رادار', nameEn:'Radar Sweep', color:'rgba(0,229,160', fx:fxRadar },
+    { id:'hex', nameAr:'سداسيات', nameEn:'Hex Shields', color:'rgba(34,211,238', fx:fxHex },
+    { id:'particles', nameAr:'جسيمات', nameEn:'Particles', color:'rgba(163,230,53', fx:fxParticles },
+    { id:'globe', nameAr:'كرة أرضية', nameEn:'Globe', color:'rgba(0,212,255', fx:fxGlobe },
+    { id:'tunnel', nameAr:'نفق بيانات', nameEn:'Data Tunnel', color:'rgba(0,229,160', fx:fxTunnel },
+    { id:'waveform', nameAr:'موجات', nameEn:'Waveform', color:'rgba(0,229,160', fx:fxWaveform },
+    { id:'virus', nameAr:'فيروسات', nameEn:'Virus Cells', color:'rgba(255,59,59', fx:fxVirus }
+  ];
+  window.CYBER_BACKGROUNDS = BGS;
+
+  let mainAnim = null, autoTimer = null;
+  const host = document.getElementById('vantaBg');
+
+  function makeRunner(canvas, ctx, bg, fixed){
+    const S = {};
+    let raf;
+    const start = performance.now();
+    function resize(){ if(fixed) return; canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    if(!fixed){ resize(); window.addEventListener('resize', resize); }
+    function tick(now){ try { bg.fx(ctx, canvas.width, canvas.height, (now-start)/1000, S, bg.color); } catch(e){} raf = requestAnimationFrame(tick); }
+    raf = requestAnimationFrame(tick);
+    return { stop(){ cancelAnimationFrame(raf); if(!fixed) window.removeEventListener('resize', resize); } };
+  }
+  function destroy(){ if(mainAnim){ try { mainAnim.stop(); } catch(e){} mainAnim = null; } if(host) host.innerHTML = ''; }
+  function applyBg(id){
+    destroy();
+    if(id === 'none') return;
+    const bg = BGS.find(b => b.id === id) || BGS[0];
+    const canvas = document.createElement('canvas');
+    canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
+    host.appendChild(canvas);
+    mainAnim = makeRunner(canvas, canvas.getContext('2d'), bg, false);
+  }
+  function currentChoice(){ return localStorage.getItem('cyberBgChoice') || 'net-green'; }
+  window.selectCyberBg = function(id){ localStorage.setItem('cyberBgChoice', id); applyBg(id); if(window.renderBgPicker) window.renderBgPicker(); };
+
+  let thumbRunners = [];
+  function stopThumbs(){ thumbRunners.forEach(r => { try { r.stop(); } catch(e){} }); thumbRunners = []; }
+  function startThumb(canvas, bg){ canvas.width = 108; canvas.height = 40; thumbRunners.push(makeRunner(canvas, canvas.getContext('2d'), bg, true)); }
+
+  window.renderBgPicker = function(){
+    const grid = document.getElementById('bgPickerGrid');
+    if(!grid) return;
+    stopThumbs();
+    grid.innerHTML = '';
+    const cur = currentChoice();
+    const items = [{ id:'none', nameAr:'بدون', nameEn:'None' }].concat(BGS);
+    items.forEach((b, idx) => {
+      const sel = b.id === cur;
+      const div = document.createElement('div');
+      div.style.cssText = `cursor:pointer;border-radius:10px;padding:8px 6px;text-align:center;border:2px solid ${sel ? '#00e5a0' : 'var(--border)'};background:var(--panel2)`;
+      div.onclick = () => window.selectCyberBg(b.id);
+      div.innerHTML = `<div style="width:100%;height:40px;border-radius:6px;margin-bottom:6px;overflow:hidden;background:#05080a" data-thumb="${idx}"></div><div style="font-size:10.5px;line-height:1.3">${isAr() ? b.nameAr : b.nameEn}</div>`;
+      grid.appendChild(div);
+    });
+    items.forEach((b, idx) => {
+      if(!b.fx) return;
+      const holder = grid.querySelector(`[data-thumb="${idx}"]`);
+      if(!holder) return;
+      const c = document.createElement('canvas');
+      c.style.cssText = 'width:100%;height:100%;display:block';
+      holder.appendChild(c);
+      startThumb(c, b);
+    });
+    const chk = document.getElementById('chkBgAutoRotate');
+    if(chk && !chk._bound){
+      chk._bound = true;
+      chk.checked = localStorage.getItem('cyberBgAutoRotate') === '1';
+      if(chk.checked) startAuto();
+      chk.onchange = () => {
+        localStorage.setItem('cyberBgAutoRotate', chk.checked ? '1' : '0');
+        if(autoTimer){ clearInterval(autoTimer); autoTimer = null; }
+        if(chk.checked) startAuto();
+      };
+    }
+  };
+  function startAuto(){
+    autoTimer = setInterval(() => {
+      const ids = BGS.map(b => b.id);
+      const idx = ids.indexOf(currentChoice());
+      const next = ids[(idx + 1) % ids.length];
+      localStorage.setItem('cyberBgChoice', next);
+      applyBg(next);
+      if(window.renderBgPicker) window.renderBgPicker();
+    }, 20000);
+  }
+  applyBg(currentChoice());
+})();
+
+/* ═══ 26. BOOT ═══ */
+applyLanguage();
+renderAll();
+
+// Fill default project if empty
+if(!state.projects.length){
+  const id = 'p_' + Date.now();
+  state.projects.push({ id, title: t('defaultProjectTitle'), messages: [], code:'' });
+  state.currentId = id;
+  saveState();
+} else if(!state.currentId){
+  state.currentId = state.projects[state.projects.length - 1].id;
+}
+renderAll();
+
+// Initial localStorage test
+try { localStorage.setItem('_test', '1'); localStorage.removeItem('_test'); }
+catch(e){ console.warn('localStorage unavailable'); }
+
+console.log('%c🛡️ TARYAM Cyber — Enhanced Edition', 'color:#00e5a0;font-size:16px;font-weight:bold');
+console.log('%c⚡ Powered by DeepSeek Synthesis Engine', 'color:#4d6bfe;font-size:12px');
+</script>
+</body>
+</html>
