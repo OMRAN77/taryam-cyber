@@ -127,3 +127,29 @@ test('TTS only forwards known voices', async () => {
     assert.strictEqual(JSON.parse(upstream.lastBody).voice, 'onyx');
   } finally { restore(); }
 });
+
+test('the TARYAM extension has its own bucket: it does not use up the 20 chat messages', async () => {
+  const { upstream, restore } = setup();
+  try {
+    for (const name of ['claude', 'openai', 'deepseek']) {
+      const h = require('../../api/' + name);
+      for (let i = 0; i < 25; i++) assert.strictEqual((await chat(h, '198.51.100.40', { client: 'taryam-ext' })).status, 200, name + ' #' + i);
+    }
+    // 75 extension calls later, the same IP still has its full chat quota.
+    const ds = require('../../api/deepseek');
+    for (let i = 0; i < 20; i++) assert.strictEqual((await chat(ds, '198.51.100.40')).status, 200);
+    assert.strictEqual((await chat(ds, '198.51.100.40')).status, 402);
+    assert.strictEqual(upstream.calls, 95);
+  } finally { restore(); }
+});
+
+test('openai: reasoning models are sent without a temperature', async () => {
+  const { upstream, restore } = setup();
+  try {
+    const h = require('../../api/openai');
+    await chat(h, '198.51.100.50', { model: 'o3' });
+    assert.ok(!('temperature' in JSON.parse(upstream.lastBody)));
+    await chat(h, '198.51.100.50', { model: 'gpt-4.1' });
+    assert.strictEqual(JSON.parse(upstream.lastBody).temperature, 0.7);
+  } finally { restore(); }
+});

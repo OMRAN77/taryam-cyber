@@ -34,7 +34,7 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const usage = await checkAndConsume(token, req);
+    const usage = await checkAndConsume(token, req, body.client === 'taryam-ext' ? 'ext' : 'chat');
     if (!usage.allowed) {
       rejectUsage(res, usage);
       return;
@@ -49,7 +49,8 @@ module.exports = async (req, res) => {
       body: JSON.stringify({
         model: model || 'gpt-4o-mini',
         messages,
-        temperature: 0.7,
+        // Reasoning models (o1/o3/o4, gpt-5) reject any temperature but the default.
+        ...(/^(o\d|gpt-5)/i.test(String(model || '')) ? {} : { temperature: 0.7 }),
       }),
     });
 
