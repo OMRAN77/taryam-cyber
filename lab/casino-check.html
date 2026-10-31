@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- connect-src 'self': the only network call this page can make is to our own /api/casino-check. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="color-scheme" content="dark">
+<title>فحص الكازينو — TARYAM</title>
+<link rel="icon" href="../icons/favicon-32.png">
+<link rel="stylesheet" href="lab.css">
+<script type="module" src="casino-check.js"></script>
+</head>
+<body>
+<header class="top">
+  <a class="back" href="../index.html" data-t="back"></a>
+  <div class="brand">
+    <h1 data-t="pageTitle"></h1>
+    <p data-t="subtitle"></p>
+  </div>
+  <a class="back" href="casino.html" data-t="casinoLink"></a>
+  <a class="back" href="mines.html" data-t="minesLink"></a>
+  <a class="back" href="index.html" data-t="labLink"></a>
+  <button id="langToggle" type="button" class="ghost" data-t="language"></button>
+</header>
+<div class="wrap stack">
+  <p class="privacy" data-t="privacy"></p>
+
+  <section class="panel" id="site">
+    <h2 data-t="siteTitle"></h2>
+    <p class="muted" data-t="siteIntro"></p>
+    <div class="url-row">
+      <label><span data-t="urlIn"></span><input id="s-url" dir="ltr" placeholder="example-casino.com" autocomplete="off" inputmode="url"></label>
+      <button type="button" class="primary" id="run-site" data-t="check"></button>
+    </div>
+    <div class="error" id="err-site" hidden></div>
+    <div class="results" id="res-site"></div>
+    <details class="box" id="paste-box">
+      <summary data-t="pasteTitle"></summary>
+      <p class="muted small" data-t="pasteIntro"></p>
+      <label><span data-t="pasteIn"></span><textarea id="s-html" rows="6" dir="ltr" spellcheck="false" placeholder="<!doctype html> …"></textarea></label>
+      <div class="actions"><button type="button" class="primary" id="run-paste" data-t="pasteRun"></button></div>
+    </details>
+  </section>
+
+  <section class="panel" id="fair">
+    <h2 data-t="fairTitle"></h2>
+    <p class="muted" data-t="fairIntro"></p>
+    <div class="grid three">
+      <label><span data-t="game"></span>
+        <select id="f-game">
+          <option value="mines" data-t="gMines"></option>
+          <option value="dice" data-t="gDice"></option>
+          <option value="limbo" data-t="gLimbo"></option>
+          <option value="plinko" data-t="gPlinko"></option>
+        </select>
+      </label>
+      <label data-for="mines"><span data-t="minesIn"></span><input id="f-mines" value="3" dir="ltr" inputmode="numeric" autocomplete="off"></label>
+      <label data-for="plinko"><span data-t="rowsIn"></span><input id="f-rows" value="16" dir="ltr" inputmode="numeric" autocomplete="off"></label>
+      <label><span data-t="nonceIn"></span><input id="f-nonce" value="1" dir="ltr" inputmode="numeric" autocomplete="off"></label>
+    </div>
+    <div class="grid two">
+      <label><span data-t="serverSeedIn"></span><input id="f-server" dir="ltr" autocomplete="off" spellcheck="false"></label>
+      <label><span data-t="serverHashIn"></span><input id="f-hash" dir="ltr" autocomplete="off" spellcheck="false"></label>
+      <label><span data-t="clientSeedIn"></span><input id="f-client" dir="ltr" autocomplete="off" spellcheck="false"></label>
+      <label><span data-t="shownIn"></span><input id="f-shown" dir="ltr" autocomplete="off"></label>
+    </div>
+    <div class="actions"><button type="button" class="primary" id="run-fair" data-t="verify"></button><button type="button" id="example-fair" data-t="example"></button></div>
+    <div class="error" id="err-fair" hidden></div>
+    <div class="results" id="res-fair"></div>
+    <div class="box">
+      <h3 class="sub" data-t="predictTitle"></h3>
+      <p class="small" id="predict-note"></p>
+    </div>
+  </section>
+
+  <section class="panel" id="history">
+    <h2 data-t="histTitle"></h2>
+    <p class="muted" data-t="histIntro"></p>
+    <label><span data-t="histIn"></span><textarea id="h-text" rows="8" dir="auto" placeholder="30/10/2026 14:05  Mines  5.00  ×0.00  0.00&#10;30/10/2026 14:06  Mines  5.00  ×1.12  5.60&#10;…"></textarea></label>
+    <div class="grid three">
+      <label><span data-t="declaredIn"></span><input id="h-declared" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="97"></label>
+    </div>
+    <div class="actions"><button type="button" class="primary" id="run-hist" data-t="analyse"></button><button type="button" id="example-hist" data-t="example"></button></div>
+    <p class="muted small" data-t="parseHelp"></p>
+    <div class="error" id="err-hist" hidden></div>
+    <div class="results" id="res-hist"></div>
+    <div class="box">
+      <h3 class="sub" data-t="demoTitle"></h3>
+      <p class="small" data-t="demoText"></p>
+    </div>
+  </section>
+
+  <section class="panel help" id="help">
+    <h2 data-t="helpTitle"></h2>
+    <ul>
+      <li data-t="help1"></li>
+      <li data-t="help2"></li>
+      <li data-t="help3"></li>
+    </ul>
+  </section>
+</div>
+</body>
+</html>

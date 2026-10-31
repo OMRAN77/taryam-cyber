@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- connect-src 'none': this page computes everything locally and cannot send anything. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="color-scheme" content="dark">
+<title>Mines من أ إلى ي — TARYAM</title>
+<link rel="icon" href="../icons/favicon-32.png">
+<link rel="stylesheet" href="lab.css">
+<script type="module" src="mines.js"></script>
+</head>
+<body>
+<header class="top">
+  <a class="back" href="../index.html" data-t="back"></a>
+  <div class="brand">
+    <h1 data-t="pageTitle"></h1>
+    <p data-t="subtitle"></p>
+  </div>
+  <a class="back" href="casino-check.html" data-t="checkLink"></a>
+  <a class="back" href="casino.html" data-t="casinoLink"></a>
+  <button id="langToggle" type="button" class="ghost" data-t="language"></button>
+</header>
+<div class="wrap stack">
+  <p class="privacy" data-t="privacy"></p>
+
+  <section class="panel" id="story">
+    <h2 data-t="storyTitle"></h2>
+    <ol class="story">
+      <li data-t="story1"></li>
+      <li data-t="story2"></li>
+      <li data-t="story3"></li>
+      <li data-t="story4"></li>
+    </ol>
+  </section>
+
+  <section class="panel" id="commit">
+    <h2 data-t="commitTitle"></h2>
+    <p class="muted" data-t="commitIntro"></p>
+    <div class="grid two">
+      <label><span data-t="hashIn"></span><input id="c-hash" dir="ltr" autocomplete="off" spellcheck="false" placeholder="dde93053e586c455…"></label>
+      <label><span data-t="seedIn"></span><input id="c-seed" dir="ltr" autocomplete="off" spellcheck="false" placeholder="turbo-demo-round-7f3a91"></label>
+    </div>
+    <div class="actions"><button type="button" class="primary" id="run-commit" data-t="verify"></button><button type="button" id="example-commit" data-t="example"></button></div>
+    <div class="error" id="err-commit" hidden></div>
+    <div class="results" id="res-commit"></div>
+    <p class="small muted" data-t="commitNote"></p>
+  </section>
+
+  <section class="panel" id="ladder">
+    <h2 data-t="ladderTitle"></h2>
+    <p class="muted" data-t="ladderIntro"></p>
+    <div class="grid three">
+      <label><span data-t="minesIn"></span><input id="l-mines" value="3" dir="ltr" inputmode="numeric" autocomplete="off"></label>
+      <label><span data-t="betIn"></span><input id="l-bet" value="10" dir="ltr" inputmode="decimal" autocomplete="off"></label>
+      <label><span data-t="rtpIn"></span><input id="l-rtp" value="96" dir="ltr" inputmode="decimal" autocomplete="off"></label>
+    </div>
+    <label><span data-t="multsIn"></span><input id="l-mults" dir="ltr" autocomplete="off" placeholder="1.09 1.24 1.43 1.66 …"></label>
+    <p class="small muted" data-t="multsHint"></p>
+    <div class="actions"><button type="button" class="primary" id="run-ladder" data-t="compute"></button></div>
+    <div class="error" id="err-ladder" hidden></div>
+    <div class="results" id="res-ladder"></div>
+    <div class="box" id="walk">
+      <h3 class="sub" data-t="walkTitle"></h3>
+      <div class="walk-grid" id="walk-grid"></div>
+      <p id="walk-state" class="headline"></p>
+      <div class="actions"><button type="button" class="primary" id="walk-safe" data-t="walkSafe"></button><button type="button" id="walk-reset" data-t="walkReset"></button></div>
+    </div>
+    <div class="box" id="session">
+      <h3 class="sub" id="session-title"></h3>
+      <div class="grid three"><label><span data-t="roundsIn"></span><input id="s-rounds" value="200" dir="ltr" inputmode="numeric" autocomplete="off"></label></div>
+      <div class="results" id="res-session"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="history">
+    <h2 data-t="histTitle"></h2>
+    <p class="muted" data-t="histIntro"></p>
+    <label><span data-t="histIn"></span><textarea id="h-text" rows="7" dir="auto" placeholder="30/10/2026 17:01  Mines  5.00  ×0.00  0.00&#10;30/10/2026 17:02  Mines  5.00  ×1.09  5.45&#10;…"></textarea></label>
+    <div class="actions"><button type="button" class="primary" id="run-hist" data-t="analyse"></button><button type="button" id="example-hist" data-t="example"></button></div>
+    <div class="error" id="err-hist" hidden></div>
+    <div class="results" id="res-hist"></div>
+  </section>
+
+  <section class="panel" id="operator">
+    <h2 data-t="siteTitle"></h2>
+    <p data-t="siteText1"></p>
+    <p data-t="siteText2"></p>
+    <a class="download" id="site-link" href="casino-check.html" data-t="siteBtn"></a>
+  </section>
+</div>
+</body>
+</html>

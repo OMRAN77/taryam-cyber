@@ -186,3 +186,57 @@ td.na { color: var(--muted); }
 .table-view summary { cursor: pointer; color: var(--primary-2); font-size: 13.5px; margin: 10px 0 8px; }
 .help ul { margin: 0; padding-inline-start: 20px; }
 .help li + li { margin-top: 6px; }
+
+/* casino-check.html */
+.url-row { display: flex; align-items: flex-end; gap: 10px; }
+.url-row label { flex: 1; min-width: 0; }
+.url-row input { font-family: var(--mono); font-size: 14px; }
+.url-row button { white-space: nowrap; }
+.risk { display: grid; gap: 10px; }
+.risk-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.risk-head strong { font-size: 22px; }
+.risk-bar { height: 12px; border-radius: 6px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.risk-fill { display: block; height: 100%; border-radius: 6px; min-width: 4px; transition: width 0.4s ease; }
+.risk-fill.caution { background: linear-gradient(90deg, #059669, var(--green)); }
+.risk-fill.warning { background: linear-gradient(90deg, #d97706, var(--amber)); }
+.risk-fill.danger { background: linear-gradient(90deg, #b91c1c, var(--red)); }
+.findings { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.finding { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: rgba(0, 0, 0, 0.28); border: 1px solid var(--border); font-size: 14px; }
+.finding > div { min-width: 0; flex: 1; }
+.finding .sev { flex: 0 0 auto; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; border: 1px solid; margin-top: 2px; }
+.finding.high .sev { color: var(--red); border-color: rgba(248, 113, 113, 0.5); background: rgba(248, 113, 113, 0.1); }
+.finding.medium .sev { color: var(--amber); border-color: rgba(251, 191, 36, 0.5); background: rgba(251, 191, 36, 0.1); }
+.finding.low .sev { color: var(--cyan); border-color: rgba(34, 211, 238, 0.4); background: rgba(34, 211, 238, 0.08); }
+.finding.info .sev { color: var(--muted); border-color: var(--border); }
+.finding.ok .sev { color: var(--green); border-color: rgba(52, 211, 153, 0.45); background: rgba(52, 211, 153, 0.08); }
+.finding.high { border-color: rgba(248, 113, 113, 0.3); }
+.finding.ok { border-color: rgba(52, 211, 153, 0.25); }
+.finding .ev { margin-top: 4px; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.finding .ev bdi { font-family: var(--mono); }
+dl.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 14px; }
+dl.kv dt { color: var(--muted); }
+dl.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.mines-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; max-width: 360px; direction: ltr; }
+.mtile { position: relative; aspect-ratio: 1; border-radius: 10px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--border); display: grid; place-items: center; font-size: 20px; }
+.mtile .n { position: absolute; top: 3px; left: 6px; font-size: 10.5px; color: var(--muted); }
+.mtile.mine { background: rgba(248, 113, 113, 0.14); border-color: rgba(248, 113, 113, 0.5); }
+.mtile.diff { outline: 2px dashed var(--amber); outline-offset: -2px; }
+.mono-line { font-family: var(--mono); font-size: 13px; direction: ltr; text-align: left; overflow-wrap: anywhere; margin: 0; }
+:root[dir="rtl"] .mono-line { text-align: right; }
+@media (max-width: 760px) {
+  .url-row { flex-direction: column; align-items: stretch; }
+  dl.kv { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  dl.kv dd { margin-bottom: 8px; }
+}
+details.box > summary { cursor: pointer; color: var(--primary-2); font-weight: 600; }
+details.box[open] > summary { margin-bottom: 10px; }
+
+/* mines.html */
+ol.story { margin: 0; padding-inline-start: 22px; font-size: 15px; }
+ol.story li + li { margin-top: 8px; }
+.walk-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; max-width: 320px; direction: ltr; margin: 10px 0; }
+.mtile.gem { background: rgba(34, 211, 238, 0.14); border-color: rgba(34, 211, 238, 0.5); }
+table.ladder td.offered { font-weight: 700; color: var(--primary-2); }
+table.ladder .tag { display: inline-block; margin-inline-start: 6px; font-size: 10.5px; font-weight: 600; color: var(--green); border: 1px solid rgba(52, 211, 153, 0.45); border-radius: 999px; padding: 1px 7px; vertical-align: middle; }
+table.ladder td.fail { color: var(--red); font-weight: 700; }
+#operator .download { margin-top: 6px; }
