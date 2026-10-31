@@ -34,7 +34,7 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const usage = await checkAndConsume(token, req);
+    const usage = await checkAndConsume(token, req, body.client === 'taryam-ext' ? 'ext' : 'chat');
     if (!usage.allowed) {
       rejectUsage(res, usage);
       return;

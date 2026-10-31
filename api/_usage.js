@@ -14,6 +14,10 @@ const GUEST_LIMIT = 20;
 const LIMITS = {
   chat: { account: DAILY_LIMIT, guest: GUEST_LIMIT },
   tts: { account: 30, guest: 10 },
+  // The owner's TARYAM browser extension (asks Claude/GPT/DeepSeek once per roulette
+  // round). Its own bucket so it never eats the site's chat quota; the high cap
+  // only protects the owner's API keys from a runaway loop or a stranger.
+  ext: { account: 1000, guest: 1000 },
 };
 
 function todayStr() {
