@@ -90,6 +90,21 @@ test('an EDIT is all-or-nothing: a missing or ambiguous SEARCH leaves the file u
   assert.strictEqual(ambiguous.files['a.js'], files['a.js']);
 });
 
+test('a SEARCH that matches in two overlapping places is ambiguous too', () => {
+  // '}\n}' starts at index 1 and again at index 3 of 'x}\n}\n}'.
+  const { ops } = AF.parseOps('<<<EDIT path="a">>>\n<<<SEARCH>>>\n}\n}\n<<<REPLACE>>>\nZ\n<<<END>>>');
+  const braces = AF.applyOps({ a: 'x}\n}\n}' }, ops);
+  assert.strictEqual(braces.results[0].ok, false);
+  assert.match(braces.results[0].error, /matches 2 places/);
+  assert.strictEqual(braces.files.a, 'x}\n}\n}');
+  const runs = AF.applyOps({ a: 'aaa' }, [{ type: 'edit', path: 'a', edits: [{ search: 'aa', replace: 'b' }] }]);
+  assert.match(runs.results[0].error, /matches 2 places/);
+  // A unique match is still applied.
+  const unique = AF.applyOps({ a: 'f() {\n  g() {\n  }\n}\n' }, [{ type: 'edit', path: 'a', edits: [{ search: '  }\n}', replace: '  }\n};' }] }]);
+  assert.strictEqual(unique.results[0].ok, true, unique.results[0].error);
+  assert.strictEqual(unique.files.a, 'f() {\n  g() {\n  }\n};\n');
+});
+
 test('REPLACE text containing $& or $1 is inserted literally', () => {
   const r = AF.applyOps({ 'a.txt': 'price' }, [{ type: 'edit', path: 'a.txt', edits: [{ search: 'price', replace: 'cost $& $1' }] }]);
   assert.strictEqual(r.files['a.txt'], 'cost $& $1');
@@ -109,6 +124,35 @@ test('inlines local CSS/JS for the preview and leaves external URLs alone', () =
   assert.match(out, /href="https:\/\/cdn.example\/x.css"/);
   assert.match(out, /<script data-src="js\/app.js">\nalert\("<\\\/script>"\)\n<\/script>/);
   assert.match(out, /<script src="https:\/\/cdn.example\/y.js"><\/script>/);
+  // Passing the root page's own path changes nothing.
+  assert.strictEqual(AF.inlineAssets(html, files, 'index.html'), out);
+});
+
+test('refs resolve from the HTML file\'s folder, like a browser would', () => {
+  const files = {
+    'site/index.html': '',
+    'site/style.css': 'body{margin:0}',
+    'site/app.js': 'go()',
+    'css/shared.css': 'h1{}',
+    'lib/x.js': 'x()',
+    'style.css': 'ROOT',
+  };
+  const html = '<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="../css/shared.css">'
+    + '<script src="./app.js"></script><script src="/lib/x.js"></script>';
+  const page = AF.mainHtml(files);
+  assert.strictEqual(page, 'site/index.html');
+  const out = AF.inlineAssets(html, files, page);
+  assert.match(out, /<style data-src="site\/style.css">\nbody\{margin:0\}\n<\/style>/);
+  assert.doesNotMatch(out, /ROOT/, 'the root style.css is not the sibling one');
+  assert.match(out, /<style data-src="css\/shared.css">\nh1\{\}\n<\/style>/);
+  assert.match(out, /<script data-src="site\/app.js">\ngo\(\)\n<\/script>/);
+  assert.match(out, /<script data-src="lib\/x.js">\nx\(\)\n<\/script>/, 'a leading / means the project root');
+  // '..' past the project root is never resolved, even if a file of that name exists.
+  const up = '<link rel="stylesheet" href="../../style.css"><script src="../app.js"></script>';
+  assert.strictEqual(AF.inlineAssets(up, { 'pages/a.html': '', 'style.css': 'x', 'app.js': 'y' }, 'pages/a.html'),
+    '<link rel="stylesheet" href="../../style.css"><script data-src="app.js">\ny\n</script>');
+  assert.strictEqual(AF.inlineAssets('<script src="../app.js"></script>', { 'app.js': 'y' }),
+    '<script src="../app.js"></script>');
 });
 
 test('mainHtml prefers index.html', () => {
