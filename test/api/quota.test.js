@@ -8,10 +8,10 @@ const PROVIDER_KEYS = {
 };
 
 // Fake upstream AI provider: counts calls, remembers the Authorization header used.
-// Limits are off by default (private deployment); these tests turn them on with QUOTA=on
-// so the limit logic stays covered. Pass { QUOTA: undefined } to test the default.
+// Limits are on by default for everyone except the owner account(s) (OWNER_USERNAMES,
+// default "taryam"); QUOTA=off lifts them all. Each test starts from those defaults.
 function setup(env = {}) {
-  env = { QUOTA: 'on', ...env };
+  env = { QUOTA: undefined, OWNER_USERNAMES: undefined, ...env };
   const blob = createBlobFake();
   const upstream = { calls: 0, auth: [] };
   const restore = installFetch(blob.fetchImpl(async (url, opts) => {
@@ -30,23 +30,79 @@ const chat = (handler, ip, extra = {}) => callApi(handler, {
   headers: { 'x-forwarded-for': ip },
 });
 
-test('by default (QUOTA unset) nothing is capped and nothing is counted', async () => {
-  const { blob, upstream, restore } = setup({ QUOTA: undefined });
+test('by default guests are limited but the owner account is not, and costs no Blob I/O', async () => {
+  const { blob, upstream, restore } = setup();
+  try {
+    const { makeToken } = require('../../api/_secrets');
+    const ds = require('../../api/deepseek');
+    for (let i = 0; i < 20; i++) assert.strictEqual((await chat(ds, '198.51.100.90')).status, 200);
+    assert.strictEqual((await chat(ds, '198.51.100.90')).status, 402, 'a guest stops at 20');
+    const before = blob.log.length;
+    const owner = makeToken('taryam', 0);
+    for (let i = 0; i < 25; i++) assert.strictEqual((await chat(ds, '198.51.100.90', { token: owner })).status, 200, 'owner message ' + (i + 1));
+    assert.strictEqual(blob.log.length, before, 'no quota counters read or written for the owner');
+    assert.strictEqual(upstream.calls, 45);
+  } finally { restore(); }
+});
+
+test('OWNER_USERNAMES replaces the default owner list', async () => {
+  const { restore } = setup({ OWNER_USERNAMES: 'Boss, other' });
+  try {
+    const { makeToken } = require('../../api/_secrets');
+    const ds = require('../../api/deepseek');
+    const taryam = makeToken('taryam', 0);
+    for (let i = 0; i < 20; i++) assert.strictEqual((await chat(ds, '198.51.100.92', { token: taryam })).status, 200);
+    assert.strictEqual((await chat(ds, '198.51.100.92', { token: taryam })).status, 402, 'no longer an owner');
+    const boss = makeToken('boss', 0);
+    for (let i = 0; i < 25; i++) assert.strictEqual((await chat(ds, '198.51.100.92', { token: boss })).status, 200);
+  } finally { restore(); }
+});
+
+test('a forged or expired token for the owner name gets no exemption', async () => {
+  const { restore } = setup();
+  try {
+    const { makeToken } = require('../../api/_secrets');
+    const ds = require('../../api/deepseek');
+    const real = makeToken('taryam', 0);
+    const forged = real.slice(0, -2) + (real.endsWith('AA') ? 'BB' : 'AA');
+    for (let i = 0; i < 20; i++) assert.strictEqual((await chat(ds, '198.51.100.93', { token: forged })).status, 200);
+    assert.strictEqual((await chat(ds, '198.51.100.93', { token: forged })).status, 402, 'counted as a guest');
+  } finally { restore(); }
+});
+
+test('QUOTA=off lifts every limit and counts nothing', async () => {
+  const { blob, upstream, restore } = setup({ QUOTA: 'off' });
   try {
     const ds = require('../../api/deepseek');
-    for (let i = 0; i < 25; i++) assert.strictEqual((await chat(ds, '198.51.100.90')).status, 200, 'message ' + (i + 1));
+    for (let i = 0; i < 25; i++) assert.strictEqual((await chat(ds, '198.51.100.94')).status, 200, 'message ' + (i + 1));
     assert.strictEqual(upstream.calls, 25);
     assert.strictEqual(blob.log.length, 0, 'no quota counters read or written');
   } finally { restore(); }
 });
 
-test('by default the voice and chat endpoints work even without Blob configured', async () => {
-  const { upstream, restore } = setup({ QUOTA: undefined, BLOB_READ_WRITE_TOKEN: undefined });
+test('with QUOTA=off chat and voice work even without Blob configured', async () => {
+  const { upstream, restore } = setup({ QUOTA: 'off', BLOB_READ_WRITE_TOKEN: undefined });
   try {
     assert.strictEqual((await chat(require('../../api/openai'), '198.51.100.91')).status, 200);
     const tts = await callApi(require('../../api/tts'), { body: { text: 'hi', voice: 'nova' }, headers: { 'x-forwarded-for': '198.51.100.91' } });
     assert.strictEqual(tts.status, 200);
     assert.strictEqual(upstream.calls, 2);
+  } finally { restore(); }
+});
+
+test('scan tools keep their daily limit for guests but not for the owner token', async () => {
+  const { blob, restore } = setup();
+  try {
+    const { makeToken } = require('../../api/_secrets');
+    const webscan = require('../../api/webscan');
+    const scan = (extra = {}) => callApi(webscan, { body: { mode: 'headers', value: 'example.com', guestId: 'g-1', ...extra }, headers: { 'x-forwarded-for': '198.51.100.95' } });
+    for (let i = 0; i < 40; i++) assert.strictEqual((await scan()).status, 200, 'scan ' + (i + 1));
+    const over = await scan();
+    assert.strictEqual(over.status, 429, 'guest stops at 40');
+    const before = blob.log.length;
+    const owner = makeToken('taryam', 0);
+    for (let i = 0; i < 45; i++) assert.strictEqual((await scan({ token: owner })).status, 200, 'owner scan ' + (i + 1));
+    assert.strictEqual(blob.log.length, before, 'no counter I/O for the owner');
   } finally { restore(); }
 });
 

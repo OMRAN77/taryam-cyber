@@ -16,7 +16,7 @@ const PUBLIC_BASE = 'https://' + STORE_ID + '.public.blob.vercel-storage.com/';
 
 const VT_BASE = 'https://www.virustotal.com/api/v3';
 const DAILY_LIMIT = 15; // per guest/user id, keeps free-tier quota safe
-const { quotaEnabled } = require('./_quota');
+const { quotaEnabled, isOwnerToken } = require('./_quota');
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -108,8 +108,8 @@ module.exports = async (req, res) => {
 
     const id = String(guestId || req.headers['x-forwarded-for'] || 'anon').slice(0, 100);
     const today = todayStr();
-    // Daily per-tool limit, only when QUOTA=on (see api/_quota.js).
-    const limited = quotaEnabled();
+    // Daily per-tool limit; never for the owner's account or a QUOTA=off deployment (api/_quota.js).
+    const limited = quotaEnabled() && !isOwnerToken(body.token);
     let usage = { date: today, count: 0 };
     if (limited) {
       usage = await readBlobJson(usagePath(id), null);
