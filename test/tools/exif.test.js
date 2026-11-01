@@ -86,7 +86,50 @@ test('decodes GPS coordinates to decimal degrees and flags the privacy risk', ()
 test('southern/western refs produce negative coordinates', () => {
   const dec = ExifParser._internal.dmsToDecimal([{ value: 33 }, { value: 52 }, { value: 0 }], 'S');
   assert.ok(Math.abs(dec - (-33.866667)) < 1e-5, 'lat ' + dec);
+  const w = ExifParser._internal.dmsToDecimal([{ value: 151 }, { value: 12 }, { value: 0 }], 'W');
+  assert.ok(Math.abs(w - (-151.2)) < 1e-5, 'lon ' + w);
 });
+
+// The full path: refs are read as 'S\0' / 'W\0' ASCII tags from the GPS IFD
+// of a real JPEG, in both byte orders, and each axis uses its own ref.
+function geoJpeg(little, latRef, lonRef, extraGps) {
+  return wrapJpeg(buildTiff({
+    little,
+    ifd0: [{ tag: 0x010f, type: 2, values: 'Phone' }],
+    gps: [
+      { tag: 0x0001, type: 2, values: latRef },
+      { tag: 0x0002, type: 5, values: [[33, 1], [52, 1], [0, 1]] },
+      { tag: 0x0003, type: 2, values: lonRef },
+      { tag: 0x0004, type: 5, values: [[151, 1], [12, 1], [0, 1]] },
+    ].concat(extraGps || []),
+  }));
+}
+
+for (const little of [false, true]) {
+  const order = little ? 'little-endian' : 'big-endian';
+
+  test('S/W refs give negative latitude and longitude through parse() (' + order + ')', () => {
+    // GPSAltitudeRef is a BYTE in the spec, as real cameras write it.
+    const r = ExifParser.parse(geoJpeg(little, 'S', 'W', [
+      { tag: 0x0005, type: 1, values: [1] },       // below sea level (BYTE)
+      { tag: 0x0006, type: 5, values: [[30, 1]] }, // 30 m
+    ]));
+    assert.ok(r.gps, 'gps extracted');
+    assert.ok(Math.abs(r.gps.latitude - (-33.866667)) < 1e-5, 'lat ' + r.gps.latitude);
+    assert.ok(Math.abs(r.gps.longitude - (-151.2)) < 1e-5, 'lon ' + r.gps.longitude);
+    assert.strictEqual(r.gps.latitudeRef, 'S');
+    assert.strictEqual(r.gps.longitudeRef, 'W');
+    assert.strictEqual(r.gps.altitude, -30);
+    assert.match(r.gps.googleMapsUrl, /maps\?q=-33\.86\d*,-151\.2$/);
+  });
+
+  test('mixed hemispheres keep each axis on its own ref (' + order + ')', () => {
+    const nw = ExifParser.parse(geoJpeg(little, 'N', 'W')).gps;
+    assert.ok(nw.latitude > 0 && nw.longitude < 0, JSON.stringify(nw));
+    const se = ExifParser.parse(geoJpeg(little, 'S', 'E')).gps;
+    assert.ok(se.latitude < 0 && se.longitude > 0, JSON.stringify(se));
+  });
+}
 
 test('reads PNG dimensions and tEXt metadata', () => {
   const { buildPng } = require('../helpers/make-image');
@@ -121,22 +164,94 @@ test('malformed / truncated / random input never throws', () => {
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xff, 0xff, 0xff, 0xff]), // PNG sig + garbage chunk len
     Buffer.alloc(0),
     Buffer.from([0x00, 0x01, 0x02, 0x03]),
-    crypto_random(2048),
+    Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x4a, 0x46]), // APP0 'JF' at EOF, no version bytes
+    Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x08, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]), // JFIF, minor version cut off
   ];
   for (const s of samples) {
     assert.doesNotThrow(() => { const r = ExifParser.parse(s); assert.ok(r && typeof r.format === 'string'); });
   }
 });
 
-function crypto_random(n) {
-  const b = Buffer.alloc(n);
-  for (let i = 0; i < n; i++) b[i] = (Math.random() * 256) | 0;
-  return b;
+// A minimal JFIF JPEG: SOI, APP0 "JFIF\0" v1.01, EOI.
+const JFIF_BODY = [0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
+function jfifJpeg() {
+  return Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 2 + JFIF_BODY.length].concat(JFIF_BODY, [0xff, 0xd9]));
 }
+
+test('JFIF version is read from a full APP0 and never past a short one', () => {
+  assert.ok(ExifParser.parse(jfifJpeg()).notes.includes('JFIF 1.01'));
+  // Every APP0 length 0..20 at the very end of the file, cut at every point.
+  for (let segLen = 0; segLen <= 20; segLen++) {
+    const full = [0xff, 0xd8, 0xff, 0xe0, 0x00, segLen].concat(JFIF_BODY, JFIF_BODY);
+    for (let end = 4; end <= full.length; end++) {
+      const s = Buffer.from(full.slice(0, end));
+      assert.doesNotThrow(() => ExifParser.parse(s), 'segLen ' + segLen + ' cut at ' + end);
+    }
+  }
+  // A short APP0 mid-file must not borrow the next segment's bytes as a version.
+  const short = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x4a, 0x46, 0xff, 0xfe, 0x00, 0x08, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0xff, 0xd9]);
+  const r = ExifParser.parse(short);
+  assert.ok(!r.notes.some((n) => /^JFIF/.test(n)), JSON.stringify(r.notes));
+  assert.deepStrictEqual(r.comments, ['AAAAAA']);
+});
+
+// Seeded, so a failure reproduces: mutate and truncate valid JPEG/PNG files
+// (random bytes alone almost never pass detect(), so no parser would run).
+test('mutated and truncated real images never throw', () => {
+  let seed = 0x7a2f;
+  const rand = (n) => { seed = (Math.imul(seed, 1103515245) + 12345) >>> 0; return (seed >>> 8) % n; };
+  const { buildPng, sampleGeoJpeg } = require('../helpers/make-image');
+  const seeds = [
+    sampleGeoJpeg(),
+    jfifJpeg(),
+    buildPng({ width: 8, height: 8, text: { Software: 'x', Comment: 'y' } }),
+  ];
+  for (const base of seeds) {
+    for (let k = 0; k < 1500; k++) {
+      const s = Buffer.from(base);
+      const flips = 1 + rand(4);
+      for (let j = 0; j < flips; j++) s[4 + rand(s.length - 4)] = rand(256); // keep the magic bytes
+      const cut = rand(3) === 0 ? s.subarray(0, 4 + rand(s.length - 4)) : s;
+      assert.doesNotThrow(() => ExifParser.parse(cut), 'seed case ' + k);
+    }
+  }
+});
 
 test('detect() identifies formats by magic bytes', () => {
   assert.strictEqual(ExifParser.detect(Buffer.from([0xff, 0xd8, 0xff, 0xe0])), 'JPEG');
   assert.strictEqual(ExifParser.detect(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0])), 'PNG');
   assert.strictEqual(ExifParser.detect(Buffer.from([0x47, 0x49, 0x46, 0x38])), 'GIF');
   assert.strictEqual(ExifParser.detect(Buffer.from([0x00, 0x00, 0x00, 0x00])), 'unknown');
+});
+
+// ---- metadata the parser sees but cannot decode must not read as "clean" ----
+const MI = require('../helpers/make-image');
+// Insert a chunk just before IEND (the last 12 bytes of a PNG from buildPng).
+const withChunk = (png, chunk) => Buffer.concat([png.subarray(0, png.length - 12), chunk, png.subarray(png.length - 12)]);
+const zlibLike = Buffer.from([0x78, 0x9c, 0x01, 0x02, 0x03]);
+
+test('a PNG zTXt chunk is reported as present but not decoded', () => {
+  const data = Buffer.concat([Buffer.from('Raw profile type exif', 'latin1'), Buffer.from([0, 0]), zlibLike]);
+  const r = ExifParser.parse(withChunk(MI.buildPng({ width: 2, height: 2 }), MI.pngChunk('zTXt', data)));
+  assert.ok(r.warnings.some((w) => /not decoded: zTXt "Raw profile type exif"/.test(w)), JSON.stringify(r.warnings));
+});
+
+test('a compressed iTXt is reported; an uncompressed iTXt is decoded', () => {
+  const itxt = (flag, text) => MI.pngChunk('iTXt', Buffer.concat([Buffer.from('Author', 'latin1'), Buffer.from([0, flag, 0]), Buffer.from('en', 'latin1'), Buffer.from([0, 0]), text]));
+  const compressed = ExifParser.parse(withChunk(MI.buildPng(), itxt(1, zlibLike)));
+  assert.ok(compressed.warnings.some((w) => /not decoded: iTXt "Author" \(compressed\)/.test(w)), JSON.stringify(compressed.warnings));
+  const plain = ExifParser.parse(withChunk(MI.buildPng(), itxt(0, Buffer.from('Omran', 'utf8'))));
+  assert.strictEqual(plain.text.Author, 'Omran');
+  assert.ok(!plain.warnings.some((w) => /not decoded/.test(w)));
+});
+
+test('a JPEG cut off inside its EXIF segment is not treated as fully read', () => {
+  const jpeg = wrapJpeg(buildTiff({ little: false, ifd0: [{ tag: 0x010f, type: 2, values: 'TARYAM' }] }));
+  const r = ExifParser.parse(jpeg.subarray(0, 20)); // ends inside APP1
+  assert.ok(r.warnings.some((w) => /not decoded: APP1 \(truncated\)/.test(w)), JSON.stringify(r.warnings));
+});
+
+test('a PNG with only plain tEXt has no "not decoded" warning', () => {
+  const r = ExifParser.parse(MI.buildPng({ text: { Software: 'X' } }));
+  assert.ok(!r.warnings.some((w) => /not decoded/.test(w)), JSON.stringify(r.warnings));
 });

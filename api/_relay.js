@@ -8,10 +8,19 @@
 //   Server-Sent Events, pipe them through as they arrive so tokens show up live.
 //   Otherwise the upstream JSON is returned unchanged, exactly as before.
 //
+//   If the upstream stream breaks after it started, a final SSE event
+//   `data: {"error":{"message":"..."}}` is written before the response ends, so the
+//   browser can tell a cut-off answer from a complete one.
+// - Disconnects: when the browser goes away before the answer is complete, the
+//   upstream request is aborted so the provider stops generating (and billing).
+//
 // Quota is checked by each proxy before calling this, so a fallback retry never
 // costs the user an extra message.
 
-const MODEL_NOT_FOUND = /model_not_found|model.{0,60}(not.?found|does not exist|decommissioned|deprecated|is invalid|unknown)|(invalid|unknown|no such|unsupported) model/i;
+// Covers OpenAI-style "model_not_found" / "does not exist", Groq "decommissioned",
+// DeepSeek "Model Not Exist" and OpenRouter "<id> is not a valid model ID" /
+// "No endpoints found for <id>". Only consulted for 400/404 answers.
+const MODEL_NOT_FOUND = /model_not_found|model.{0,60}(not.?found|not.?exist|decommissioned|deprecated|is invalid|unknown)|(invalid|unknown|no such|unsupported) model|not a valid model|no endpoints found for/i;
 
 function isModelNotFound(status, text) {
   return (status === 404 || status === 400) && MODEL_NOT_FOUND.test(String(text || ''));
@@ -38,6 +47,13 @@ async function relayChat(res, opts) {
   const candidates = uniq(opts.models || []);
   let discovered = false;
   let last = null;
+  // Abort the upstream call if the browser disconnects before the response ended.
+  // Test doubles for res may have no event emitter, hence the guard.
+  const ac = new AbortController();
+  if (typeof res.on === 'function') {
+    res.on('close', () => { if (!res.writableEnded) ac.abort(); });
+    if (res.destroyed) ac.abort();
+  }
 
   for (let i = 0; i < candidates.length; i++) {
     const model = candidates[i];
@@ -47,6 +63,7 @@ async function relayChat(res, opts) {
       method: 'POST',
       headers: Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {}),
       body: JSON.stringify(payload),
+      signal: ac.signal,
     });
 
     if (upstream.ok) {
@@ -57,7 +74,20 @@ async function relayChat(res, opts) {
         res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('X-Accel-Buffering', 'no');
         setModelHeader(res, model);
-        for await (const chunk of upstream.body) res.write(chunk);
+        try {
+          for await (const chunk of upstream.body) {
+            if (ac.signal.aborted) break;
+            res.write(chunk);
+          }
+        } catch (e) {
+          // The upstream broke mid-answer. Report it in-band (the leading blank line
+          // closes any half-written event) rather than ending as if it were complete.
+          // Nothing to tell a browser that already left.
+          if (!ac.signal.aborted) {
+            const message = 'stream interrupted: ' + (e && e.message ? e.message : String(e));
+            res.write('\n\ndata: ' + JSON.stringify({ error: { message } }) + '\n\n');
+          }
+        }
         res.end();
         return { model, streamed: true };
       }

@@ -7,7 +7,7 @@
 //   type 2 = ASCII (values: string), 3 = SHORT (number[]), 4 = LONG (number[]),
 //   5 = RATIONAL (Array<[num, den]>).
 
-const SIZE = { 2: 1, 3: 2, 4: 4, 5: 8 };
+const SIZE = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8 };
 
 function entryByteLen(e) {
   if (e.type === 2) return e.values.length + 1;
@@ -51,6 +51,8 @@ function buildTiff(opts) {
     if (e.type === 2) {
       for (let i = 0; i < e.values.length; i++) buf[at + i] = e.values.charCodeAt(i) & 0xff;
       buf[at + e.values.length] = 0;
+    } else if (e.type === 1) {
+      e.values.forEach((v, i) => { buf[at + i] = v & 0xff; });
     } else if (e.type === 3) {
       e.values.forEach((v, i) => w16(at + i * 2, v));
     } else if (e.type === 4) {

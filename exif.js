@@ -4,7 +4,8 @@
  * Dependency-free reader for the metadata embedded in image files:
  *   - JPEG  : APP0 (JFIF), APP1 (EXIF/TIFF + XMP), COM comments, SOF size.
  *   - TIFF  : raw TIFF/EXIF IFD stream (II/MM, IFD0, ExifIFD, GPS, IFD1).
- *   - PNG   : IHDR size, tEXt / zTXt(uncompressed only) / iTXt, tIME, eXIf.
+ *   - PNG   : IHDR size, tEXt / iTXt (uncompressed), tIME, eXIf. zTXt, compressed iTXt
+ *             and truncated metadata are reported as present but not decoded.
  *
  * Runs entirely on an in-memory buffer — it makes no network calls and
  * writes nothing, so a user's photo never leaves their machine. It is
@@ -297,7 +298,7 @@
   // ---- JPEG --------------------------------------------------------------
   function parseJpeg(bytes) {
     const r = new Reader(bytes, false);
-    const info = { format: 'JPEG', segments: [], tiff: null, xmp: null, comments: [], jfif: null, dimensions: null };
+    const info = { format: 'JPEG', segments: [], tiff: null, xmp: null, comments: [], jfif: null, dimensions: null, undecoded: [] };
     let p = 2; // skip SOI FFD8
     let guard = 0;
     while (p + 4 <= bytes.length && guard++ < MAX_JPEG_SEGMENTS) {
@@ -307,9 +308,12 @@
       p += 2;
       if (marker === 0xd9 || marker === 0xda) break; // EOI / SOS (entropy data follows)
       if (marker >= 0xd0 && marker <= 0xd7) continue; // RSTn, no length
-      if (p + 2 > bytes.length) break;
+      // APPn/COM carry metadata: if one is cut off we cannot say the file is clean.
+      const meta = (marker >= 0xe0 && marker <= 0xef) || marker === 0xfe;
+      const name = marker === 0xfe ? 'COM' : 'APP' + (marker - 0xe0);
+      if (p + 2 > bytes.length) { if (meta) info.undecoded.push(name + ' (truncated)'); break; }
       const segLen = r.u16(p);
-      if (segLen < 2 || p + segLen > bytes.length) break;
+      if (segLen < 2 || p + segLen > bytes.length) { if (meta) info.undecoded.push(name + ' (truncated)'); break; }
       const dataStart = p + 2;
       const dataLen = segLen - 2;
       info.segments.push({ marker: '0x' + marker.toString(16), length: segLen });
@@ -318,7 +322,9 @@
       if ((marker >= 0xc0 && marker <= 0xcf) && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
         if (dataLen >= 5) info.dimensions = { height: r.u16(dataStart + 1), width: r.u16(dataStart + 3) };
       } else if (marker === 0xe0) { // APP0 / JFIF
-        if (bytes[dataStart] === 0x4a && bytes[dataStart + 1] === 0x46) {
+        // "JFIF\0" + major + minor: a shorter segment has no version to read.
+        if (dataLen >= 7 && bytes[dataStart] === 0x4a && bytes[dataStart + 1] === 0x46 &&
+            bytes[dataStart + 2] === 0x49 && bytes[dataStart + 3] === 0x46 && bytes[dataStart + 4] === 0) {
           info.jfif = { version: r.u8(dataStart + 5) + '.' + String(r.u8(dataStart + 6)).padStart(2, '0') };
         }
       } else if (marker === 0xe1) { // APP1 : EXIF or XMP
@@ -345,14 +351,17 @@
   // ---- PNG ---------------------------------------------------------------
   function parsePng(bytes) {
     const r = new Reader(bytes, false); // PNG is big-endian
-    const info = { format: 'PNG', dimensions: null, bitDepth: null, colorType: null, text: {}, time: null, tiff: null, chunks: [] };
+    const info = { format: 'PNG', dimensions: null, bitDepth: null, colorType: null, text: {}, time: null, tiff: null, chunks: [], undecoded: [] };
     let p = 8; // skip signature
     let guard = 0;
     while (p + 8 <= bytes.length && guard++ < MAX_JPEG_SEGMENTS) {
       const len = r.u32(p);
       const type = r.ascii(p + 4, 4);
       const dataStart = p + 8;
-      if (dataStart + len + 4 > bytes.length) break;
+      if (dataStart + len + 4 > bytes.length) {
+        if (/^(tEXt|zTXt|iTXt|eXIf)$/.test(type)) info.undecoded.push(type + ' (truncated)');
+        break;
+      }
       info.chunks.push(type);
       if (type === 'IHDR' && len >= 13) {
         info.dimensions = { width: r.u32(dataStart), height: r.u32(dataStart + 4) };
@@ -363,6 +372,10 @@
         const raw = bytes.subarray(dataStart, dataStart + len);
         const z = raw.indexOf(0);
         if (z > 0) info.text[latin1(raw.subarray(0, z))] = latin1(raw.subarray(z + 1)).slice(0, MAX_STRING);
+      } else if (type === 'zTXt') { // deflate-compressed text (e.g. ImageMagick's "Raw profile type exif")
+        const raw = bytes.subarray(dataStart, dataStart + len);
+        const z = raw.indexOf(0);
+        info.undecoded.push('zTXt "' + (z > 0 ? latin1(raw.subarray(0, Math.min(z, 79))) : '?') + '"');
       } else if (type === 'iTXt') {
         const raw = bytes.subarray(dataStart, dataStart + len);
         const z = raw.indexOf(0);
@@ -373,6 +386,7 @@
           const l2 = raw.indexOf(0, q); if (l2 < 0) { p = dataStart + len + 4; continue; }
           const l3 = raw.indexOf(0, l2 + 1); if (l3 < 0) { p = dataStart + len + 4; continue; }
           if (compFlag === 0) info.text[latin1(raw.subarray(0, z))] = utf8(raw.subarray(l3 + 1)).slice(0, MAX_STRING);
+          else info.undecoded.push('iTXt "' + latin1(raw.subarray(0, Math.min(z, 79))) + '" (compressed)');
         }
       } else if (type === 'tIME' && len >= 7) {
         info.time = r.u16(dataStart) + '-' + pad(r.u8(dataStart + 2)) + '-' + pad(r.u8(dataStart + 3)) + ' ' +
@@ -478,6 +492,7 @@
       if (parsed.jfif) report.notes.push('JFIF ' + parsed.jfif.version);
       if (parsed.time) report.datetime.pngTime = parsed.time;
       if (parsed.tiffError) report.warnings.push('EXIF block present but unreadable: ' + parsed.tiffError);
+      if (parsed.undecoded && parsed.undecoded.length) report.warnings.push('Metadata present but not decoded: ' + parsed.undecoded.join(', '));
 
       const tiff = parsed.tiff;
       if (tiff) {

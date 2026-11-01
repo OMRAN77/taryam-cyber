@@ -372,6 +372,27 @@ details.md-sources summary:hover{color:var(--text-2)}
 .attach-chip .rm:hover{color:var(--red)}
 .attach-chip .rm svg{width:12px;height:12px}
 
+/* Files shown inside a sent message */
+.msg-files{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.msg-files.only{margin-top:0}
+.msg-img{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+.msg-file{
+  display:inline-flex;align-items:center;gap:5px;max-width:170px;
+  padding:3px 10px;border-radius:999px;direction:ltr;
+  font:500 11.5px/1.5 var(--font-mono);
+  background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text-2);
+}
+.msg-file .ic{flex-shrink:0;font-size:11px}
+.msg-file .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* On the purple→cyan user bubble: dark glass and white text so names stay readable */
+.msg.user .msg-file{background:rgba(8,10,18,.28);border-color:rgba(255,255,255,.3);color:#fff}
+.msg-file.more{cursor:pointer}
+.msg-file.more:hover{background:rgba(255,255,255,.14)}
+.msg.user .msg-file.more:hover{background:rgba(8,10,18,.42)}
+.msg-files .extra{display:none}
+.msg-files.expanded .msg-file.extra{display:inline-flex}
+.msg-files.expanded .msg-img.extra{display:block}
+
 /* Emoji picker */
 #emojiPicker{
   position:absolute;bottom:100%;margin-bottom:8px;
@@ -662,9 +683,10 @@ dialog select option{background:#0f1219;color:var(--text)}
   }
   #sidebar{transform:translateX(-100%);max-width:340px}
   #workarea{transform:translateX(-100%)}
-  html[dir="rtl"] #sidebar,html[dir="rtl"] #workarea{
-    inset-inline-start:auto;inset-inline-end:0;transform:translateX(100%);
-  }
+  /* inset-inline-start:0 already pins the drawers to the right edge in RTL, so only
+     the slide direction flips; pinning them to inline-end (= left) left the closed
+     drawers on screen, covering the dock. */
+  html[dir="rtl"] #sidebar,html[dir="rtl"] #workarea{transform:translateX(100%)}
   #sidebar.open,#workarea.open{transform:translateX(0)!important}
   #chatcol{width:100%}
   #messages{padding:16px 12px calc(var(--dock-h, 128px) + 24px)}
@@ -722,7 +744,7 @@ html.mobile-ui #workarea{
 }
 html.mobile-ui #sidebar{transform:translateX(-100%)}
 html.mobile-ui #workarea{transform:translateX(-100%)}
-html.mobile-ui[dir="rtl"] #sidebar,html.mobile-ui[dir="rtl"] #workarea{inset-inline-start:auto;inset-inline-end:0;transform:translateX(100%)}
+html.mobile-ui[dir="rtl"] #sidebar,html.mobile-ui[dir="rtl"] #workarea{transform:translateX(100%)}
 html.mobile-ui #sidebar.open,html.mobile-ui #workarea.open{transform:translateX(0)!important}
 html.mobile-ui #chatcol{width:100%}
 html.mobile-ui .resizer{display:none}
@@ -1259,8 +1281,8 @@ const PROVIDER_ORDER = ['deepseek','claude','openai','gemini','groq','openrouter
 
 /* ═══ i18n ═══ */
 const I18N = {
-  ar:{dir:'rtl',pageTitle:'TARYAM Cyber — أدوات الأمن السيبراني',appTitle:'تريم سايبر',offlineBanner:'⚠️ أنت غير متصل بالإنترنت',backOnlineBanner:'✅ عاد الاتصال',authTitle:'مرحبًا بك',authSubtitle:'سجّل الدخول أو أنشئ حسابًا جديدًا',authTabLogin:'دخول',authTabSignup:'حساب جديد',authUsernameLabel:'اسم المستخدم',authPasswordLabel:'كلمة المرور',authNewPasswordLabel:'كلمة مرور جديدة',authRecoveryLabel:'رمز الاسترجاع',authForgotLink:'نسيت كلمة المرور؟',authRememberMe:'تذكرني',authBackToLogin:'رجوع',authSubmitReset:'إعادة تعيين',authRecoveryModalTitle:'🔑 احتفظ برمز الاسترجاع',authRecoveryModalDesc:'هذا الرمز الوحيد لاستعادة حسابك إذا نسيت كلمة المرور.',authSubmitLogin:'دخول',authSubmitSignup:'إنشاء الحساب',guestMode:'الدخول كضيف (20 رسالة)',guestLimitMsg:'🎉 استخدمت رسائلك المجانية! سجّل الدخول للمتابعة.',logout:'خروج',settings:'الإعدادات',download:'تنزيل',newProject:'مشروع جديد',send:'إرسال',preview:'المعاينة',code:'الكود',promptPlaceholder:'صف ما تريد... مثال: اشرح ثغرة XSS',emptyTitle:'ابدأ ببناء أول تطبيق 🚀',emptyDesc:'اكتب وصفًا في المربع على اليسار',settingsTitle:'إعدادات الاتصال',langSectionTitle:'🌐 اللغة',apiKeysSectionTitle:'🔑 مفاتيح API',themeSectionLabel:'🎨 المظهر',voiceSectionLabel:'🔊 الصوت',aboutSectionTitle:'ℹ️ عن البرنامج',provider:'المزوّد الافتراضي',apiKeyLabel:'مفتاح API',modelLabel:'اسم النموذج',cancel:'إلغاء',save:'حفظ',close:'إغلاق',askAllLabel:'🎯 اسأل كل المزوّدين',mergeLabel:'🧠 دمج ذكي',building:'جارٍ العمل...',scoring:'📊 تقييم جودة الإجابات...',synthesizing:'🎨 توليف الجواب الموحّد...',verifying:'✅ التحقق النهائي...',merging:'🧠 دمج ذكي 3 مراحل...',mergedLabel:'🧠 الجواب الموحّد',mergeContributors:'دُمِجت إجابات: ',mergeFailedNote:'⚠️ لم يستجب: ',mergeSourcesLabel:'عرض الإجابات الفردية',buildSuccess:'تم ✅',defaultProjectTitle:'مشروع جديد',confirmDeleteProject:'حذف "{name}"؟',install:'تثبيت التطبيق',speakBtn:'استماع',stopSpeakBtn:'إيقاف',providerError:'خطأ من المزوّد: ',quotaError:'⏳ الحصة المجانية انتهت مؤقتًا',authError:'🔑 مفتاح API غير صحيح',apiKeyMissing:'أدخل مفتاح API أولاً',acctSectionTitle:'👤 حسابي',acctUsernameLabel:'اسم المستخدم',themeAccentLabel:'اللون الأساسي',themeTextLabel:'لون النص',themeBgLabel:'لون الخلفية',projectsListTitle:'المشاريع',secToolsTitle:'أدوات الأمن',rtpLabTitle:'مختبر RTP',casinoTitle:'كيف يكسب الكازينو',clockDialogTitle:'🕐 التقويم والوقت'},
-  en:{dir:'ltr',pageTitle:'TARYAM Cyber — Cybersecurity Tools',appTitle:'TARYAM Cyber',offlineBanner:"⚠️ You're offline",backOnlineBanner:'✅ Back online',authTitle:'Welcome',authSubtitle:'Log in or create an account',authTabLogin:'Log In',authTabSignup:'Sign Up',authUsernameLabel:'Username',authPasswordLabel:'Password',authNewPasswordLabel:'New password',authRecoveryLabel:'Recovery code',authForgotLink:'Forgot password?',authRememberMe:'Remember me',authBackToLogin:'Back',authSubmitReset:'Reset',authRecoveryModalTitle:'🔑 Save this recovery code',authRecoveryModalDesc:'The only code to recover your account if you forget your password.',authSubmitLogin:'Log In',authSubmitSignup:'Create Account',guestMode:'Continue as guest (20 messages)',guestLimitMsg:'🎉 Free messages used! Log in to continue.',logout:'Log out',settings:'Settings',download:'Download',newProject:'New Project',send:'Send',preview:'Preview',code:'Code',promptPlaceholder:'Describe what you want... e.g. explain XSS',emptyTitle:'Start building your first app 🚀',emptyDesc:'Type a description in the box',settingsTitle:'Connection Settings',langSectionTitle:'🌐 Language',apiKeysSectionTitle:'🔑 API Keys',themeSectionLabel:'🎨 Appearance',voiceSectionLabel:'🔊 Voice',aboutSectionTitle:'ℹ️ About',provider:'Default provider',apiKeyLabel:'API Key',modelLabel:'Model name',cancel:'Cancel',save:'Save',close:'Close',askAllLabel:'🎯 Ask all providers',mergeLabel:'🧠 Smart merge',building:'Working...',scoring:'📊 Scoring answer quality...',synthesizing:'🎨 Synthesizing unified answer...',verifying:'✅ Final verification...',merging:'🧠 3-stage smart merge...',mergedLabel:'🧠 Unified Answer',mergeContributors:'Merged from: ',mergeFailedNote:'⚠️ Did not respond: ',mergeSourcesLabel:'Show individual answers',buildSuccess:'Done ✅',defaultProjectTitle:'New Project',confirmDeleteProject:'Delete "{name}"?',install:'Install App',speakBtn:'Listen',stopSpeakBtn:'Stop',providerError:'Provider error: ',quotaError:'⏳ Free quota temporarily exhausted',authError:'🔑 Invalid API key',apiKeyMissing:'Enter your API key first',acctSectionTitle:'👤 My account',acctUsernameLabel:'Username',themeAccentLabel:'Accent color',themeTextLabel:'Text color',themeBgLabel:'Background color',projectsListTitle:'Projects',secToolsTitle:'Security Tools',rtpLabTitle:'RTP Lab',casinoTitle:'How the casino wins',clockDialogTitle:'🕐 Calendar & Time'}
+  ar:{dir:'rtl',pageTitle:'TARYAM Cyber — أدوات الأمن السيبراني',appTitle:'تريم سايبر',offlineBanner:'⚠️ أنت غير متصل بالإنترنت',backOnlineBanner:'✅ عاد الاتصال',authTitle:'مرحبًا بك',authSubtitle:'سجّل الدخول أو أنشئ حسابًا جديدًا',authTabLogin:'دخول',authTabSignup:'حساب جديد',authUsernameLabel:'اسم المستخدم',authPasswordLabel:'كلمة المرور',authNewPasswordLabel:'كلمة مرور جديدة',authRecoveryLabel:'رمز الاسترجاع',authForgotLink:'نسيت كلمة المرور؟',authRememberMe:'تذكرني',authBackToLogin:'رجوع',authSubmitReset:'إعادة تعيين',authRecoveryModalTitle:'🔑 احتفظ برمز الاسترجاع',authRecoveryModalDesc:'هذا الرمز الوحيد لاستعادة حسابك إذا نسيت كلمة المرور.',authSubmitLogin:'دخول',authSubmitSignup:'إنشاء الحساب',guestMode:'الدخول كضيف (20 رسالة يوميًا)',guestLimitMsg:'🎉 استخدمت رسائلك المجانية! سجّل الدخول للمتابعة.',logout:'خروج',settings:'الإعدادات',download:'تنزيل',newProject:'مشروع جديد',send:'إرسال',preview:'المعاينة',code:'الكود',promptPlaceholder:'صف ما تريد... مثال: اشرح ثغرة XSS',emptyTitle:'ابدأ ببناء أول تطبيق 🚀',emptyDesc:'اكتب وصفًا في المربع على اليسار',settingsTitle:'إعدادات الاتصال',langSectionTitle:'🌐 اللغة',apiKeysSectionTitle:'🔑 مفاتيح API',themeSectionLabel:'🎨 المظهر',voiceSectionLabel:'🔊 الصوت',aboutSectionTitle:'ℹ️ عن البرنامج',provider:'المزوّد الافتراضي',apiKeyLabel:'مفتاح API',modelLabel:'اسم النموذج',cancel:'إلغاء',save:'حفظ',close:'إغلاق',askAllLabel:'🎯 اسأل كل المزوّدين',mergeLabel:'🧠 دمج ذكي',building:'جارٍ العمل...',scoring:'📊 تقييم جودة الإجابات...',synthesizing:'🎨 توليف الجواب الموحّد...',verifying:'✅ التحقق النهائي...',merging:'🧠 دمج ذكي 3 مراحل...',mergedLabel:'🧠 الجواب الموحّد',mergeContributors:'دُمِجت إجابات: ',mergeFailedNote:'⚠️ لم يستجب: ',mergeSourcesLabel:'عرض الإجابات الفردية',buildSuccess:'تم ✅',defaultProjectTitle:'مشروع جديد',confirmDeleteProject:'حذف "{name}"؟',install:'تثبيت التطبيق',speakBtn:'استماع',stopSpeakBtn:'إيقاف',providerError:'خطأ من المزوّد: ',quotaError:'⏳ الحصة المجانية انتهت مؤقتًا',authError:'🔑 مفتاح API غير صحيح',apiKeyMissing:'أدخل مفتاح API أولاً',acctSectionTitle:'👤 حسابي',acctUsernameLabel:'اسم المستخدم',themeAccentLabel:'اللون الأساسي',themeTextLabel:'لون النص',themeBgLabel:'لون الخلفية',projectsListTitle:'المشاريع',secToolsTitle:'أدوات الأمن',rtpLabTitle:'مختبر RTP',casinoTitle:'كيف يكسب الكازينو',clockDialogTitle:'🕐 التقويم والوقت'},
+  en:{dir:'ltr',pageTitle:'TARYAM Cyber — Cybersecurity Tools',appTitle:'TARYAM Cyber',offlineBanner:"⚠️ You're offline",backOnlineBanner:'✅ Back online',authTitle:'Welcome',authSubtitle:'Log in or create an account',authTabLogin:'Log In',authTabSignup:'Sign Up',authUsernameLabel:'Username',authPasswordLabel:'Password',authNewPasswordLabel:'New password',authRecoveryLabel:'Recovery code',authForgotLink:'Forgot password?',authRememberMe:'Remember me',authBackToLogin:'Back',authSubmitReset:'Reset',authRecoveryModalTitle:'🔑 Save this recovery code',authRecoveryModalDesc:'The only code to recover your account if you forget your password.',authSubmitLogin:'Log In',authSubmitSignup:'Create Account',guestMode:'Continue as guest (20 messages/day)',guestLimitMsg:'🎉 Free messages used! Log in to continue.',logout:'Log out',settings:'Settings',download:'Download',newProject:'New Project',send:'Send',preview:'Preview',code:'Code',promptPlaceholder:'Describe what you want... e.g. explain XSS',emptyTitle:'Start building your first app 🚀',emptyDesc:'Type a description in the box',settingsTitle:'Connection Settings',langSectionTitle:'🌐 Language',apiKeysSectionTitle:'🔑 API Keys',themeSectionLabel:'🎨 Appearance',voiceSectionLabel:'🔊 Voice',aboutSectionTitle:'ℹ️ About',provider:'Default provider',apiKeyLabel:'API Key',modelLabel:'Model name',cancel:'Cancel',save:'Save',close:'Close',askAllLabel:'🎯 Ask all providers',mergeLabel:'🧠 Smart merge',building:'Working...',scoring:'📊 Scoring answer quality...',synthesizing:'🎨 Synthesizing unified answer...',verifying:'✅ Final verification...',merging:'🧠 3-stage smart merge...',mergedLabel:'🧠 Unified Answer',mergeContributors:'Merged from: ',mergeFailedNote:'⚠️ Did not respond: ',mergeSourcesLabel:'Show individual answers',buildSuccess:'Done ✅',defaultProjectTitle:'New Project',confirmDeleteProject:'Delete "{name}"?',install:'Install App',speakBtn:'Listen',stopSpeakBtn:'Stop',providerError:'Provider error: ',quotaError:'⏳ Free quota temporarily exhausted',authError:'🔑 Invalid API key',apiKeyMissing:'Enter your API key first',acctSectionTitle:'👤 My account',acctUsernameLabel:'Username',themeAccentLabel:'Accent color',themeTextLabel:'Text color',themeBgLabel:'Background color',projectsListTitle:'Projects',secToolsTitle:'Security Tools',rtpLabTitle:'RTP Lab',casinoTitle:'How the casino wins',clockDialogTitle:'🕐 Calendar & Time'}
 };
 let lang = localStorage.getItem('aiapp_lang') || 'ar';
 const t = k => I18N[lang][k] || k;
@@ -1271,7 +1293,6 @@ function authGet(k){ try { return sessionStorage.getItem(k) || localStorage.getI
 function authSet(k,v){ try { if(localStorage.getItem('aiapp_remember') !== 'false'){ localStorage.setItem(k,v); sessionStorage.removeItem(k); } else { sessionStorage.setItem(k,v); localStorage.removeItem(k); } } catch(e){ (window._memStore = window._memStore||{})[k] = v; } }
 function authRemove(k){ try { localStorage.removeItem(k); sessionStorage.removeItem(k); } catch(e){} if(window._memStore) delete window._memStore[k]; }
 window.authGet = authGet;
-const GUEST_LIMIT = 20;
 window.getGuestMsgCount = () => parseInt(localStorage.getItem('aiapp_guest_msg_count')||'0',10);
 window.incrementGuestMsgCount = () => localStorage.setItem('aiapp_guest_msg_count', String(window.getGuestMsgCount()+1));
 window.getGuestId = () => { let id = localStorage.getItem('aiapp_guest_id'); if(!id){ id = 'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,12); localStorage.setItem('aiapp_guest_id', id); } return id; };
@@ -1374,9 +1395,24 @@ function purgeOldImages(){ let p=false; state.projects.forEach(proj => { const i
 function getCurrent(){ return state.projects.find(p => p.id === state.currentId); }
 
 /* ═══ Provider Calls ═══ */
+// The explanation inside an error body: {error:"..."} (our proxies), {error:{message}}
+// (OpenAI-style providers), or {message}.
+function errorText(text){
+  try {
+    const p = JSON.parse(text);
+    const e = p?.error;
+    const m = typeof e === 'string' ? (e === 'limit' && p.message ? p.message : e) : (e?.message || p?.message);
+    return m ? String(m).slice(0, 220) : '';
+  } catch(err){ return ''; }
+}
 function throwProviderError(status, text){
-  if(status === 429) throw new Error(t('quotaError'));
-  if(status === 401 || status === 403){ let m=null; try { const p = JSON.parse(text); if(p?.error && /session|الجلسة/i.test(p.error)) m = p.error; } catch(e){} throw new Error(m ? '🔒 '+m : t('authError')); }
+  const said = errorText(text);
+  if(status === 402 && said) throw new Error('⏳ ' + said); // daily allowance (only when QUOTA=on)
+  if(status === 429) throw new Error(t('quotaError') + (said ? ' — ' + said : ''));
+  const missing = said.match(/Server is missing (\w+)/);
+  if(missing) throw new Error(isAr() ? '🔑 المفتاح ' + missing[1] + ' غير مضبوط في إعدادات Vercel (Environment Variables)' : '🔑 ' + missing[1] + ' is not set in Vercel → Environment Variables');
+  if(status === 504) throw new Error(isAr() ? '⌛ انتهت مهلة الخادم (الطلب كبير أو المزوّد بطيء)' : '⌛ The server timed out (large request or slow provider)');
+  if(status === 401 || status === 403){ let m=null; try { const p = JSON.parse(text); if(p?.error && /session|الجلسة/i.test(p.error)) m = p.error; } catch(e){} throw new Error(m ? '🔒 '+m : t('authError') + (said ? ' — ' + said : '')); }
   if(status === 404){
     try {
       const p = JSON.parse(text);
@@ -1386,7 +1422,7 @@ function throwProviderError(status, text){
       }
     } catch(e){ if(e.message.startsWith('⚠️')) throw e; }
   }
-  throw new Error(t('providerError') + status + ' — ' + (text||'').slice(0,150));
+  throw new Error(t('providerError') + status + ' — ' + (said || (text||'').slice(0,150)));
 }
 function buildIdentity(key){
   const p = PROVIDERS[key]; if(!p) return '';
@@ -1394,21 +1430,56 @@ function buildIdentity(key){
   const langRule = isAr() ? 'أجب دائمًا بالعربية الفصحى المبسطة.' : 'Always reply in English.';
   return `${id}\n${langRule}\nقاعدة أخلاقية صارمة: لا تساعد في اختراق/تتبّع/مراقبة أي طرف ثالث بدون إذن صريح.`;
 }
-function toOpenAIVision(msgs){ return msgs.map(m => { if(m.images?.length){ const c = [{type:'text',text:m.content||''}]; m.images.forEach(img => c.push({type:'image_url',image_url:{url:img.dataUrl}})); return {role:m.role,content:c}; } return {role:m.role,content:m.content}; }); }
-function stripPlain(msgs){ return msgs.map(m => ({role:m.role,content:m.content||''})); }
+// The history as providers get it: images whose data was purged are dropped, turns left
+// with neither text nor an image are skipped, and back-to-back turns of the same role are
+// joined (Perplexity, deepseek-reasoner and others reject [user, user]).
+function providerTurns(msgs){
+  const out = [];
+  msgs.forEach(m => {
+    const content = String(m.content ?? '').trim() ? String(m.content) : '';
+    const images = (m.images || []).filter(img => img?.dataUrl?.includes(','));
+    if(!content && !images.length) return;
+    const prev = out[out.length-1];
+    if(prev && prev.role === m.role){ prev.content = [prev.content, content].filter(Boolean).join('\n\n'); prev.images.push(...images); }
+    else out.push({role:m.role, content, images});
+  });
+  return out;
+}
+// No empty text block next to an image (providers reject it; image-only turns are fine).
+function toOpenAIVision(msgs){ return msgs.map(m => { if(m.images?.length){ const c = m.content ? [{type:'text',text:m.content}] : []; m.images.forEach(img => c.push({type:'image_url',image_url:{url:img.dataUrl}})); return {role:m.role,content:c}; } return {role:m.role,content:m.content}; }); }
+function stripPlain(msgs){ return msgs.map(m => ({role:m.role,content:m.content || (m.images?.length ? (isAr() ? '[صورة]' : '[image]') : '')})); }
 
+// A provider can be called without the user's own key only when the site has a proxy for it.
+// Per-provider time limit in "Ask all" (localStorage override is for tests).
+function askAllTimeoutMs(){ return Number(localStorage.getItem('aiapp_askall_timeout_ms')) || 120000; }
+function canCallProvider(key){ const p = PROVIDERS[key]; return !!p && (!!p.proxy || !!localStorage.getItem(p.keyVar)); }
+
+// opts.timeoutMs: give up on this provider after that long (used by "Ask all", so one
+// slow or stuck provider can't keep the whole round waiting forever).
 async function callProvider(key, messages, opts = {}){
+  if(!opts.timeoutMs) return callProviderOnce(key, messages, opts);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs);
+  try { return await callProviderOnce(key, messages, {...opts, signal: ctrl.signal}); }
+  catch(e){
+    if(ctrl.signal.aborted) throw new Error((isAr() ? '⌛ انتهت المهلة (' : '⌛ Timed out (') + Math.round(opts.timeoutMs/1000) + (isAr() ? ' ث)' : ' s)'));
+    throw e;
+  }
+  finally { clearTimeout(timer); }
+}
+async function callProviderOnce(key, messages, opts = {}){
   const p = PROVIDERS[key]; if(!p) throw new Error('Unknown: '+key);
   const apiKey = localStorage.getItem(p.keyVar) || '';
   const model = localStorage.getItem(p.modelVar) || p.defaultModel;
   const useProxy = !apiKey && p.proxy;
   const useDirect = !!apiKey;
   const identity = buildIdentity(key);
-  const restMsgs = messages.filter(m => m.role !== 'system');
-  const fullMessages = identity ? [{role:'system',content:identity}, ...restMsgs] : messages;
+  const restMsgs = providerTurns(messages.filter(m => m.role !== 'system'));
+  const fullMessages = identity ? [{role:'system',content:identity}, ...restMsgs] : providerTurns(messages);
   if(!useProxy && !useDirect) throw new Error(t('apiKeyMissing'));
-  if(p.isClaude) return callClaude(key, fullMessages, {apiKey, model, useProxy});
-  if(key === 'gemini') return callGemini(fullMessages, {apiKey, model, useProxy});
+  const signal = opts.signal;
+  if(p.isClaude) return callClaude(key, fullMessages, {apiKey, model, useProxy, signal});
+  if(key === 'gemini') return callGemini(fullMessages, {apiKey, model, useProxy, signal});
 
   const endpoint = useProxy ? p.proxy : p.direct;
   const headers = {'Content-Type':'application/json'};
@@ -1422,7 +1493,7 @@ async function callProvider(key, messages, opts = {}){
     if(key === 'openai') body.max_completion_tokens = 8000; else if(!reasoning) body.max_tokens = 8000;
     if(opts.stream) body.stream = true;
   } else Object.assign(body, {token:authGet('aiapp_auth_token'), guestId:window.getGuestId(), stream:!!opts.stream});
-  const res = await fetch(endpoint, {method:'POST',headers,body:JSON.stringify(body)});
+  const res = await fetch(endpoint, {method:'POST',headers,body:JSON.stringify(body),signal});
   if(!res.ok){ throwProviderError(res.status, await res.text()); }
   // Only parse as Server-Sent Events when the server actually streamed; a plain JSON
   // answer (older proxy, provider without streaming) used to be read as SSE and lost.
@@ -1435,52 +1506,65 @@ async function callProvider(key, messages, opts = {}){
 async function streamOpenAI(res, onToken){
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = '', full = '';
+  let buffer = '', full = '', failed = '';
   const handle = line => {
-    if(!line.startsWith('data:')) return;
+    if(failed || !line.startsWith('data:')) return;
     const payload = line.slice(5).trim();
     if(!payload || payload === '[DONE]') return;
-    try { const j = JSON.parse(payload); const tok = j.choices?.[0]?.delta?.content || ''; if(tok){ full += tok; if(onToken) onToken(tok); } } catch(e){}
+    let j; try { j = JSON.parse(payload); } catch(e){ return; }
+    // A stream that breaks after it started ends with {"error":{"message":...}} (our relay,
+    // OpenRouter): the reply failed even though the response itself ended normally.
+    if(j?.error){ failed = String((typeof j.error === 'string' ? j.error : j.error.message) || 'stream error'); return; }
+    const tok = j.choices?.[0]?.delta?.content || '';
+    if(tok){ full += tok; if(onToken) onToken(tok); }
   };
-  while(true){
-    const {done, value} = await reader.read();
-    if(done) break;
-    buffer += decoder.decode(value, {stream:true});
-    const lines = buffer.split('\n');
-    buffer = lines.pop();
-    lines.forEach(handle);
-  }
+  // The error carries the text received so far (err.partial), so the caller can keep it.
+  const fail = e => { const err = e instanceof Error ? e : new Error(String(e)); err.partial = full; return err; };
+  try {
+    while(!failed){
+      const {done, value} = await reader.read();
+      if(done) break;
+      buffer += decoder.decode(value, {stream:true});
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      lines.forEach(handle);
+    }
+  } catch(e){ throw fail(e); }
   buffer += decoder.decode();
   if(buffer) handle(buffer); // last event when the stream didn't end with a newline
+  if(failed){ reader.cancel().catch(() => {}); throw fail(failed); }
   return full;
 }
-async function callClaude(key, messages, {apiKey, model, useProxy}){
+async function callClaude(key, messages, {apiKey, model, useProxy, signal}){
   const system = messages.find(m => m.role === 'system')?.content;
   const rest = messages.filter(m => m.role !== 'system').map(m => {
-    if(m.images?.length){ const c = [{type:'text',text:m.content||''}]; m.images.forEach(img => c.push({type:'image',source:{type:'base64',media_type:img.mime||'image/jpeg',data:img.dataUrl.split(',')[1]}})); return {role:m.role==='assistant'?'assistant':'user',content:c}; }
+    if(m.images?.length){ const c = m.content ? [{type:'text',text:m.content}] : []; m.images.forEach(img => c.push({type:'image',source:{type:'base64',media_type:img.mime||'image/jpeg',data:img.dataUrl.split(',')[1]}})); return {role:m.role==='assistant'?'assistant':'user',content:c}; }
     return {role:m.role==='assistant'?'assistant':'user',content:m.content||''};
   });
   const endpoint = useProxy ? '/api/claude' : 'https://api.anthropic.com/v1/messages';
   const headers = {'Content-Type':'application/json'};
   if(!useProxy){ headers['x-api-key'] = apiKey; headers['anthropic-version'] = '2023-06-01'; headers['anthropic-dangerous-direct-browser-access'] = 'true'; }
   const body = useProxy ? {model, system, messages:rest, token:authGet('aiapp_auth_token'), guestId:window.getGuestId()} : {model, system, messages:rest, max_tokens:8000};
-  const res = await fetch(endpoint, {method:'POST',headers,body:JSON.stringify(body)});
+  const res = await fetch(endpoint, {method:'POST',headers,body:JSON.stringify(body),signal});
   if(!res.ok) throwProviderError(res.status, await res.text());
   const data = await res.json();
-  if(data.stop_reason === 'refusal') throw new Error('رفض Claude هذا الطلب' + (data.stop_details?.category ? ' (' + data.stop_details.category + ')' : '') + '. أعد صياغته أو جرّب مزوّدًا آخر.');
+  if(data.stop_reason === 'refusal'){
+    const cat = data.stop_details?.category ? ' (' + data.stop_details.category + ')' : '';
+    throw new Error(isAr() ? 'رفض Claude هذا الطلب' + cat + '. أعد صياغته أو جرّب مزوّدًا آخر.' : 'Claude declined this request' + cat + '. Rephrase it or try another provider.');
+  }
   return (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n') || '';
 }
-async function callGemini(messages, {apiKey, model, useProxy}){
+async function callGemini(messages, {apiKey, model, useProxy, signal}){
   const system = messages.find(m => m.role === 'system')?.content;
   const rest = messages.filter(m => m.role !== 'system');
   const contents = rest.map(m => {
-    const parts = [{text:m.content||''}];
+    const parts = m.content ? [{text:m.content}] : [];
     if(m.images?.length) m.images.forEach(img => { if(!img.dataUrl?.includes(',')) return; parts.push({inline_data:{mime_type:img.mime||'image/jpeg',data:img.dataUrl.split(',')[1]}}); });
     return {role:m.role==='assistant'?'model':'user', parts};
   });
   const systemInstruction = system ? {parts:[{text:system}]} : undefined;
   if(useProxy){
-    const res = await fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,contents,systemInstruction,token:authGet('aiapp_auth_token'),guestId:window.getGuestId()})});
+    const res = await fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,contents,systemInstruction,token:authGet('aiapp_auth_token'),guestId:window.getGuestId()}),signal});
     if(!res.ok) throwProviderError(res.status, await res.text());
     const data = await res.json();
     return data.candidates?.[0]?.content?.parts?.map(p => p.text).join('\n') || '';
@@ -1488,7 +1572,7 @@ async function callGemini(messages, {apiKey, model, useProxy}){
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const body = {contents};
   if(systemInstruction) body.systemInstruction = systemInstruction;
-  const res = await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const res = await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal});
   if(!res.ok) throwProviderError(res.status, await res.text());
   const data = await res.json();
   return data.candidates?.[0]?.content?.parts?.map(p => p.text).join('\n') || '';
@@ -1571,7 +1655,7 @@ async function consensusMerge(question, good, failed, apiMsgs){
   if(!topKeys.includes('deepseek')){ const order = ['claude','openai','gemini','deepseek','groq','openrouter','mistral','cohere','perplexity']; synthKey = order.find(k => topKeys.includes(k)) || scored[0].key; }
 
   let draft;
-  try { draft = await callProvider(synthKey, synthMsgs); }
+  try { draft = await callProvider(synthKey, synthMsgs, {timeoutMs: askAllTimeoutMs()}); }
   catch(e){ return {content:scored[0].text, sources:scored, contributors:scored.map(s=>s.label), failed, synthModel:scored[0].label, error:e.message}; }
 
   const verifierKey = ['claude','openai','gemini'].find(k => topKeys.includes(k) && k !== synthKey);
@@ -1579,7 +1663,7 @@ async function consensusMerge(question, good, failed, apiMsgs){
   if(verifierKey && scored.length >= 3){
     try {
       const vp = isAr() ? `راجع الجواب التالي لأخطاء تقنية أو معلومات ناقصة. أعد الجواب مصححًا بلا مقدمة.\n\n## السؤال\n${question}\n\n## الجواب\n${draft}` : `Review for technical errors or missing info. Return corrected verbatim, no preamble.\n\n## Q\n${question}\n\n## A\n${draft}`;
-      const v = await callProvider(verifierKey, [{role:'user', content:vp}]);
+      const v = await callProvider(verifierKey, [{role:'user', content:vp}], {timeoutMs: askAllTimeoutMs()});
       if(v && v.trim().length > draft.length * 0.5){ finalDraft = v; verifierUsed = verifierKey; }
     } catch(e){}
   }
@@ -1652,10 +1736,14 @@ function renderMessages(keep){
       lbl.textContent = m.providerLabel;
       div.appendChild(lbl);
     }
-    const txt = document.createElement('div');
-    if(m.role !== 'user' && m.content && mdLooks(m.content)){ txt.className = 'md'; txt.innerHTML = mdToHtml(m.content); }
-    else txt.textContent = m.content || '';
-    div.appendChild(txt);
+    // A message sent with files only is stored as "📎"; show just the files, not that placeholder.
+    const onlyFiles = m.role === 'user' && m.content === '📎' && m.attachments?.length;
+    if(!onlyFiles){
+      const txt = document.createElement('div');
+      if(m.role !== 'user' && m.content && mdLooks(m.content)){ txt.className = 'md'; txt.innerHTML = mdToHtml(m.content); }
+      else txt.textContent = m.content || '';
+      div.appendChild(txt);
+    }
 
     if(m.sources?.length){
       const det = document.createElement('details');
@@ -1681,12 +1769,29 @@ function renderMessages(keep){
     }
 
     if(m.attachments?.length){
+      const SHOW = 6; // more than this collapse behind a "+N" pill
       const aw = document.createElement('div');
-      aw.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:8px';
-      m.attachments.forEach(a => {
-        if(a.isImage && !a.purged){ const img = document.createElement('img'); img.src = a.dataUrl; img.style.cssText = 'width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)'; aw.appendChild(img); }
-        else if(!a.isImage){ const ch = document.createElement('div'); ch.style.cssText = 'font-size:11px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text-2)'; ch.textContent = '📄 '+a.name; aw.appendChild(ch); }
+      aw.className = 'msg-files' + (onlyFiles ? ' only' : '');
+      m.attachments.forEach((a, i) => {
+        let el;
+        if(a.isImage && !a.purged){ el = document.createElement('img'); el.className = 'msg-img'; el.src = a.dataUrl; el.alt = a.name || ''; }
+        else {
+          el = document.createElement('span'); el.className = 'msg-file'; el.title = a.name;
+          const ic = document.createElement('span'); ic.className = 'ic'; ic.textContent = a.isImage ? '🖼️' : '📄';
+          const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = a.name;
+          el.append(ic, nm);
+        }
+        if(i >= SHOW) el.classList.add('extra');
+        aw.appendChild(el);
       });
+      if(m.attachments.length > SHOW){
+        const more = document.createElement('button');
+        more.type = 'button'; more.className = 'msg-file more';
+        more.textContent = '+' + (m.attachments.length - SHOW);
+        more.title = isAr() ? 'عرض كل الملفات' : 'Show all files';
+        more.onclick = () => { aw.classList.add('expanded'); more.remove(); };
+        aw.appendChild(more);
+      }
       div.appendChild(aw);
     }
 
@@ -1710,13 +1815,17 @@ function renderMessages(keep){
     }
     if(isAskAllReply){
       wrap.appendChild(div);
-      const choose = document.createElement('button');
-      choose.className = 'btn';
-      choose.style.cssText = 'flex:0 0 auto;align-self:flex-start;margin-top:4px;width:30px;height:30px;border-radius:50%;padding:0;font-size:13px';
-      choose.textContent = cur.continueProvider === m.providerKey ? '✓' : '○';
-      if(cur.continueProvider === m.providerKey){ choose.style.background = 'var(--grad)'; choose.style.color = '#fff'; choose.style.border = 'none'; }
-      choose.onclick = () => { cur.continueProvider = m.providerKey; saveState(); renderAll(true); };
-      wrap.appendChild(choose);
+      // "Continue with this provider" only on real answers, not on failure notices;
+      // tapping the chosen one again goes back to asking everyone.
+      if(!m.failed){
+        const choose = document.createElement('button');
+        choose.className = 'btn';
+        choose.style.cssText = 'flex:0 0 auto;align-self:flex-start;margin-top:4px;width:30px;height:30px;border-radius:50%;padding:0;font-size:13px';
+        choose.textContent = cur.continueProvider === m.providerKey ? '✓' : '○';
+        if(cur.continueProvider === m.providerKey){ choose.style.background = 'var(--grad)'; choose.style.color = '#fff'; choose.style.border = 'none'; }
+        choose.onclick = () => { cur.continueProvider = cur.continueProvider === m.providerKey ? undefined : m.providerKey; saveState(); renderAll(true); };
+        wrap.appendChild(choose);
+      }
       messagesEl.appendChild(wrap);
     } else messagesEl.appendChild(div);
   });
@@ -1877,14 +1986,27 @@ document.addEventListener('click', e => { if(emojiPicker.classList.contains('ope
 
 /* ═══ Send Prompt ═══ */
 const sendBtn = $('#btnSend');
+let sending = false; // one request at a time (Enter and voice chat bypass the disabled button)
+// One provider's answer as a chat message. An empty reply becomes a notice; a reply cut
+// off mid-way keeps its text plus a note. Notes are shown, never sent back (apiText).
+function pushReply(cur, key, reply, cut){
+  const name = PROVIDERS[key].name;
+  if(!reply?.trim()){
+    cur.messages.push({role:'assistant', content:'⚠️ '+(isAr() ? 'وصل ردّ فارغ من '+name+'. أعد المحاولة أو جرّب مزوّدًا آخر.' : name+' sent an empty reply. Try again or use another provider.'), providerKey:key, providerLabel:name, notice:true});
+    return;
+  }
+  const {code, explanation} = extractReply(reply);
+  if(code && !cut) cur.code = code; // a cut-off reply's code may be incomplete: offer it, don't apply it
+  const answer = explanation||(code && !cut ? t('buildSuccess') : '');
+  const msg = {role:'assistant', content:answer, code, providerKey:key, providerLabel:name};
+  if(cut){ msg.apiText = answer; msg.content = [answer, '⚠️ '+(isAr() ? 'انقطع الرد قبل اكتماله: ' : 'The reply was cut off: ')+cut.message].filter(Boolean).join('\n\n'); }
+  cur.messages.push(msg);
+}
 async function sendPrompt(){
+  if(sending) return; // what was typed stays in the box
   const promptEl = $('#prompt');
   const text = promptEl.value.trim();
   if(!text && !pendingAttachments.length) return;
-  if(!authGet('aiapp_auth_token')){
-    if(window.getGuestMsgCount() >= GUEST_LIMIT){ window.requireLogin('guestLimit'); return; }
-    window.incrementGuestMsgCount();
-  }
   let cur = getCurrent();
   if(!cur){ const id = 'p_'+Date.now(); cur = {id, title:(text||'مشروع').slice(0,30), messages:[], code:''}; state.projects.push(cur); state.currentId = id; }
   if(cur.messages.length === 0) cur.title = (text||'مشروع').slice(0,30);
@@ -1897,7 +2019,7 @@ async function sendPrompt(){
   cur.messages.push({role:'user', content:text||'📎', attachments: attachments.length ? attachments : undefined, apiText, apiImages: images.length ? images : undefined});
   promptEl.value = ''; pendingAttachments = []; renderAttachStrip(); renderAll(); saveState();
 
-  sendBtn.disabled = true; sendBtn.innerHTML = '<span class="spinner"></span>';
+  sending = true; sendBtn.disabled = true; sendBtn.innerHTML = '<span class="spinner"></span>';
   const thinking = document.createElement('div');
   thinking.className = 'msg assistant';
   thinking.innerHTML = '<span class="provider-tag" style="color:var(--primary-2)">⚡ جارٍ العمل...</span><div>'+t('building')+'</div>';
@@ -1910,24 +2032,26 @@ async function sendPrompt(){
   try {
     const apiMsgs = [];
     if(cur.code) apiMsgs.push({role:'assistant', content:'```' + (cur.codeType === 'python' ? 'python' : 'html') + '\n' + cur.code + '\n```'});
-    cur.messages.filter(m => !m.askAllReply).forEach(m => {
+    cur.messages.filter(m => !m.askAllReply && !m.notice).forEach(m => {
       const c = m.apiText !== undefined ? m.apiText : m.content;
       if(!c && !(m.apiImages?.length)) return;
       apiMsgs.push({role:m.role, content:c, images:m.apiImages});
     });
 
     if(customProvider){
-      const reply = await callProvider(customProvider, apiMsgs);
-      const {code, explanation} = extractReply(reply);
-      if(code) cur.code = code;
-      cur.messages.push({role:'assistant', content:explanation||(code?t('buildSuccess'):''), code, providerKey:customProvider, providerLabel:PROVIDERS[customProvider].name});
+      pushReply(cur, customProvider, await callProvider(customProvider, apiMsgs));
     } else if(askAll){
-      const enabled = PROVIDER_ORDER.filter(k => localStorage.getItem('aiapp_include_'+k) !== 'false');
+      // Only providers that can actually be called (a site proxy, or the user's own key).
+      const enabled = PROVIDER_ORDER.filter(k => localStorage.getItem('aiapp_include_'+k) !== 'false' && canCallProvider(k));
       if(!enabled.length) throw new Error('لم يُفعّل أي مزوّد.');
       thinking.querySelector('div').textContent = mergeMode ? t('scoring') : '⚡ '+enabled.length+' مزوّد...';
-      const results = await Promise.allSettled(enabled.map(k => callProvider(k, apiMsgs).then(text => ({key:k, text}))));
+      const results = await Promise.allSettled(enabled.map(k => callProvider(k, apiMsgs, {timeoutMs: askAllTimeoutMs()}).then(text => ({key:k, text}))));
       const good = [], failed = [];
-      results.forEach((r, i) => { const k = enabled[i]; if(r.status === 'fulfilled' && r.value.text?.trim()) good.push({key:k, label:PROVIDERS[k].name, text:r.value.text}); else failed.push(PROVIDERS[k].name); });
+      results.forEach((r, i) => {
+        const k = enabled[i];
+        if(r.status === 'fulfilled' && r.value.text?.trim()) good.push({key:k, label:PROVIDERS[k].name, text:r.value.text});
+        else failed.push({key:k, name:PROVIDERS[k].name, reason: r.status === 'rejected' ? (r.reason?.message || String(r.reason)) : (isAr() ? 'ردّ فارغ' : 'empty reply')});
+      });
       if(mergeMode && good.length >= 1){
         thinking.querySelector('div').textContent = t('merging');
         const result = await consensusMerge(apiText||text, good, failed, apiMsgs);
@@ -1935,9 +2059,11 @@ async function sendPrompt(){
         if(code) cur.code = code;
         const notes = [];
         if(result.contributors.length > 1) notes.push('— '+t('mergeContributors')+result.contributors.join('، ')+` (${result.contributors.length})`);
-        if(result.failed.length) notes.push('— '+t('mergeFailedNote')+result.failed.join('، '));
+        if(result.failed.length) notes.push('— '+t('mergeFailedNote')+'\n'+result.failed.map(f => '  • '+f.name+': '+f.reason).join('\n'));
         if(result.verifierModel) notes.push('— ✓ تحقق: '+PROVIDERS[result.verifierModel].name);
-        cur.messages.push({role:'assistant', content:(explanation||(code?t('buildSuccess'):''))+(notes.length?'\n\n'+notes.join('\n'):''), code, providerLabel:t('mergedLabel'), merged:true, autoApplied:!!code, sources:result.sources.map(s => ({key:s.key, label:s.label, text:s.text.slice(0, 3000), score:s.score}))});
+        const answer = explanation||(code?t('buildSuccess'):'');
+        // The notes (contributors, failures) are shown; only the answer goes back as history.
+        cur.messages.push({role:'assistant', content:answer+(notes.length?'\n\n'+notes.join('\n'):''), apiText:answer, code, providerLabel:t('mergedLabel'), merged:true, autoApplied:!!code, sources:result.sources.map(s => ({key:s.key, label:s.label, text:s.text.slice(0, 3000), score:s.score}))});
       } else {
         thinking.querySelector('div').textContent = '✓ '+good.length+' إجابة';
         let applied = false;
@@ -1947,23 +2073,26 @@ async function sendPrompt(){
           if(code && !applied){ cur.code = code; msg.autoApplied = true; applied = true; }
           cur.messages.push(msg);
         });
-        failed.forEach(n => cur.messages.push({role:'assistant', content:'⚠️ '+n+' لم يستجب', providerLabel:n, askAllReply:true}));
+        // Same reason everywhere (e.g. a missing quota or network) → one message, not eight.
+        const reasons = [...new Set(failed.map(f => f.reason))];
+        if(failed.length > 1 && reasons.length === 1){
+          cur.messages.push({role:'assistant', content:'⚠️ '+reasons[0]+'\n('+failed.map(f => f.name).join('، ')+')', providerLabel: isAr() ? 'المزوّدون' : 'Providers', notice:true});
+        } else failed.forEach(f => cur.messages.push({role:'assistant', content:'⚠️ '+f.reason, providerKey:f.key, providerLabel:f.name, askAllReply:true, failed:true}));
       }
     } else {
       const defKey = localStorage.getItem('aiapp_provider') || 'deepseek';
       thinking.querySelector('.provider-tag').textContent = PROVIDERS[defKey].name;
       const contentDiv = thinking.querySelector('div');
       contentDiv.classList.add('streaming-cursor');
-      let buf = '';
-      const reply = await callProvider(defKey, apiMsgs, {stream:true, onToken: tok => { buf += tok; contentDiv.textContent = buf; messagesEl.scrollTop = messagesEl.scrollHeight; }});
+      let buf = '', reply, cut = null;
+      try { reply = await callProvider(defKey, apiMsgs, {stream:true, onToken: tok => { buf += tok; contentDiv.textContent = buf; messagesEl.scrollTop = messagesEl.scrollHeight; }}); }
+      catch(e){ reply = e.partial || buf; if(!reply.trim()) throw e; cut = e; } // broke mid-way: keep what arrived
       contentDiv.classList.remove('streaming-cursor');
-      const {code, explanation} = extractReply(reply);
-      if(code) cur.code = code;
-      cur.messages.push({role:'assistant', content:explanation||(code?t('buildSuccess'):''), code, providerKey:defKey, providerLabel:PROVIDERS[defKey].name});
+      pushReply(cur, defKey, reply, cut);
     }
-  } catch(err){ cur.messages.push({role:'assistant', content:'⚠️ '+err.message}); }
+  } catch(err){ cur.messages.push({role:'assistant', content:'⚠️ '+err.message, notice:true}); } // shown, never sent back
   finally {
-    sendBtn.disabled = false; sendBtn.innerHTML = '<span>'+t('send')+'</span> <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
+    sending = false; sendBtn.disabled = false; sendBtn.innerHTML = '<span>'+t('send')+'</span> <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
     saveState(); renderAll();
     if($('#btnVoiceChat').classList.contains('active')){ const last = cur.messages[cur.messages.length-1]; if(last?.role === 'assistant' && last.content) speakSmart(mdStrip(last.content)); }
     if(window.innerWidth <= 860 && cur.code){ document.querySelector('.tab[data-tab="preview"]')?.click(); setTimeout(() => openDrawer($('#workarea')), 300); }
@@ -2571,19 +2700,57 @@ function wireSecTools(){
         html += `<div style="margin:6px 0"><a href="${esc(r.gps.openStreetMapUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">🗺️ افتح على OpenStreetMap</a> · <a href="${esc(r.gps.googleMapsUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">Google Maps</a></div>`;
       }
 
+      // Raw tags the summaries above leave out but that still identify a place, a person or a device.
+      const tg = r.tags || {}, ifd0 = tg.IFD0 || {}, exifIfd = tg.Exif || {}, gpsTags = tg.GPS || {};
+      const bytesOf = v => (Array.isArray(v) ? v : [v]).filter(b => typeof b === 'number');
+      const utf16 = (b, le) => { let s = ''; for(let i = 0; i + 1 < b.length; i += 2) s += String.fromCharCode(le ? b[i] | (b[i+1] << 8) : (b[i] << 8) | b[i+1]); return s; };
+      const xpText = v => v == null ? null : utf16(bytesOf(v), true); // Windows XP* tags: UCS-2LE bytes
+      const userComment = v => { const b = bytesOf(v); if(b.length <= 8) return null; const code = String.fromCharCode(...b.slice(0, 8)).replace(/\0/g, ''); return code === 'UNICODE' ? utf16(b.slice(8), /^little/.test(r.byteOrder||'')) : String.fromCharCode(...b.slice(8)); };
+      const tagText = v => (v == null ? '' : typeof v === 'string' ? v : JSON.stringify(v)).replace(/\0/g, '').trim();
+
+      const gpsKeys = Object.keys(gpsTags).filter(k => k !== 'GPSVersionID' && tagText(gpsTags[k]));
+      if(!r.gps && gpsKeys.length){
+        html += sec('📍 الموقع الجغرافي (GPS)');
+        html += `<div style="color:#fbbf24;font-size:12px;margin:2px 0 4px">⚠️ توجد حقول GPS لكن تعذّر تحويلها إلى إحداثيات — قد تكشف مكان التصوير.</div>`;
+        gpsKeys.forEach(k => { const v = gpsTags[k]; html += row(k, Array.isArray(v) ? v.map(fmt).join(', ') : fmt(v)); });
+      }
+
+      const identity = [
+        ['المؤلف (Artist)', ifd0.Artist], ['حقوق النشر (Copyright)', ifd0.Copyright], ['وصف الصورة (ImageDescription)', ifd0.ImageDescription],
+        ['المؤلف (XPAuthor)', xpText(ifd0.Tag0x9c9d)], ['العنوان (XPTitle)', xpText(ifd0.Tag0x9c9b)], ['تعليق (XPComment)', xpText(ifd0.Tag0x9c9c)],
+        ['الموضوع (XPSubject)', xpText(ifd0.Tag0x9c9f)], ['كلمات مفتاحية (XPKeywords)', xpText(ifd0.Tag0x9c9e)],
+        ['اسم المالك (CameraOwnerName)', exifIfd.CameraOwnerName], ['الرقم التسلسلي للعدسة (LensSerialNumber)', exifIfd.LensSerialNumber],
+        ['معرّف الصورة الفريد (ImageUniqueID)', exifIfd.ImageUniqueID], ['تعليق المستخدم (UserComment)', userComment(exifIfd.UserComment)],
+      ].map(([k, v]) => [k, tagText(v)]).filter(([, v]) => v);
+      if(identity.length){ html += sec('🪪 بيانات تعريفية (المؤلف/المالك/الأرقام التسلسلية)'); identity.forEach(([k, v]) => html += row(k, v)); }
+
       const txtKeys = Object.keys(r.text||{});
       if(txtKeys.length){ html += sec('🏷️ حقول نصية'); txtKeys.forEach(k => html += row(k, r.text[k])); }
       if(r.comments && r.comments.length){ html += sec('💬 تعليقات'); r.comments.forEach((c,i)=> html += row('#'+(i+1), c)); }
       if(r.xmp){ html += sec('📝 XMP'); html += `<pre style="white-space:pre-wrap;word-break:break-word;margin:0;font-size:11px;color:var(--text-2)">${esc(r.xmp.slice(0,800))}</pre>`; }
 
-      if(r.warnings && r.warnings.length){
-        html += `<div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:10px;padding:10px 12px;margin:12px 0 2px;font-size:12px;line-height:1.7;color:var(--text)">${r.warnings.map(esc).join('<br>')}</div>`;
+      const warnings = r.warnings || [];
+      if(warnings.length){
+        html += `<div class="exif-warnings" style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:10px;padding:10px 12px;margin:12px 0 2px;font-size:12px;line-height:1.7;color:var(--text)">${warnings.map(esc).join('<br>')}</div>`;
       }
-      const hasAnyData = r.gps || Object.keys(r.camera||{}).length || Object.keys(r.datetime||{}).length || Object.keys(r.exposure||{}).length || txtKeys.length || (r.comments&&r.comments.length) || r.xmp;
-      if(!hasAnyData){
-        html += `<div style="color:var(--text-2);margin-top:10px">✅ لم يُعثر على بيانات وصفية مخفية (EXIF/XMP). هذه الصورة لا تكشف الجهاز أو الموقع.</div>`;
+      // Three outcomes: the file could not be checked, something was found, or it is clean.
+      // Only a format the parser reads (and an EXIF block it could decode) can be called clean.
+      const unsupported = ['WEBP','HEIC','GIF'].includes(r.format);
+      const undecoded = warnings.some(w => /not decoded/i.test(w));
+      const unreadable = undecoded || warnings.some(w => /unreadable|parse failed|Unrecognized/i.test(w));
+      const checked = ['JPEG','PNG','TIFF'].includes(r.format) && !unreadable;
+      const hasAnyData = r.gps || gpsKeys.length || identity.length || warnings.length || Object.keys(r.camera||{}).length || Object.keys(r.datetime||{}).length || Object.keys(r.exposure||{}).length || txtKeys.length || (r.comments&&r.comments.length) || r.xmp;
+      if(!checked){
+        const why = unsupported ? `استخراج البيانات الوصفية من صيغة ${esc(r.format)} غير مدعوم بعد، فلم تُفحص هذه الصورة.`
+          : r.format === 'unknown' ? 'صيغة الملف غير معروفة، فلم تُفحص بياناته الوصفية.'
+          : undecoded ? 'في الملف بيانات وصفية مضغوطة أو مقطوعة لم يستطع الفحص فكّها.'
+          : 'كتلة البيانات الوصفية (EXIF) موجودة لكن تعذّرت قراءتها.';
+        html += `<div class="exif-unchecked" style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.35);border-radius:10px;padding:10px 12px;margin:12px 0 2px;font-size:12px;line-height:1.7;color:#fbbf24">⚠️ ${why} لا يمكن الجزم بخلوّ الملف من البيانات المخفية — قد يكشف الجهاز أو الموقع.${unsupported ? ' حوّله إلى JPEG أو PNG ثم أعد الفحص.' : ''}</div>`;
+      } else if(!hasAnyData){
+        html += `<div style="color:var(--text-2);margin-top:10px">✅ لم يُعثر على بيانات وصفية مخفية (EXIF/XMP) تكشف الجهاز أو الموقع أو صاحب الصورة. (حقول IPTC لا تُفحص.)</div>`;
       }
-      if(r.notes && r.notes.length) html += `<div style="color:var(--text-2);font-size:11px;margin-top:8px">${r.notes.map(esc).join(' · ')}</div>`;
+      const notes = (r.notes||[]).filter(n => !/not supported yet/.test(n)); // shown above in Arabic
+      if(notes.length) html += `<div style="color:var(--text-2);font-size:11px;margin-top:8px">${notes.map(esc).join(' · ')}</div>`;
 
       const rawJson = JSON.stringify(r.tags && Object.keys(r.tags).length ? r.tags : {text:r.text, comments:r.comments}, null, 2);
       html += `<details style="margin-top:12px"><summary style="cursor:pointer;color:var(--text-2);font-size:12px">🔍 عرض كل الحقول الخام (JSON)</summary><pre style="white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font-size:11px;color:var(--text-2)">${esc(rawJson)}</pre></details>`;
@@ -2652,22 +2819,22 @@ function wireSecTools(){
       prefix = `📄 ${file.name}\n🔑 SHA-256: ${value}\n\n`;
     } else value = $('#vtValue').value.trim();
     if(!value) return; box.textContent = prefix + '⏳...';
-    try { const res = await fetch('/api/virustotal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode: mode === 'file' ? 'hash' : mode, value, guestId: window.getGuestId()})}); const data = await res.json();
+    try { const res = await fetch('/api/virustotal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode: mode === 'file' ? 'hash' : mode, value, guestId: window.getGuestId(), token: authGet('aiapp_auth_token')})}); const data = await res.json();
       if(data.notConfigured){ box.textContent = prefix+'🚧 قريبًا'; return; } if(data.error){ box.textContent = prefix+'⚠️ '+data.error; return; }
       const icon = data.verdict === 'malicious' ? '🚨' : data.verdict === 'clean' ? '✅' : '⚠️'; const s = data.stats || {};
       box.textContent = prefix+`${icon} ${data.verdict}\nخبيث: ${s.malicious||0} | نظيف: ${s.harmless||0}`;
     } catch(e){ box.textContent = '⚠️ '+e.message; }
   });
   // Recon
-  $('#btnReconRun')?.addEventListener('click', async () => { const domain = $('#reconDomain').value.trim(); if(!domain) return; const box = $('#reconResult'); box.textContent = '⏳...'; try { const res = await fetch('/api/recon',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain,guestId:window.getGuestId()})}); const data = await res.json(); if(data.error){ box.textContent = '⚠️ '+data.error; return; } const lines = [`🌍 ${data.domain}\n📡 DNS:`]; Object.entries(data.dns||{}).forEach(([k,v]) => { if(v?.length) lines.push(`  ${k}: ${v.map(x => typeof x === 'object' ? x.exchange||JSON.stringify(x) : x).join(', ')}`); }); lines.push(`\n🔍 Subdomains (${data.subdomainCount}):`); (data.subdomains||[]).slice(0,100).forEach(s => lines.push('  • '+s)); box.textContent = lines.join('\n'); } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnReconRun')?.addEventListener('click', async () => { const domain = $('#reconDomain').value.trim(); if(!domain) return; const box = $('#reconResult'); box.textContent = '⏳...'; try { const res = await fetch('/api/recon',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.error){ box.textContent = '⚠️ '+data.error; return; } const lines = [`🌍 ${data.domain}\n📡 DNS:`]; Object.entries(data.dns||{}).forEach(([k,v]) => { if(v?.length) lines.push(`  ${k}: ${v.map(x => typeof x === 'object' ? x.exchange||JSON.stringify(x) : x).join(', ')}`); }); lines.push(`\n🔍 Subdomains (${data.subdomainCount}):`); (data.subdomains||[]).slice(0,100).forEach(s => lines.push('  • '+s)); box.textContent = lines.join('\n'); } catch(e){ box.textContent = '⚠️ '+e.message; } });
   // WebScan
-  $('#btnWebscanRun')?.addEventListener('click', async () => { const mode = $('#webscanMode').value, value = $('#webscanValue').value.trim(); if(!value) return; const box = $('#webscanResult'); box.textContent = '⏳...'; try { const res = await fetch('/api/webscan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode,value,guestId:window.getGuestId()})}); const data = await res.json(); if(data.error){ box.textContent = '⚠️ '+data.error; return; } if(mode === 'headers'){ const lines = [`🛡️ Grade: ${data.grade} (${data.score}/100)`, '']; (data.details||[]).forEach(d => lines.push((d.present ? '✅' : '❌')+' '+d.label)); box.textContent = lines.join('\n'); } else { box.textContent = `🔒 ${data.host}\nIssuer: ${data.issuer||'—'}\nValid until: ${data.validTo||'—'}\nDays left: ${data.daysLeft}\nProtocol: ${data.protocol||'—'}`; } } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnWebscanRun')?.addEventListener('click', async () => { const mode = $('#webscanMode').value, value = $('#webscanValue').value.trim(); if(!value) return; const box = $('#webscanResult'); box.textContent = '⏳...'; try { const res = await fetch('/api/webscan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode,value,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.error){ box.textContent = '⚠️ '+data.error; return; } if(mode === 'headers'){ const lines = [`🛡️ Grade: ${data.grade} (${data.score}/100)`, '']; (data.details||[]).forEach(d => lines.push((d.present ? '✅' : '❌')+' '+d.label)); box.textContent = lines.join('\n'); } else { box.textContent = `🔒 ${data.host}\nIssuer: ${data.issuer||'—'}\nValid until: ${data.validTo||'—'}\nDays left: ${data.daysLeft}\nProtocol: ${data.protocol||'—'}`; } } catch(e){ box.textContent = '⚠️ '+e.message; } });
   // JWT
   $('#btnJwtRun')?.addEventListener('click', async () => { const token = $('#jwtInput').value.trim(); if(!token) return; const box = $('#jwtResult'); box.textContent = '⏳...'; try { const parts = token.split('.'); if(parts.length !== 3){ box.textContent = '⚠️ JWT غير صالح'; return; } const header = JSON.parse(atob(parts[0].replace(/-/g,'+').replace(/_/g,'/'))); const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/'))); const lines = ['📋 Header:', JSON.stringify(header, null, 2), '', '📦 Payload:', JSON.stringify(payload, null, 2)]; if(payload.exp) lines.push('', '⏰ Expires: ' + new Date(payload.exp*1000).toISOString()); box.textContent = lines.join('\n'); } catch(e){ box.textContent = '⚠️ '+e.message; } });
   // Hash ID
   $('#btnHashidRun')?.addEventListener('click', () => { const hash = $('#hashidInput').value.trim(); if(!hash) return; const box = $('#hashidResult'); const guesses = []; if(/^[a-f0-9]{32}$/i.test(hash)) guesses.push('MD5'); if(/^[a-f0-9]{40}$/i.test(hash)) guesses.push('SHA-1'); if(/^[a-f0-9]{64}$/i.test(hash)) guesses.push('SHA-256'); if(/^\$2[aby]\$/.test(hash)) guesses.push('bcrypt'); box.textContent = guesses.length ? `🔎 ${guesses.join(', ')}` : '⚠️ نوع غير معروف'; });
   // IP Rep
-  $('#btnIprepCheck')?.addEventListener('click', async () => { const ip = $('#iprepIp').value.trim(); if(!ip) return; const box = $('#iprepResult'); box.textContent = '⏳...'; try { const res = await fetch('/api/iprep',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip,guestId:window.getGuestId()})}); const data = await res.json(); if(data.notConfigured){ box.textContent = '🚧 قريبًا'; return; } if(data.error){ box.textContent = '⚠️ '+data.error; return; } const score = data.abuseScore || 0; const icon = score >= 75 ? '🚨' : score >= 25 ? '⚠️' : '✅'; box.textContent = `${icon} ${data.ip}\nAbuse Score: ${score}%\nReports: ${data.totalReports||0}\nISP: ${data.isp||'—'}\nCountry: ${data.countryName||'—'}`; } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnIprepCheck')?.addEventListener('click', async () => { const ip = $('#iprepIp').value.trim(); if(!ip) return; const box = $('#iprepResult'); box.textContent = '⏳...'; try { const res = await fetch('/api/iprep',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.notConfigured){ box.textContent = '🚧 قريبًا'; return; } if(data.error){ box.textContent = '⚠️ '+data.error; return; } const score = data.abuseScore || 0; const icon = score >= 75 ? '🚨' : score >= 25 ? '⚠️' : '✅'; box.textContent = `${icon} ${data.ip}\nAbuse Score: ${score}%\nReports: ${data.totalReports||0}\nISP: ${data.isp||'—'}\nCountry: ${data.countryName||'—'}`; } catch(e){ box.textContent = '⚠️ '+e.message; } });
   // Probmath
   $('#btnPmHouseCalc')?.addEventListener('click', () => { const box = $('#pmHouseResult'); const bet = parseFloat($('#pmBet').value), wp = parseFloat($('#pmWinProb').value)/100, po = parseFloat($('#pmPayout').value); if(!(bet>0)||!(wp>=0&&wp<=1)||!(po>0)){ box.textContent = '⚠️ أرقام غير صحيحة'; return; } const winAmt = bet*(po-1), lp = 1-wp, ev = wp*winAmt - lp*bet, he = -ev/bet*100; box.textContent = `💰 القيمة المتوقعة: ${ev.toFixed(4)}\n📊 حافة البيت: ${he.toFixed(2)}%\n${ev < 0 ? '🔴 لصالح البيت' : '🟢 لصالحك'}`; });
   $('#btnPmKellyCalc')?.addEventListener('click', () => { const box = $('#pmKellyResult'); const bank = parseFloat($('#pmBankroll').value), p = parseFloat($('#pmKellyProb').value)/100, odds = parseFloat($('#pmKellyOdds').value); if(!(bank>0)||!(p>=0&&p<=1)||!(odds>0)){ box.textContent = '⚠️ أرقام غير صحيحة'; return; } const b = odds-1, q = 1-p, k = b > 0 ? ((b*p-q)/b) : -1; if(k <= 0) box.textContent = '🔴 لا ميزة رياضية — 0%'; else box.textContent = `📈 Kelly: ${(k*100).toFixed(2)}%\n💵 المقترح: ${(bank*k).toFixed(2)}`; });

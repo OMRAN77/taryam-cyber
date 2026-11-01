@@ -16,6 +16,7 @@ const PUBLIC_BASE = 'https://' + STORE_ID + '.public.blob.vercel-storage.com/';
 
 const VT_BASE = 'https://www.virustotal.com/api/v3';
 const DAILY_LIMIT = 15; // per guest/user id, keeps free-tier quota safe
+const { quotaEnabled, isOwnerToken } = require('./_quota');
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -107,11 +108,16 @@ module.exports = async (req, res) => {
 
     const id = String(guestId || req.headers['x-forwarded-for'] || 'anon').slice(0, 100);
     const today = todayStr();
-    let usage = await readBlobJson(usagePath(id), null);
-    if (!usage || usage.date !== today) usage = { date: today, count: 0 };
-    if (usage.count >= DAILY_LIMIT) {
-      res.status(429).json({ error: 'limit', message: 'وصلت للحد اليومي المسموح لهذه الأداة (' + DAILY_LIMIT + ' فحوصات/يوم). حاول غدًا.' });
-      return;
+    // Daily per-tool limit; never for the owner's account or a QUOTA=off deployment (api/_quota.js).
+    const limited = quotaEnabled() && !isOwnerToken(body.token);
+    let usage = { date: today, count: 0 };
+    if (limited) {
+      usage = await readBlobJson(usagePath(id), null);
+      if (!usage || usage.date !== today) usage = { date: today, count: 0 };
+      if (usage.count >= DAILY_LIMIT) {
+        res.status(429).json({ error: 'limit', message: 'وصلت للحد اليومي المسموح لهذه الأداة (' + DAILY_LIMIT + ' فحوصات/يوم). حاول غدًا.' });
+        return;
+      }
     }
 
     let upstream;
@@ -155,10 +161,9 @@ module.exports = async (req, res) => {
         }
         await new Promise((r) => setTimeout(r, 1500));
       }
-      usage.count += 1;
-      await writeBlobJson(usagePath(id), usage);
+      if (limited) { usage.count += 1; await writeBlobJson(usagePath(id), usage); }
       if (!analysis) {
-        res.status(200).json({ pending: true, message: 'التحليل قيد التنفيذ، حاول مرة أخرى خلال دقيقة.', remaining: DAILY_LIMIT - usage.count });
+        res.status(200).json({ pending: true, message: 'التحليل قيد التنفيذ، حاول مرة أخرى خلال دقيقة.', remaining: limited ? DAILY_LIMIT - usage.count : null });
         return;
       }
       const attrs = analysis.data.attributes;
@@ -176,16 +181,15 @@ module.exports = async (req, res) => {
         mode,
         verdict,
         stats: { malicious, suspicious, harmless, undetected },
-        remaining: DAILY_LIMIT - usage.count,
+        remaining: limited ? DAILY_LIMIT - usage.count : null,
       });
       return;
     }
 
-    usage.count += 1;
-    await writeBlobJson(usagePath(id), usage);
+    if (limited) { usage.count += 1; await writeBlobJson(usagePath(id), usage); }
 
     if (upstream.status === 404) {
-      res.status(200).json({ target: q, mode, verdict: 'not_found', message: 'لا يوجد سجل لهذا الـ Hash في قاعدة بيانات VirusTotal (لا يعني أنه آمن بالضرورة).', remaining: DAILY_LIMIT - usage.count });
+      res.status(200).json({ target: q, mode, verdict: 'not_found', message: 'لا يوجد سجل لهذا الـ Hash في قاعدة بيانات VirusTotal (لا يعني أنه آمن بالضرورة).', remaining: limited ? DAILY_LIMIT - usage.count : null });
       return;
     }
     if (!upstream.ok) {
@@ -196,7 +200,7 @@ module.exports = async (req, res) => {
     const data = await upstream.json();
     const attrs = data && data.data && data.data.attributes;
     const summary = summarize(attrs);
-    res.status(200).json({ target: q, mode, ...summary, remaining: DAILY_LIMIT - usage.count });
+    res.status(200).json({ target: q, mode, ...summary, remaining: limited ? DAILY_LIMIT - usage.count : null });
   } catch (e) {
     res.status(500).json({ error: 'Proxy error: ' + (e && e.message ? e.message : String(e)) });
   }
