@@ -683,9 +683,10 @@ dialog select option{background:#0f1219;color:var(--text)}
   }
   #sidebar{transform:translateX(-100%);max-width:340px}
   #workarea{transform:translateX(-100%)}
-  html[dir="rtl"] #sidebar,html[dir="rtl"] #workarea{
-    inset-inline-start:auto;inset-inline-end:0;transform:translateX(100%);
-  }
+  /* inset-inline-start:0 already pins the drawers to the right edge in RTL, so only
+     the slide direction flips; pinning them to inline-end (= left) left the closed
+     drawers on screen, covering the dock. */
+  html[dir="rtl"] #sidebar,html[dir="rtl"] #workarea{transform:translateX(100%)}
   #sidebar.open,#workarea.open{transform:translateX(0)!important}
   #chatcol{width:100%}
   #messages{padding:16px 12px calc(var(--dock-h, 128px) + 24px)}
@@ -743,7 +744,7 @@ html.mobile-ui #workarea{
 }
 html.mobile-ui #sidebar{transform:translateX(-100%)}
 html.mobile-ui #workarea{transform:translateX(-100%)}
-html.mobile-ui[dir="rtl"] #sidebar,html.mobile-ui[dir="rtl"] #workarea{inset-inline-start:auto;inset-inline-end:0;transform:translateX(100%)}
+html.mobile-ui[dir="rtl"] #sidebar,html.mobile-ui[dir="rtl"] #workarea{transform:translateX(100%)}
 html.mobile-ui #sidebar.open,html.mobile-ui #workarea.open{transform:translateX(0)!important}
 html.mobile-ui #chatcol{width:100%}
 html.mobile-ui .resizer{display:none}
@@ -2699,19 +2700,55 @@ function wireSecTools(){
         html += `<div style="margin:6px 0"><a href="${esc(r.gps.openStreetMapUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">🗺️ افتح على OpenStreetMap</a> · <a href="${esc(r.gps.googleMapsUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">Google Maps</a></div>`;
       }
 
+      // Raw tags the summaries above leave out but that still identify a place, a person or a device.
+      const tg = r.tags || {}, ifd0 = tg.IFD0 || {}, exifIfd = tg.Exif || {}, gpsTags = tg.GPS || {};
+      const bytesOf = v => (Array.isArray(v) ? v : [v]).filter(b => typeof b === 'number');
+      const utf16 = (b, le) => { let s = ''; for(let i = 0; i + 1 < b.length; i += 2) s += String.fromCharCode(le ? b[i] | (b[i+1] << 8) : (b[i] << 8) | b[i+1]); return s; };
+      const xpText = v => v == null ? null : utf16(bytesOf(v), true); // Windows XP* tags: UCS-2LE bytes
+      const userComment = v => { const b = bytesOf(v); if(b.length <= 8) return null; const code = String.fromCharCode(...b.slice(0, 8)).replace(/\0/g, ''); return code === 'UNICODE' ? utf16(b.slice(8), /^little/.test(r.byteOrder||'')) : String.fromCharCode(...b.slice(8)); };
+      const tagText = v => (v == null ? '' : typeof v === 'string' ? v : JSON.stringify(v)).replace(/\0/g, '').trim();
+
+      const gpsKeys = Object.keys(gpsTags).filter(k => k !== 'GPSVersionID' && tagText(gpsTags[k]));
+      if(!r.gps && gpsKeys.length){
+        html += sec('📍 الموقع الجغرافي (GPS)');
+        html += `<div style="color:#fbbf24;font-size:12px;margin:2px 0 4px">⚠️ توجد حقول GPS لكن تعذّر تحويلها إلى إحداثيات — قد تكشف مكان التصوير.</div>`;
+        gpsKeys.forEach(k => { const v = gpsTags[k]; html += row(k, Array.isArray(v) ? v.map(fmt).join(', ') : fmt(v)); });
+      }
+
+      const identity = [
+        ['المؤلف (Artist)', ifd0.Artist], ['حقوق النشر (Copyright)', ifd0.Copyright], ['وصف الصورة (ImageDescription)', ifd0.ImageDescription],
+        ['المؤلف (XPAuthor)', xpText(ifd0.Tag0x9c9d)], ['العنوان (XPTitle)', xpText(ifd0.Tag0x9c9b)], ['تعليق (XPComment)', xpText(ifd0.Tag0x9c9c)],
+        ['الموضوع (XPSubject)', xpText(ifd0.Tag0x9c9f)], ['كلمات مفتاحية (XPKeywords)', xpText(ifd0.Tag0x9c9e)],
+        ['اسم المالك (CameraOwnerName)', exifIfd.CameraOwnerName], ['الرقم التسلسلي للعدسة (LensSerialNumber)', exifIfd.LensSerialNumber],
+        ['معرّف الصورة الفريد (ImageUniqueID)', exifIfd.ImageUniqueID], ['تعليق المستخدم (UserComment)', userComment(exifIfd.UserComment)],
+      ].map(([k, v]) => [k, tagText(v)]).filter(([, v]) => v);
+      if(identity.length){ html += sec('🪪 بيانات تعريفية (المؤلف/المالك/الأرقام التسلسلية)'); identity.forEach(([k, v]) => html += row(k, v)); }
+
       const txtKeys = Object.keys(r.text||{});
       if(txtKeys.length){ html += sec('🏷️ حقول نصية'); txtKeys.forEach(k => html += row(k, r.text[k])); }
       if(r.comments && r.comments.length){ html += sec('💬 تعليقات'); r.comments.forEach((c,i)=> html += row('#'+(i+1), c)); }
       if(r.xmp){ html += sec('📝 XMP'); html += `<pre style="white-space:pre-wrap;word-break:break-word;margin:0;font-size:11px;color:var(--text-2)">${esc(r.xmp.slice(0,800))}</pre>`; }
 
-      if(r.warnings && r.warnings.length){
-        html += `<div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:10px;padding:10px 12px;margin:12px 0 2px;font-size:12px;line-height:1.7;color:var(--text)">${r.warnings.map(esc).join('<br>')}</div>`;
+      const warnings = r.warnings || [];
+      if(warnings.length){
+        html += `<div class="exif-warnings" style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:10px;padding:10px 12px;margin:12px 0 2px;font-size:12px;line-height:1.7;color:var(--text)">${warnings.map(esc).join('<br>')}</div>`;
       }
-      const hasAnyData = r.gps || Object.keys(r.camera||{}).length || Object.keys(r.datetime||{}).length || Object.keys(r.exposure||{}).length || txtKeys.length || (r.comments&&r.comments.length) || r.xmp;
-      if(!hasAnyData){
-        html += `<div style="color:var(--text-2);margin-top:10px">✅ لم يُعثر على بيانات وصفية مخفية (EXIF/XMP). هذه الصورة لا تكشف الجهاز أو الموقع.</div>`;
+      // Three outcomes: the file could not be checked, something was found, or it is clean.
+      // Only a format the parser reads (and an EXIF block it could decode) can be called clean.
+      const unsupported = ['WEBP','HEIC','GIF'].includes(r.format);
+      const unreadable = warnings.some(w => /unreadable|parse failed|Unrecognized/i.test(w));
+      const checked = ['JPEG','PNG','TIFF'].includes(r.format) && !unreadable;
+      const hasAnyData = r.gps || gpsKeys.length || identity.length || warnings.length || Object.keys(r.camera||{}).length || Object.keys(r.datetime||{}).length || Object.keys(r.exposure||{}).length || txtKeys.length || (r.comments&&r.comments.length) || r.xmp;
+      if(!checked){
+        const why = unsupported ? `استخراج البيانات الوصفية من صيغة ${esc(r.format)} غير مدعوم بعد، فلم تُفحص هذه الصورة.`
+          : r.format === 'unknown' ? 'صيغة الملف غير معروفة، فلم تُفحص بياناته الوصفية.'
+          : 'كتلة البيانات الوصفية (EXIF) موجودة لكن تعذّرت قراءتها.';
+        html += `<div class="exif-unchecked" style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.35);border-radius:10px;padding:10px 12px;margin:12px 0 2px;font-size:12px;line-height:1.7;color:#fbbf24">⚠️ ${why} لا يمكن الجزم بخلوّ الملف من البيانات المخفية — قد يكشف الجهاز أو الموقع.${unsupported ? ' حوّله إلى JPEG أو PNG ثم أعد الفحص.' : ''}</div>`;
+      } else if(!hasAnyData){
+        html += `<div style="color:var(--text-2);margin-top:10px">✅ لم يُعثر على بيانات وصفية مخفية (EXIF/XMP) تكشف الجهاز أو الموقع أو صاحب الصورة. (حقول IPTC لا تُفحص.)</div>`;
       }
-      if(r.notes && r.notes.length) html += `<div style="color:var(--text-2);font-size:11px;margin-top:8px">${r.notes.map(esc).join(' · ')}</div>`;
+      const notes = (r.notes||[]).filter(n => !/not supported yet/.test(n)); // shown above in Arabic
+      if(notes.length) html += `<div style="color:var(--text-2);font-size:11px;margin-top:8px">${notes.map(esc).join(' · ')}</div>`;
 
       const rawJson = JSON.stringify(r.tags && Object.keys(r.tags).length ? r.tags : {text:r.text, comments:r.comments}, null, 2);
       html += `<details style="margin-top:12px"><summary style="cursor:pointer;color:var(--text-2);font-size:12px">🔍 عرض كل الحقول الخام (JSON)</summary><pre style="white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font-size:11px;color:var(--text-2)">${esc(rawJson)}</pre></details>`;
