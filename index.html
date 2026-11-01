@@ -194,7 +194,8 @@ html[dir="ltr"] #sidebar{border-right:1px solid var(--border)}
 }
 html[dir="rtl"] #chatcol{border-left:1px solid var(--border)}
 html[dir="ltr"] #chatcol{border-right:1px solid var(--border)}
-#messages{flex:1;overflow-y:auto;padding:20px 18px 100px;display:flex;flex-direction:column;gap:14px;scroll-behavior:smooth}
+/* --dock-h is the floating dock's live height (set from JS), so the last message is never hidden behind it. */
+#messages{flex:1;overflow-y:auto;padding:20px 18px calc(var(--dock-h, 128px) + 28px);display:flex;flex-direction:column;gap:14px;scroll-behavior:smooth}
 #messages::-webkit-scrollbar{width:6px}
 #messages::-webkit-scrollbar-track{background:transparent}
 #messages::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px}
@@ -353,9 +354,13 @@ details.md-sources summary:hover{color:var(--text-2)}
 .toggle-chip input{display:none}
 
 /* Attachments strip */
-#attachStrip{display:flex;flex-wrap:wrap;gap:6px;padding:0 6px}
+/* One scrollable row inside the dock, so many files don't make it grow tall. */
+#attachStrip{display:flex;flex-wrap:nowrap;gap:6px;padding:2px 4px 4px;overflow-x:auto;scrollbar-width:thin}
+#attachStrip::-webkit-scrollbar{height:4px}
+#attachStrip::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:2px}
 #attachStrip:empty{display:none}
 .attach-chip{
+  flex-shrink:0;
   display:flex;align-items:center;gap:6px;
   background:var(--surface-2);border:1px solid var(--border-2);
   border-radius:8px;padding:4px 8px;font-size:11.5px;color:var(--text-2);
@@ -662,7 +667,7 @@ dialog select option{background:#0f1219;color:var(--text)}
   }
   #sidebar.open,#workarea.open{transform:translateX(0)!important}
   #chatcol{width:100%}
-  #messages{padding:16px 12px 120px}
+  #messages{padding:16px 12px calc(var(--dock-h, 128px) + 24px)}
   #inputbar{bottom:10px;left:10px;right:10px;border-radius:18px}
   dialog{
     position:fixed;inset:0;margin:0;
@@ -991,22 +996,23 @@ html.mobile-ui .resizer{display:none}
   <div id="chatcol">
     <div id="messages"></div>
 
-    <div id="chat-toggles" style="padding:8px 16px">
-      <label class="toggle-chip" id="chip-askall">
-        <input type="checkbox" id="chkAskAll">
-        <span data-i18n="askAllLabel">🎯 اسأل كل المزوّدين</span>
-      </label>
-      <label class="toggle-chip on" id="chip-merge">
-        <input type="checkbox" id="chkMerge" checked>
-        <span data-i18n="mergeLabel">🧠 دمج ذكي</span>
-      </label>
-    </div>
-
-    <div id="attachStrip"></div>
-
+    <!-- The dock floats over the bottom of the chat column, so everything that belongs
+         to the composer (toggles, attachments) lives inside it; outside it they were
+         laid out underneath the dock and ended up hidden or cut off. -->
     <div id="inputbar">
       <input type="file" id="attachInput" accept="image/*,.txt,.py,.js,.json,.md,.html,.log,.css,.csv" multiple style="display:none">
       <div id="emojiPicker"></div>
+      <div id="chat-toggles">
+        <label class="toggle-chip" id="chip-askall">
+          <input type="checkbox" id="chkAskAll">
+          <span data-i18n="askAllLabel">🎯 اسأل كل المزوّدين</span>
+        </label>
+        <label class="toggle-chip on" id="chip-merge">
+          <input type="checkbox" id="chkMerge" checked>
+          <span data-i18n="mergeLabel">🧠 دمج ذكي</span>
+        </label>
+      </div>
+      <div id="attachStrip"></div>
       <textarea id="prompt" rows="1" data-i18n-placeholder="promptPlaceholder" placeholder="صف ما تريد... مثال: اشرح ثغرة XSS"></textarea>
       <div class="dock-row">
         <div class="dock-icons">
@@ -1968,6 +1974,14 @@ $('#prompt').addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shift
 $('#prompt').addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(140, e.target.scrollHeight) + 'px'; });
 $('#chkAskAll').checked = localStorage.getItem('aiapp_askall') === 'true';
 $('#chkMerge').checked = localStorage.getItem('aiapp_merge') !== 'false';
+// Keep the message list's bottom padding equal to the dock's real height (it grows
+// with toggles, attachments and a multi-line prompt).
+(function trackDockHeight(){
+  const dock = $('#inputbar'), col = $('#chatcol');
+  const sync = () => col.style.setProperty('--dock-h', dock.offsetHeight + 'px');
+  sync();
+  if(window.ResizeObserver) new ResizeObserver(sync).observe(dock);
+})();
 function updateChipStates(){
   $('#chip-askall').classList.toggle('on', $('#chkAskAll').checked);
   $('#chip-merge').classList.toggle('on', $('#chkMerge').checked);
