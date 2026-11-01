@@ -1,10 +1,14 @@
 // Tests for api/_relay.js through the real provider proxies: SSE is piped through
 // when the browser asks for a stream, JSON stays unchanged otherwise, retired model
 // ids fall back to the next candidate (or a discovered one), and other errors are
-// passed through without retrying. Nothing here talks to the network.
+// passed through without retrying. A stream that breaks ends with an error event, and
+// a browser that disconnects aborts the upstream call. Nothing here talks to the
+// network (the disconnect tests use a local server on 127.0.0.1).
 const test = require('node:test');
 const assert = require('node:assert');
+const http = require('http');
 const { loadApi, createBlobFake, installFetch, STRONG_SECRET } = require('../helpers/harness');
+const { startServer } = require('../helpers/dev-server');
 
 const KEYS = {
   COHERE_API_KEY: 'k', DEEPSEEK_API_KEY: 'k', GROQ_API_KEY: 'k', MISTRAL_API_KEY: 'k',
@@ -23,14 +27,14 @@ function sseResponse(text) {
   return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
 }
 
-// upstream(url, body) -> Response. Records every provider call.
+// upstream(url, body, opts) -> Response. Records every provider call.
 function setup(upstream) {
   const blob = createBlobFake();
   const calls = [];
   const restore = installFetch(blob.fetchImpl(async (url, opts) => {
     const body = opts.body ? JSON.parse(opts.body) : null;
     calls.push({ url, body });
-    return upstream(url, body);
+    return upstream(url, body, opts);
   }));
   loadApi('_usage', { AUTH_SECRET: STRONG_SECRET, BLOB_READ_WRITE_TOKEN: blob.token, ...KEYS });
   require('../../api/_store').config.retryDelayMs = 0;
@@ -59,6 +63,8 @@ function call(name, body) {
 
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json' } });
 const notFound = (id) => json({ error: { code: 'model_not_found', message: 'The model `' + id + '` does not exist' } }, 404);
+const ok = () => json({ choices: [{ message: { content: 'ok' } }] });
+const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 
 test('a streamed answer is piped through as Server-Sent Events', async () => {
   const { calls, restore } = setup(() => sseResponse(SSE));
@@ -145,4 +151,135 @@ test('an unsafe model id is not echoed into a response header', async () => {
     assert.strictEqual(r.status, 200);
     assert.strictEqual(r.headers['x-taryam-model'], undefined);
   } finally { restore(); }
+});
+
+// How DeepSeek and OpenRouter word "this model id is unknown" (not OpenAI's wording).
+const PROVIDER_NOT_FOUND = [
+  ['DeepSeek 400 "Model Not Exist"', 'deepseek', 'deepseek-coder', 'deepseek-chat',
+    () => json({ error: { message: 'Model Not Exist', type: 'invalid_request_error', param: null, code: 'invalid_request_error' } }, 400)],
+  ['OpenRouter 400 "is not a valid model ID"', 'openrouter', 'gpt-4o', 'openai/gpt-5.6',
+    () => json({ error: { message: 'gpt-4o is not a valid model ID', code: 400 } }, 400)],
+  ['OpenRouter 404 "No endpoints found for"', 'openrouter', 'anthropic/claude-2', 'openai/gpt-5.6',
+    () => json({ error: { message: 'No endpoints found for anthropic/claude-2.', code: 404 } }, 404)],
+];
+
+for (const [label, provider, bad, next, reply] of PROVIDER_NOT_FOUND) {
+  test('fallback also fires on ' + label, async () => {
+    const { calls, restore } = setup((url, body) => (body.model === bad ? reply() : ok()));
+    try {
+      const r = await call(provider, { model: bad });
+      assert.strictEqual(r.status, 200);
+      assert.deepStrictEqual(calls.map((c) => c.body.model), [bad, next]);
+      assert.strictEqual(r.headers['x-taryam-model'], next);
+    } finally { restore(); }
+  });
+}
+
+test('other 400s (context length, max_tokens, temperature) are not mistaken for a missing model', async () => {
+  const cases = [
+    ['deepseek', 'deepseek-chat', "This model's maximum context length is 65536 tokens. However, you requested 70000 tokens (61808 in the messages, 8192 in the completion). Please reduce the length of the messages or completion."],
+    ['deepseek', 'deepseek-reasoner', 'Invalid max_tokens value, the valid range of max_tokens is [1, 8192]'],
+    ['openai', 'gpt-4o-mini', "Unsupported value: 'temperature' does not support 0.7 with this model. Only the default (1) value is supported."],
+  ];
+  for (const [provider, model, message] of cases) {
+    const { calls, restore } = setup(() => json({ error: { message, type: 'invalid_request_error', code: 'invalid_request_error' } }, 400));
+    try {
+      const r = await call(provider, { model });
+      assert.strictEqual(r.status, 400, message);
+      assert.strictEqual(r.body.error.message, message);
+      assert.strictEqual(calls.length, 1, 'no fallback for: ' + message);
+    } finally { restore(); }
+  }
+});
+
+test('an upstream stream that breaks mid-way ends with an error event, not as a complete answer', async () => {
+  // The break lands inside an event, as a connection reset would.
+  const head = 'data: {"choices":[{"delta":{"content":"Part one."}}]}\n\n'
+    + 'data: {"choices":[{"delta":{"content":" Part tw';
+  const { restore } = setup(() => {
+    let n = 0;
+    const body = new ReadableStream({
+      pull(c) { if (n++ === 0) c.enqueue(new TextEncoder().encode(head)); else c.error(new Error('upstream reset')); },
+    });
+    return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  });
+  try {
+    const r = await call('deepseek', { stream: true, model: 'deepseek-chat' });
+    assert.strictEqual(r.status, 200);
+    assert.ok(r.text.startsWith(head), 'what arrived before the break still reaches the browser');
+    assert.ok(r.text.endsWith('\n\n'), 'the error event is terminated by a blank line');
+    const data = r.text.split('\n').filter((l) => l.startsWith('data:'));
+    const last = JSON.parse(data[data.length - 1].slice(5));
+    assert.match(last.error.message, /upstream reset/);
+    assert.strictEqual(data.filter((l) => l.includes('"error"')).length, 1, 'exactly one error event');
+  } finally { restore(); }
+});
+
+// POSTs a streamed chat to the local dev server. onResponse(res, req) drives the read.
+function streamRequest(server, onResponse) {
+  return new Promise((resolve, reject) => {
+    const req = http.request(server.url + '/api/deepseek', { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+      (res) => onResponse(res, req, resolve));
+    req.on('error', (e) => { if (!req.destroyed) reject(e); });
+    req.end(JSON.stringify({ messages: [{ role: 'user', content: 'hi' }], model: 'deepseek-chat', stream: true }));
+  });
+}
+
+test('a browser that disconnects mid-stream aborts the upstream request', async () => {
+  const TOTAL = 60;
+  let signal = null;
+  let sent = 0;
+  const { restore } = setup((url, body, opts) => {
+    signal = opts.signal || null;
+    const enc = new TextEncoder();
+    // Behaves like a real fetch body: aborting the request errors the stream.
+    const stream = new ReadableStream({
+      start(c) { if (signal) signal.addEventListener('abort', () => { try { c.error(signal.reason); } catch (e) { /* closed */ } }); },
+      async pull(c) {
+        if (sent >= TOTAL) { c.close(); return; }
+        await tick(10);
+        if (signal && signal.aborted) return;
+        sent++;
+        c.enqueue(enc.encode('data: {"choices":[{"delta":{"content":"t' + sent + ' "}}]}\n\n'));
+      },
+    });
+    return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  });
+  const server = await startServer();
+  try {
+    await streamRequest(server, (res, req, done) => {
+      assert.strictEqual(res.statusCode, 200);
+      res.once('data', () => { req.destroy(); done(); }); // first tokens arrived, then the tab closes
+    });
+    assert.ok(signal, 'the upstream fetch is given an abort signal');
+    for (let i = 0; i < 100 && !signal.aborted; i++) await tick(10);
+    assert.strictEqual(signal.aborted, true, 'the upstream request is aborted after the disconnect');
+    const atAbort = sent;
+    await tick(100);
+    assert.strictEqual(sent, atAbort, 'no more upstream chunks are read after the abort');
+    assert.ok(sent < TOTAL, 'the upstream answer was not read to the end (' + sent + '/' + TOTAL + ')');
+  } finally {
+    await server.close();
+    restore();
+  }
+});
+
+test('a stream that completes normally is not aborted and gets no error event', async () => {
+  let signal = null;
+  const { restore } = setup((url, body, opts) => { signal = opts.signal; return sseResponse(SSE); });
+  const server = await startServer();
+  try {
+    const text = await streamRequest(server, (res, req, done) => {
+      let t = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { t += c; });
+      res.on('end', () => done(t));
+    });
+    assert.strictEqual(text, SSE);
+    await tick(20);
+    assert.strictEqual(signal.aborted, false);
+  } finally {
+    await server.close();
+    restore();
+  }
 });
