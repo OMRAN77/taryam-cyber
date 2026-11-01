@@ -239,3 +239,16 @@ test('EXIF tool flags GPS tags that do not decode into coordinates', async (t) =
   assert.match(r.visible, /25\.19/, 'raw latitude value is visible');
   assert.deepStrictEqual(errors, [], 'no page errors');
 });
+
+test('EXIF tool does not call a PNG with compressed metadata clean', async (t) => {
+  const { page, errors } = await newExifPage(t);
+  const { buildPng, pngChunk } = require('../helpers/make-image');
+  const base = buildPng({ width: 2, height: 2 });
+  const ztxt = pngChunk('zTXt', Buffer.concat([Buffer.from('Raw profile type exif', 'latin1'), Buffer.from([0, 0, 0x78, 0x9c, 1, 2, 3])]));
+  const png = Buffer.concat([base.subarray(0, base.length - 12), ztxt, base.subarray(base.length - 12)]);
+  const r = await analyse(page, 'profile.png', 'image/png', png);
+  assert.ok(!r.clean, 'not called clean:\n' + r.visible);
+  assert.match(r.unchecked || '', /لم يستطع الفحص فكّها/, 'says the metadata could not be decoded');
+  assert.match(r.warnings || '', /not decoded/);
+  assert.deepStrictEqual(errors, [], 'no page errors');
+});

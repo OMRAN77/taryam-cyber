@@ -26,6 +26,9 @@ for (const [label, viewport] of [['desktop', { width: 1280, height: 760 }], ['mo
     await page.click('#btnGuestMode');
     await page.setInputFiles('#attachInput', FILES);
     await page.waitForSelector('.attach-chip');
+    // --dock-h follows the dock through a ResizeObserver, which runs after layout: wait for it.
+    await page.waitForFunction(() => parseFloat(getComputedStyle(document.querySelector('#messages')).paddingBottom)
+      >= document.querySelector('#inputbar').getBoundingClientRect().height);
 
     const r = await page.evaluate(() => {
       const box = (el) => el.getBoundingClientRect();

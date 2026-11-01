@@ -109,10 +109,9 @@ for (const little of [false, true]) {
   const order = little ? 'little-endian' : 'big-endian';
 
   test('S/W refs give negative latitude and longitude through parse() (' + order + ')', () => {
-    // GPSAltitudeRef is a BYTE in the spec; the helper has no BYTE type, and
-    // the parser reads a one-value SHORT the same way, which is all this needs.
+    // GPSAltitudeRef is a BYTE in the spec, as real cameras write it.
     const r = ExifParser.parse(geoJpeg(little, 'S', 'W', [
-      { tag: 0x0005, type: 3, values: [1] },       // below sea level
+      { tag: 0x0005, type: 1, values: [1] },       // below sea level (BYTE)
       { tag: 0x0006, type: 5, values: [[30, 1]] }, // 30 m
     ]));
     assert.ok(r.gps, 'gps extracted');
@@ -200,7 +199,7 @@ test('JFIF version is read from a full APP0 and never past a short one', () => {
 // (random bytes alone almost never pass detect(), so no parser would run).
 test('mutated and truncated real images never throw', () => {
   let seed = 0x7a2f;
-  const rand = (n) => { seed = (seed * 1103515245 + 12345) >>> 0; return (seed >>> 8) % n; };
+  const rand = (n) => { seed = (Math.imul(seed, 1103515245) + 12345) >>> 0; return (seed >>> 8) % n; };
   const { buildPng, sampleGeoJpeg } = require('../helpers/make-image');
   const seeds = [
     sampleGeoJpeg(),
@@ -223,4 +222,36 @@ test('detect() identifies formats by magic bytes', () => {
   assert.strictEqual(ExifParser.detect(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0])), 'PNG');
   assert.strictEqual(ExifParser.detect(Buffer.from([0x47, 0x49, 0x46, 0x38])), 'GIF');
   assert.strictEqual(ExifParser.detect(Buffer.from([0x00, 0x00, 0x00, 0x00])), 'unknown');
+});
+
+// ---- metadata the parser sees but cannot decode must not read as "clean" ----
+const MI = require('../helpers/make-image');
+// Insert a chunk just before IEND (the last 12 bytes of a PNG from buildPng).
+const withChunk = (png, chunk) => Buffer.concat([png.subarray(0, png.length - 12), chunk, png.subarray(png.length - 12)]);
+const zlibLike = Buffer.from([0x78, 0x9c, 0x01, 0x02, 0x03]);
+
+test('a PNG zTXt chunk is reported as present but not decoded', () => {
+  const data = Buffer.concat([Buffer.from('Raw profile type exif', 'latin1'), Buffer.from([0, 0]), zlibLike]);
+  const r = ExifParser.parse(withChunk(MI.buildPng({ width: 2, height: 2 }), MI.pngChunk('zTXt', data)));
+  assert.ok(r.warnings.some((w) => /not decoded: zTXt "Raw profile type exif"/.test(w)), JSON.stringify(r.warnings));
+});
+
+test('a compressed iTXt is reported; an uncompressed iTXt is decoded', () => {
+  const itxt = (flag, text) => MI.pngChunk('iTXt', Buffer.concat([Buffer.from('Author', 'latin1'), Buffer.from([0, flag, 0]), Buffer.from('en', 'latin1'), Buffer.from([0, 0]), text]));
+  const compressed = ExifParser.parse(withChunk(MI.buildPng(), itxt(1, zlibLike)));
+  assert.ok(compressed.warnings.some((w) => /not decoded: iTXt "Author" \(compressed\)/.test(w)), JSON.stringify(compressed.warnings));
+  const plain = ExifParser.parse(withChunk(MI.buildPng(), itxt(0, Buffer.from('Omran', 'utf8'))));
+  assert.strictEqual(plain.text.Author, 'Omran');
+  assert.ok(!plain.warnings.some((w) => /not decoded/.test(w)));
+});
+
+test('a JPEG cut off inside its EXIF segment is not treated as fully read', () => {
+  const jpeg = wrapJpeg(buildTiff({ little: false, ifd0: [{ tag: 0x010f, type: 2, values: 'TARYAM' }] }));
+  const r = ExifParser.parse(jpeg.subarray(0, 20)); // ends inside APP1
+  assert.ok(r.warnings.some((w) => /not decoded: APP1 \(truncated\)/.test(w)), JSON.stringify(r.warnings));
+});
+
+test('a PNG with only plain tEXt has no "not decoded" warning', () => {
+  const r = ExifParser.parse(MI.buildPng({ text: { Software: 'X' } }));
+  assert.ok(!r.warnings.some((w) => /not decoded/.test(w)), JSON.stringify(r.warnings));
 });

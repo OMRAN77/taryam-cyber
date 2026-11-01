@@ -2736,12 +2736,14 @@ function wireSecTools(){
       // Three outcomes: the file could not be checked, something was found, or it is clean.
       // Only a format the parser reads (and an EXIF block it could decode) can be called clean.
       const unsupported = ['WEBP','HEIC','GIF'].includes(r.format);
-      const unreadable = warnings.some(w => /unreadable|parse failed|Unrecognized/i.test(w));
+      const undecoded = warnings.some(w => /not decoded/i.test(w));
+      const unreadable = undecoded || warnings.some(w => /unreadable|parse failed|Unrecognized/i.test(w));
       const checked = ['JPEG','PNG','TIFF'].includes(r.format) && !unreadable;
       const hasAnyData = r.gps || gpsKeys.length || identity.length || warnings.length || Object.keys(r.camera||{}).length || Object.keys(r.datetime||{}).length || Object.keys(r.exposure||{}).length || txtKeys.length || (r.comments&&r.comments.length) || r.xmp;
       if(!checked){
         const why = unsupported ? `استخراج البيانات الوصفية من صيغة ${esc(r.format)} غير مدعوم بعد، فلم تُفحص هذه الصورة.`
           : r.format === 'unknown' ? 'صيغة الملف غير معروفة، فلم تُفحص بياناته الوصفية.'
+          : undecoded ? 'في الملف بيانات وصفية مضغوطة أو مقطوعة لم يستطع الفحص فكّها.'
           : 'كتلة البيانات الوصفية (EXIF) موجودة لكن تعذّرت قراءتها.';
         html += `<div class="exif-unchecked" style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.35);border-radius:10px;padding:10px 12px;margin:12px 0 2px;font-size:12px;line-height:1.7;color:#fbbf24">⚠️ ${why} لا يمكن الجزم بخلوّ الملف من البيانات المخفية — قد يكشف الجهاز أو الموقع.${unsupported ? ' حوّله إلى JPEG أو PNG ثم أعد الفحص.' : ''}</div>`;
       } else if(!hasAnyData){
