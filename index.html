@@ -1407,32 +1407,45 @@ async function callProvider(key, messages, opts = {}){
   const endpoint = useProxy ? p.proxy : p.direct;
   const headers = {'Content-Type':'application/json'};
   if(useDirect) headers['Authorization'] = 'Bearer ' + apiKey;
-  const body = useDirect
-    ? {model, messages: p.vision ? toOpenAIVision(fullMessages) : stripPlain(fullMessages), temperature:0.7, max_tokens:8000}
-    : {model, messages: p.vision ? toOpenAIVision(fullMessages) : stripPlain(fullMessages), temperature:0.7, max_tokens:8000, token:authGet('aiapp_auth_token'), guestId:window.getGuestId(), stream:!!opts.stream};
+  const body = {model, messages: p.vision ? toOpenAIVision(fullMessages) : stripPlain(fullMessages)};
+  // Reasoning-style OpenAI models (o-series, gpt-5 and later) reject a custom temperature
+  // and the legacy max_tokens field (OpenAI wants max_completion_tokens for them).
+  const reasoning = /(^|\/)(o\d|gpt-([5-9]|\d{2}))/i.test(model);
+  if(!reasoning) body.temperature = 0.7;
+  if(useDirect){
+    if(key === 'openai') body.max_completion_tokens = 8000; else if(!reasoning) body.max_tokens = 8000;
+    if(opts.stream) body.stream = true;
+  } else Object.assign(body, {token:authGet('aiapp_auth_token'), guestId:window.getGuestId(), stream:!!opts.stream});
   const res = await fetch(endpoint, {method:'POST',headers,body:JSON.stringify(body)});
   if(!res.ok){ throwProviderError(res.status, await res.text()); }
-  if(opts.stream && res.body) return streamOpenAI(res, opts.onToken);
+  // Only parse as Server-Sent Events when the server actually streamed; a plain JSON
+  // answer (older proxy, provider without streaming) used to be read as SSE and lost.
+  if(opts.stream && res.body && /text\/event-stream/i.test(res.headers.get('content-type') || '')) return streamOpenAI(res, opts.onToken);
   const data = await res.json();
-  return data.choices?.[0]?.message?.content || '';
+  const text = data.choices?.[0]?.message?.content || '';
+  if(text && opts.onToken) opts.onToken(text);
+  return text;
 }
 async function streamOpenAI(res, onToken){
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '', full = '';
+  const handle = line => {
+    if(!line.startsWith('data:')) return;
+    const payload = line.slice(5).trim();
+    if(!payload || payload === '[DONE]') return;
+    try { const j = JSON.parse(payload); const tok = j.choices?.[0]?.delta?.content || ''; if(tok){ full += tok; if(onToken) onToken(tok); } } catch(e){}
+  };
   while(true){
     const {done, value} = await reader.read();
     if(done) break;
     buffer += decoder.decode(value, {stream:true});
     const lines = buffer.split('\n');
     buffer = lines.pop();
-    for(const line of lines){
-      if(!line.startsWith('data: ')) continue;
-      const payload = line.slice(6).trim();
-      if(payload === '[DONE]') continue;
-      try { const j = JSON.parse(payload); const tok = j.choices?.[0]?.delta?.content || ''; if(tok){ full += tok; if(onToken) onToken(tok); } } catch(e){}
-    }
+    lines.forEach(handle);
   }
+  buffer += decoder.decode();
+  if(buffer) handle(buffer); // last event when the stream didn't end with a newline
   return full;
 }
 async function callClaude(key, messages, {apiKey, model, useProxy}){
@@ -1448,6 +1461,7 @@ async function callClaude(key, messages, {apiKey, model, useProxy}){
   const res = await fetch(endpoint, {method:'POST',headers,body:JSON.stringify(body)});
   if(!res.ok) throwProviderError(res.status, await res.text());
   const data = await res.json();
+  if(data.stop_reason === 'refusal') throw new Error('رفض Claude هذا الطلب' + (data.stop_details?.category ? ' (' + data.stop_details.category + ')' : '') + '. أعد صياغته أو جرّب مزوّدًا آخر.');
   return (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n') || '';
 }
 async function callGemini(messages, {apiKey, model, useProxy}){
