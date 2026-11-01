@@ -318,7 +318,9 @@
       if ((marker >= 0xc0 && marker <= 0xcf) && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
         if (dataLen >= 5) info.dimensions = { height: r.u16(dataStart + 1), width: r.u16(dataStart + 3) };
       } else if (marker === 0xe0) { // APP0 / JFIF
-        if (bytes[dataStart] === 0x4a && bytes[dataStart + 1] === 0x46) {
+        // "JFIF\0" + major + minor: a shorter segment has no version to read.
+        if (dataLen >= 7 && bytes[dataStart] === 0x4a && bytes[dataStart + 1] === 0x46 &&
+            bytes[dataStart + 2] === 0x49 && bytes[dataStart + 3] === 0x46 && bytes[dataStart + 4] === 0) {
           info.jfif = { version: r.u8(dataStart + 5) + '.' + String(r.u8(dataStart + 6)).padStart(2, '0') };
         }
       } else if (marker === 0xe1) { // APP1 : EXIF or XMP
