@@ -1,7 +1,8 @@
-const CACHE_NAME = 'taryam-aether-v2';
+const CACHE_NAME = 'taryam-aether-v3';
 const STATIC_ASSETS = [
   './',
   './index.html',
+  './exif.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',

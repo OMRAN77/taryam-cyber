@@ -1208,6 +1208,7 @@ html.mobile-ui .resizer{display:none}
   </div>
 </div>
 
+<script src="exif.js"></script>
 <script>
 /* ═══════════ TARYAM Cyber — Aether Edition v4 ═══════════ */
 const $ = s => document.querySelector(s);
@@ -2498,16 +2499,68 @@ function secToolForm(id){
 }
 
 function wireSecTools(){
-  // EXIF
+  // EXIF — full metadata extraction, entirely in-browser (no upload).
   $('#exifFileInput')?.addEventListener('change', async e => {
     const f = e.target.files[0]; const box = $('#exifResult');
     if(!f){ box.textContent = ''; return; }
-    box.textContent = '⏳ تحليل...';
+    if(typeof window.ExifParser === 'undefined'){ box.textContent = '⚠️ محرّك EXIF لم يُحمَّل.'; return; }
+    box.textContent = '⏳ تحليل محلي (الصورة لا تُرفع لأي خادم)...';
     try {
-      const buf = await f.arrayBuffer(); const view = new DataView(buf);
-      const result = {name: f.name, size: (f.size/1024).toFixed(1)+' KB', type: f.type};
-      if(view.getUint16(0, false) !== 0xFFD8){ box.textContent = JSON.stringify(result, null, 2) + '\n\n⚠️ ليست JPEG'; return; }
-      box.textContent = JSON.stringify(result, null, 2);
+      const buf = await f.arrayBuffer();
+      const r = window.ExifParser.parse(buf);
+
+      const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const kb = f.size < 1048576 ? (f.size/1024).toFixed(1)+' KB' : (f.size/1048576).toFixed(2)+' MB';
+      const sec = t => `<div style="font-weight:700;color:var(--text);margin:12px 0 4px;font-size:12.5px">${t}</div>`;
+      const row = (k,v) => (v==null||v==='') ? '' : `<div style="display:flex;gap:10px;padding:2px 0"><span style="color:var(--text-2);min-width:130px;flex:0 0 auto">${esc(k)}</span><span style="color:var(--text);word-break:break-word">${esc(v)}</span></div>`;
+      const rows = obj => Object.keys(obj||{}).map(k => row(labelAr[k]||k, fmt(obj[k]))).join('');
+      const fmt = v => (v&&typeof v==='object') ? (('label' in v)?v.label:('value' in v?v.value:JSON.stringify(v))) : v;
+      const labelAr = {
+        make:'الصانع', model:'الطراز', lensModel:'العدسة', lensMake:'صانع العدسة', software:'البرنامج',
+        serialNumber:'الرقم التسلسلي', orientation:'الاتجاه',
+        original:'وقت الالتقاط', digitized:'وقت الرقمنة', modified:'آخر تعديل', offset:'المنطقة الزمنية', pngTime:'وقت PNG',
+        fNumber:'فتحة العدسة', exposureTime:'سرعة الغالق', iso:'ISO', focalLength:'البعد البؤري',
+        focalLength35mm:'البعد (مكافئ 35مم)', exposureBias:'تعويض التعريض', flash:'الفلاش',
+        meteringMode:'نمط القياس', exposureProgram:'برنامج التعريض', whiteBalance:'توازن الأبيض', colorSpace:'مجال الألوان'
+      };
+
+      let html = '<div style="white-space:normal">';
+      html += sec('📄 الملف');
+      html += row('الاسم', f.name) + row('الحجم', kb) + row('النوع', r.mime + (r.format!=='unknown'?' ('+r.format+')':''));
+      if(r.dimensions && r.dimensions.width) html += row('الأبعاد', r.dimensions.width+' × '+r.dimensions.height+' px');
+      if(r.colorType) html += row('نوع الألوان', r.colorType + (r.bitDepth?(' / '+r.bitDepth+'-bit'):''));
+      if(r.byteOrder) html += row('ترتيب البايتات', r.byteOrder);
+
+      if(r.camera && Object.keys(r.camera).length){ html += sec('📷 الكاميرا'); html += rows(r.camera); }
+      if(r.datetime && Object.keys(r.datetime).length){ html += sec('🕐 التواريخ'); html += rows(r.datetime); }
+      if(r.exposure && Object.keys(r.exposure).length){ html += sec('⚙️ إعدادات التصوير'); html += rows(r.exposure); }
+
+      if(r.gps){
+        html += sec('📍 الموقع الجغرافي (GPS)');
+        html += row('خط العرض', r.gps.latitude) + row('خط الطول', r.gps.longitude);
+        if(r.gps.altitude!=null) html += row('الارتفاع', r.gps.altitude+' م');
+        if(r.gps.timeStamp) html += row('وقت GPS', (r.gps.dateStamp?r.gps.dateStamp+' ':'')+r.gps.timeStamp);
+        html += `<div style="margin:6px 0"><a href="${esc(r.gps.openStreetMapUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">🗺️ افتح على OpenStreetMap</a> · <a href="${esc(r.gps.googleMapsUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">Google Maps</a></div>`;
+      }
+
+      const txtKeys = Object.keys(r.text||{});
+      if(txtKeys.length){ html += sec('🏷️ حقول نصية'); txtKeys.forEach(k => html += row(k, r.text[k])); }
+      if(r.comments && r.comments.length){ html += sec('💬 تعليقات'); r.comments.forEach((c,i)=> html += row('#'+(i+1), c)); }
+      if(r.xmp){ html += sec('📝 XMP'); html += `<pre style="white-space:pre-wrap;word-break:break-word;margin:0;font-size:11px;color:var(--text-2)">${esc(r.xmp.slice(0,800))}</pre>`; }
+
+      if(r.warnings && r.warnings.length){
+        html += `<div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:10px;padding:10px 12px;margin:12px 0 2px;font-size:12px;line-height:1.7;color:var(--text)">${r.warnings.map(esc).join('<br>')}</div>`;
+      }
+      const hasAnyData = r.gps || Object.keys(r.camera||{}).length || Object.keys(r.datetime||{}).length || Object.keys(r.exposure||{}).length || txtKeys.length || (r.comments&&r.comments.length) || r.xmp;
+      if(!hasAnyData){
+        html += `<div style="color:var(--text-2);margin-top:10px">✅ لم يُعثر على بيانات وصفية مخفية (EXIF/XMP). هذه الصورة لا تكشف الجهاز أو الموقع.</div>`;
+      }
+      if(r.notes && r.notes.length) html += `<div style="color:var(--text-2);font-size:11px;margin-top:8px">${r.notes.map(esc).join(' · ')}</div>`;
+
+      const rawJson = JSON.stringify(r.tags && Object.keys(r.tags).length ? r.tags : {text:r.text, comments:r.comments}, null, 2);
+      html += `<details style="margin-top:12px"><summary style="cursor:pointer;color:var(--text-2);font-size:12px">🔍 عرض كل الحقول الخام (JSON)</summary><pre style="white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font-size:11px;color:var(--text-2)">${esc(rawJson)}</pre></details>`;
+      html += '</div>';
+      box.innerHTML = html;
     } catch(err){ box.textContent = '⚠️ '+err.message; }
   });
   // Crypto

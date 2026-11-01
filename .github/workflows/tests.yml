@@ -14,6 +14,8 @@ jobs:
           node-version: 22
       - name: API tests
         run: node --test "test/api/**/*.test.js"
+      - name: Tool logic tests
+        run: node --test "test/tools/**/*.test.js"
       - name: RTP lab math tests
         run: node --test "test/lab/**/*.test.mjs"
       - name: Install Playwright and Chromium

@@ -21,6 +21,22 @@ AUTH_SECRET=... BLOB_READ_WRITE_TOKEN=... BLOB_STORE_ID=... node scripts/migrate
 AUTH_SECRET=... BLOB_READ_WRITE_TOKEN=... BLOB_STORE_ID=... node scripts/migrate-legacy-blobs.js --apply
 ```
 
+## أداة فحص EXIF (`exif.js`)
+
+محلّل بيانات وصفية للصور بلا أي اعتماديات، يعمل **بالكامل داخل متصفح المستخدم** —
+الصورة لا تُرفع لأي خادم. يُفتح من أدوات الأمن ← «EXIF».
+
+- **JPEG:** قطاعات APP0 (JFIF) وAPP1 (EXIF/TIFF + XMP) وتعليقات COM وأبعاد الصورة من SOF.
+- **TIFF:** تيّار TIFF/EXIF كامل (ترتيب II/MM، IFD0، ExifIFD، GPS، الصورة المصغّرة IFD1).
+- **PNG:** أبعاد IHDR، حقول tEXt / iTXt (غير المضغوطة)، tIME، وكتلة eXIf إن وُجدت.
+
+يفك إحداثيات GPS إلى درجات عشرية مع رابط خريطة، ويُنبّه إلى مخاطر الخصوصية (موقع
+التصوير، الرقم التسلسلي للكاميرا). المحلّل مُحصّن ضد الملفات المشوّهة (حدود على عدد
+المدخلات وطول النصوص وحلقات الإزاحات) ولا يُجري أي اتصال شبكي.
+
+الاختبارات: منطق المحلّل في `test/tools/exif.test.js` (يبني صور EXIF اصطناعية
+معروفة القيم)، والتكامل مع الواجهة في `test/ui/exif.test.js`.
+
 ## أدوات معطّلة مؤقتًا
 
 - **فحص المنافذ** (`api/portscan.js`): يمكن تجاوز حظر العناوين الداخلية، والتحقق من الملكية موجود في المتصفح فقط.
@@ -63,6 +79,7 @@ AUTH_SECRET=... BLOB_READ_WRITE_TOKEN=... BLOB_STORE_ID=... node scripts/migrate
 
 ```sh
 node --test "test/api/**/*.test.js"
+node --test "test/tools/**/*.test.js"
 node --test "test/lab/**/*.test.mjs"
 ```
 
