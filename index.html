@@ -194,7 +194,8 @@ html[dir="ltr"] #sidebar{border-right:1px solid var(--border)}
 }
 html[dir="rtl"] #chatcol{border-left:1px solid var(--border)}
 html[dir="ltr"] #chatcol{border-right:1px solid var(--border)}
-#messages{flex:1;overflow-y:auto;padding:20px 18px 100px;display:flex;flex-direction:column;gap:14px;scroll-behavior:smooth}
+/* --dock-h is the floating dock's live height (set from JS), so the last message is never hidden behind it. */
+#messages{flex:1;overflow-y:auto;padding:20px 18px calc(var(--dock-h, 128px) + 28px);display:flex;flex-direction:column;gap:14px;scroll-behavior:smooth}
 #messages::-webkit-scrollbar{width:6px}
 #messages::-webkit-scrollbar-track{background:transparent}
 #messages::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px}
@@ -353,9 +354,13 @@ details.md-sources summary:hover{color:var(--text-2)}
 .toggle-chip input{display:none}
 
 /* Attachments strip */
-#attachStrip{display:flex;flex-wrap:wrap;gap:6px;padding:0 6px}
+/* One scrollable row inside the dock, so many files don't make it grow tall. */
+#attachStrip{display:flex;flex-wrap:nowrap;gap:6px;padding:2px 4px 4px;overflow-x:auto;scrollbar-width:thin}
+#attachStrip::-webkit-scrollbar{height:4px}
+#attachStrip::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:2px}
 #attachStrip:empty{display:none}
 .attach-chip{
+  flex-shrink:0;
   display:flex;align-items:center;gap:6px;
   background:var(--surface-2);border:1px solid var(--border-2);
   border-radius:8px;padding:4px 8px;font-size:11.5px;color:var(--text-2);
@@ -662,7 +667,7 @@ dialog select option{background:#0f1219;color:var(--text)}
   }
   #sidebar.open,#workarea.open{transform:translateX(0)!important}
   #chatcol{width:100%}
-  #messages{padding:16px 12px 120px}
+  #messages{padding:16px 12px calc(var(--dock-h, 128px) + 24px)}
   #inputbar{bottom:10px;left:10px;right:10px;border-radius:18px}
   dialog{
     position:fixed;inset:0;margin:0;
@@ -991,22 +996,23 @@ html.mobile-ui .resizer{display:none}
   <div id="chatcol">
     <div id="messages"></div>
 
-    <div id="chat-toggles" style="padding:8px 16px">
-      <label class="toggle-chip" id="chip-askall">
-        <input type="checkbox" id="chkAskAll">
-        <span data-i18n="askAllLabel">🎯 اسأل كل المزوّدين</span>
-      </label>
-      <label class="toggle-chip on" id="chip-merge">
-        <input type="checkbox" id="chkMerge" checked>
-        <span data-i18n="mergeLabel">🧠 دمج ذكي</span>
-      </label>
-    </div>
-
-    <div id="attachStrip"></div>
-
+    <!-- The dock floats over the bottom of the chat column, so everything that belongs
+         to the composer (toggles, attachments) lives inside it; outside it they were
+         laid out underneath the dock and ended up hidden or cut off. -->
     <div id="inputbar">
       <input type="file" id="attachInput" accept="image/*,.txt,.py,.js,.json,.md,.html,.log,.css,.csv" multiple style="display:none">
       <div id="emojiPicker"></div>
+      <div id="chat-toggles">
+        <label class="toggle-chip" id="chip-askall">
+          <input type="checkbox" id="chkAskAll">
+          <span data-i18n="askAllLabel">🎯 اسأل كل المزوّدين</span>
+        </label>
+        <label class="toggle-chip on" id="chip-merge">
+          <input type="checkbox" id="chkMerge" checked>
+          <span data-i18n="mergeLabel">🧠 دمج ذكي</span>
+        </label>
+      </div>
+      <div id="attachStrip"></div>
       <textarea id="prompt" rows="1" data-i18n-placeholder="promptPlaceholder" placeholder="صف ما تريد... مثال: اشرح ثغرة XSS"></textarea>
       <div class="dock-row">
         <div class="dock-icons">
@@ -1208,6 +1214,7 @@ html.mobile-ui .resizer{display:none}
   </div>
 </div>
 
+<script src="exif.js"></script>
 <script>
 /* ═══════════ TARYAM Cyber — Aether Edition v4 ═══════════ */
 const $ = s => document.querySelector(s);
@@ -1239,14 +1246,14 @@ window.toast = function(msg, type = 'info', duration = 3200){
 /* ═══ Providers ═══ */
 const PROVIDERS = {
   deepseek:{name:'DeepSeek',color:'#4d6bfe',identity_ar:'أنت DeepSeek، من شركة DeepSeek (深度求索). عندما يسألك المستخدم من أنت، أجب: "أنا DeepSeek، نموذج ذكاء اصطناعي من شركة DeepSeek".',identity_en:'You are DeepSeek by DeepSeek company. When asked, say: "I am DeepSeek, an AI model by DeepSeek".',proxy:'/api/deepseek',direct:'https://api.deepseek.com/chat/completions',keyVar:'aiapp_deepseek_apikey',modelVar:'aiapp_deepseek_model',defaultModel:'deepseek-chat',vision:false},
-  openai:{name:'OpenAI',color:'#10a37f',identity_ar:'أنت GPT من OpenAI. عندما يسألك من أنت قل: "أنا GPT من OpenAI".',identity_en:'You are GPT by OpenAI. When asked, say: "I am GPT by OpenAI".',proxy:'/api/openai',direct:'https://api.openai.com/v1/chat/completions',keyVar:'aiapp_apikey',modelVar:'aiapp_model',defaultModel:'gpt-4o-mini',vision:true},
-  claude:{name:'Anthropic Claude',color:'#d97757',identity_ar:'أنت Claude من Anthropic. عندما يسألك من أنت قل: "أنا Claude، من Anthropic".',identity_en:'You are Claude by Anthropic. When asked, say: "I am Claude by Anthropic".',proxy:'/api/claude',direct:'https://api.anthropic.com/v1/messages',keyVar:'aiapp_claude_apikey',modelVar:'aiapp_claude_model',defaultModel:'claude-3-5-sonnet-latest',vision:true,isClaude:true},
-  gemini:{name:'Google Gemini',color:'#4285f4',identity_ar:'أنت Gemini من Google. عندما يسألك من أنت قل: "أنا Gemini من Google".',identity_en:'You are Gemini by Google. When asked, say: "I am Gemini by Google".',proxy:'/api/gemini',direct:null,keyVar:'aiapp_gemini_apikey',modelVar:'aiapp_gemini_model',defaultModel:'gemini-2.0-flash',vision:true},
+  openai:{name:'OpenAI',color:'#10a37f',identity_ar:'أنت GPT من OpenAI. عندما يسألك من أنت قل: "أنا GPT من OpenAI".',identity_en:'You are GPT by OpenAI. When asked, say: "I am GPT by OpenAI".',proxy:'/api/openai',direct:'https://api.openai.com/v1/chat/completions',keyVar:'aiapp_apikey',modelVar:'aiapp_model',defaultModel:'gpt-5.6',vision:true},
+  claude:{name:'Anthropic Claude',color:'#d97757',identity_ar:'أنت Claude من Anthropic. عندما يسألك من أنت قل: "أنا Claude، من Anthropic".',identity_en:'You are Claude by Anthropic. When asked, say: "I am Claude by Anthropic".',proxy:'/api/claude',direct:'https://api.anthropic.com/v1/messages',keyVar:'aiapp_claude_apikey',modelVar:'aiapp_claude_model',defaultModel:'claude-haiku-5-5',vision:true,isClaude:true},
+  gemini:{name:'Google Gemini',color:'#4285f4',identity_ar:'أنت Gemini من Google. عندما يسألك من أنت قل: "أنا Gemini من Google".',identity_en:'You are Gemini by Google. When asked, say: "I am Gemini by Google".',proxy:'/api/gemini',direct:null,keyVar:'aiapp_gemini_apikey',modelVar:'aiapp_gemini_model',defaultModel:'gemini-flash-latest',vision:true},
   groq:{name:'Groq',color:'#f55036',identity_ar:'أنت مساعد يعمل عبر Groq باستخدام نموذج مفتوح المصدر. عندما يسألك من أنت قل: "أنا مساعد يعمل عبر Groq".',identity_en:'You are an assistant via Groq running an open-source model.',proxy:'/api/groq',direct:'https://api.groq.com/openai/v1/chat/completions',keyVar:'aiapp_groq_apikey',modelVar:'aiapp_groq_model',defaultModel:'openai/gpt-oss-120b',vision:false},
-  openrouter:{name:'OpenRouter',color:'#6467f2',identity_ar:'أنت مساعد يعمل عبر OpenRouter (منصة وسيطة).',identity_en:'You are an assistant via OpenRouter.',proxy:'/api/openrouter',direct:'https://openrouter.ai/api/v1/chat/completions',keyVar:'aiapp_openrouter_apikey',modelVar:'aiapp_openrouter_model',defaultModel:'openai/gpt-4o-mini',vision:true},
+  openrouter:{name:'OpenRouter',color:'#6467f2',identity_ar:'أنت مساعد يعمل عبر OpenRouter (منصة وسيطة).',identity_en:'You are an assistant via OpenRouter.',proxy:'/api/openrouter',direct:'https://openrouter.ai/api/v1/chat/completions',keyVar:'aiapp_openrouter_apikey',modelVar:'aiapp_openrouter_model',defaultModel:'openai/gpt-5.6',vision:true},
   perplexity:{name:'Perplexity',color:'#20808d',identity_ar:'أنت Perplexity، مساعد بحث حي. عندما يسألك من أنت قل: "أنا Perplexity من Perplexity AI".',identity_en:'You are Perplexity by Perplexity AI.',proxy:null,direct:'https://api.perplexity.ai/chat/completions',keyVar:'aiapp_perplexity_apikey',modelVar:'aiapp_perplexity_model',defaultModel:'sonar',vision:false},
-  mistral:{name:'Mistral AI',color:'#ff7000',identity_ar:'أنت مساعد من Mistral AI (فرنسية). عندما يسألك من أنت قل: "أنا نموذج من Mistral AI".',identity_en:'You are an assistant by Mistral AI (French).',proxy:'/api/mistral',direct:'https://api.mistral.ai/v1/chat/completions',keyVar:'aiapp_mistral_apikey',modelVar:'aiapp_mistral_model',defaultModel:'mistral-small-latest',vision:false},
-  cohere:{name:'Cohere',color:'#39594d',identity_ar:'أنت مساعد من Cohere (كندية). عندما يسألك من أنت قل: "أنا نموذج من Cohere".',identity_en:'You are an assistant by Cohere (Canadian).',proxy:'/api/cohere',direct:'https://api.cohere.com/compatibility/v1/chat/completions',keyVar:'aiapp_cohere_apikey',modelVar:'aiapp_cohere_model',defaultModel:'command-r-plus',vision:false}
+  mistral:{name:'Mistral AI',color:'#ff7000',identity_ar:'أنت مساعد من Mistral AI (فرنسية). عندما يسألك من أنت قل: "أنا نموذج من Mistral AI".',identity_en:'You are an assistant by Mistral AI (French).',proxy:'/api/mistral',direct:'https://api.mistral.ai/v1/chat/completions',keyVar:'aiapp_mistral_apikey',modelVar:'aiapp_mistral_model',defaultModel:'mistral-large-latest',vision:false},
+  cohere:{name:'Cohere',color:'#39594d',identity_ar:'أنت مساعد من Cohere (كندية). عندما يسألك من أنت قل: "أنا نموذج من Cohere".',identity_en:'You are an assistant by Cohere (Canadian).',proxy:'/api/cohere',direct:'https://api.cohere.com/compatibility/v1/chat/completions',keyVar:'aiapp_cohere_apikey',modelVar:'aiapp_cohere_model',defaultModel:'command-a-plus-05-2026',vision:false}
 };
 const PROVIDER_ORDER = ['deepseek','claude','openai','gemini','groq','openrouter','mistral','cohere','perplexity'];
 
@@ -1406,32 +1413,45 @@ async function callProvider(key, messages, opts = {}){
   const endpoint = useProxy ? p.proxy : p.direct;
   const headers = {'Content-Type':'application/json'};
   if(useDirect) headers['Authorization'] = 'Bearer ' + apiKey;
-  const body = useDirect
-    ? {model, messages: p.vision ? toOpenAIVision(fullMessages) : stripPlain(fullMessages), temperature:0.7, max_tokens:8000}
-    : {model, messages: p.vision ? toOpenAIVision(fullMessages) : stripPlain(fullMessages), temperature:0.7, max_tokens:8000, token:authGet('aiapp_auth_token'), guestId:window.getGuestId(), stream:!!opts.stream};
+  const body = {model, messages: p.vision ? toOpenAIVision(fullMessages) : stripPlain(fullMessages)};
+  // Reasoning-style OpenAI models (o-series, gpt-5 and later) reject a custom temperature
+  // and the legacy max_tokens field (OpenAI wants max_completion_tokens for them).
+  const reasoning = /(^|\/)(o\d|gpt-([5-9]|\d{2}))/i.test(model);
+  if(!reasoning) body.temperature = 0.7;
+  if(useDirect){
+    if(key === 'openai') body.max_completion_tokens = 8000; else if(!reasoning) body.max_tokens = 8000;
+    if(opts.stream) body.stream = true;
+  } else Object.assign(body, {token:authGet('aiapp_auth_token'), guestId:window.getGuestId(), stream:!!opts.stream});
   const res = await fetch(endpoint, {method:'POST',headers,body:JSON.stringify(body)});
   if(!res.ok){ throwProviderError(res.status, await res.text()); }
-  if(opts.stream && res.body) return streamOpenAI(res, opts.onToken);
+  // Only parse as Server-Sent Events when the server actually streamed; a plain JSON
+  // answer (older proxy, provider without streaming) used to be read as SSE and lost.
+  if(opts.stream && res.body && /text\/event-stream/i.test(res.headers.get('content-type') || '')) return streamOpenAI(res, opts.onToken);
   const data = await res.json();
-  return data.choices?.[0]?.message?.content || '';
+  const text = data.choices?.[0]?.message?.content || '';
+  if(text && opts.onToken) opts.onToken(text);
+  return text;
 }
 async function streamOpenAI(res, onToken){
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '', full = '';
+  const handle = line => {
+    if(!line.startsWith('data:')) return;
+    const payload = line.slice(5).trim();
+    if(!payload || payload === '[DONE]') return;
+    try { const j = JSON.parse(payload); const tok = j.choices?.[0]?.delta?.content || ''; if(tok){ full += tok; if(onToken) onToken(tok); } } catch(e){}
+  };
   while(true){
     const {done, value} = await reader.read();
     if(done) break;
     buffer += decoder.decode(value, {stream:true});
     const lines = buffer.split('\n');
     buffer = lines.pop();
-    for(const line of lines){
-      if(!line.startsWith('data: ')) continue;
-      const payload = line.slice(6).trim();
-      if(payload === '[DONE]') continue;
-      try { const j = JSON.parse(payload); const tok = j.choices?.[0]?.delta?.content || ''; if(tok){ full += tok; if(onToken) onToken(tok); } } catch(e){}
-    }
+    lines.forEach(handle);
   }
+  buffer += decoder.decode();
+  if(buffer) handle(buffer); // last event when the stream didn't end with a newline
   return full;
 }
 async function callClaude(key, messages, {apiKey, model, useProxy}){
@@ -1447,7 +1467,8 @@ async function callClaude(key, messages, {apiKey, model, useProxy}){
   const res = await fetch(endpoint, {method:'POST',headers,body:JSON.stringify(body)});
   if(!res.ok) throwProviderError(res.status, await res.text());
   const data = await res.json();
-  return data.content?.map(c => c.text).join('\n') || '';
+  if(data.stop_reason === 'refusal') throw new Error('رفض Claude هذا الطلب' + (data.stop_details?.category ? ' (' + data.stop_details.category + ')' : '') + '. أعد صياغته أو جرّب مزوّدًا آخر.');
+  return (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n') || '';
 }
 async function callGemini(messages, {apiKey, model, useProxy}){
   const system = messages.find(m => m.role === 'system')?.content;
@@ -1953,6 +1974,14 @@ $('#prompt').addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shift
 $('#prompt').addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(140, e.target.scrollHeight) + 'px'; });
 $('#chkAskAll').checked = localStorage.getItem('aiapp_askall') === 'true';
 $('#chkMerge').checked = localStorage.getItem('aiapp_merge') !== 'false';
+// Keep the message list's bottom padding equal to the dock's real height (it grows
+// with toggles, attachments and a multi-line prompt).
+(function trackDockHeight(){
+  const dock = $('#inputbar'), col = $('#chatcol');
+  const sync = () => col.style.setProperty('--dock-h', dock.offsetHeight + 'px');
+  sync();
+  if(window.ResizeObserver) new ResizeObserver(sync).observe(dock);
+})();
 function updateChipStates(){
   $('#chip-askall').classList.toggle('on', $('#chkAskAll').checked);
   $('#chip-merge').classList.toggle('on', $('#chkMerge').checked);
@@ -2498,16 +2527,68 @@ function secToolForm(id){
 }
 
 function wireSecTools(){
-  // EXIF
+  // EXIF — full metadata extraction, entirely in-browser (no upload).
   $('#exifFileInput')?.addEventListener('change', async e => {
     const f = e.target.files[0]; const box = $('#exifResult');
     if(!f){ box.textContent = ''; return; }
-    box.textContent = '⏳ تحليل...';
+    if(typeof window.ExifParser === 'undefined'){ box.textContent = '⚠️ محرّك EXIF لم يُحمَّل.'; return; }
+    box.textContent = '⏳ تحليل محلي (الصورة لا تُرفع لأي خادم)...';
     try {
-      const buf = await f.arrayBuffer(); const view = new DataView(buf);
-      const result = {name: f.name, size: (f.size/1024).toFixed(1)+' KB', type: f.type};
-      if(view.getUint16(0, false) !== 0xFFD8){ box.textContent = JSON.stringify(result, null, 2) + '\n\n⚠️ ليست JPEG'; return; }
-      box.textContent = JSON.stringify(result, null, 2);
+      const buf = await f.arrayBuffer();
+      const r = window.ExifParser.parse(buf);
+
+      const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const kb = f.size < 1048576 ? (f.size/1024).toFixed(1)+' KB' : (f.size/1048576).toFixed(2)+' MB';
+      const sec = t => `<div style="font-weight:700;color:var(--text);margin:12px 0 4px;font-size:12.5px">${t}</div>`;
+      const row = (k,v) => (v==null||v==='') ? '' : `<div style="display:flex;gap:10px;padding:2px 0"><span style="color:var(--text-2);min-width:130px;flex:0 0 auto">${esc(k)}</span><span style="color:var(--text);word-break:break-word">${esc(v)}</span></div>`;
+      const rows = obj => Object.keys(obj||{}).map(k => row(labelAr[k]||k, fmt(obj[k]))).join('');
+      const fmt = v => (v&&typeof v==='object') ? (('label' in v)?v.label:('value' in v?v.value:JSON.stringify(v))) : v;
+      const labelAr = {
+        make:'الصانع', model:'الطراز', lensModel:'العدسة', lensMake:'صانع العدسة', software:'البرنامج',
+        serialNumber:'الرقم التسلسلي', orientation:'الاتجاه',
+        original:'وقت الالتقاط', digitized:'وقت الرقمنة', modified:'آخر تعديل', offset:'المنطقة الزمنية', pngTime:'وقت PNG',
+        fNumber:'فتحة العدسة', exposureTime:'سرعة الغالق', iso:'ISO', focalLength:'البعد البؤري',
+        focalLength35mm:'البعد (مكافئ 35مم)', exposureBias:'تعويض التعريض', flash:'الفلاش',
+        meteringMode:'نمط القياس', exposureProgram:'برنامج التعريض', whiteBalance:'توازن الأبيض', colorSpace:'مجال الألوان'
+      };
+
+      let html = '<div style="white-space:normal">';
+      html += sec('📄 الملف');
+      html += row('الاسم', f.name) + row('الحجم', kb) + row('النوع', r.mime + (r.format!=='unknown'?' ('+r.format+')':''));
+      if(r.dimensions && r.dimensions.width) html += row('الأبعاد', r.dimensions.width+' × '+r.dimensions.height+' px');
+      if(r.colorType) html += row('نوع الألوان', r.colorType + (r.bitDepth?(' / '+r.bitDepth+'-bit'):''));
+      if(r.byteOrder) html += row('ترتيب البايتات', r.byteOrder);
+
+      if(r.camera && Object.keys(r.camera).length){ html += sec('📷 الكاميرا'); html += rows(r.camera); }
+      if(r.datetime && Object.keys(r.datetime).length){ html += sec('🕐 التواريخ'); html += rows(r.datetime); }
+      if(r.exposure && Object.keys(r.exposure).length){ html += sec('⚙️ إعدادات التصوير'); html += rows(r.exposure); }
+
+      if(r.gps){
+        html += sec('📍 الموقع الجغرافي (GPS)');
+        html += row('خط العرض', r.gps.latitude) + row('خط الطول', r.gps.longitude);
+        if(r.gps.altitude!=null) html += row('الارتفاع', r.gps.altitude+' م');
+        if(r.gps.timeStamp) html += row('وقت GPS', (r.gps.dateStamp?r.gps.dateStamp+' ':'')+r.gps.timeStamp);
+        html += `<div style="margin:6px 0"><a href="${esc(r.gps.openStreetMapUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">🗺️ افتح على OpenStreetMap</a> · <a href="${esc(r.gps.googleMapsUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">Google Maps</a></div>`;
+      }
+
+      const txtKeys = Object.keys(r.text||{});
+      if(txtKeys.length){ html += sec('🏷️ حقول نصية'); txtKeys.forEach(k => html += row(k, r.text[k])); }
+      if(r.comments && r.comments.length){ html += sec('💬 تعليقات'); r.comments.forEach((c,i)=> html += row('#'+(i+1), c)); }
+      if(r.xmp){ html += sec('📝 XMP'); html += `<pre style="white-space:pre-wrap;word-break:break-word;margin:0;font-size:11px;color:var(--text-2)">${esc(r.xmp.slice(0,800))}</pre>`; }
+
+      if(r.warnings && r.warnings.length){
+        html += `<div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:10px;padding:10px 12px;margin:12px 0 2px;font-size:12px;line-height:1.7;color:var(--text)">${r.warnings.map(esc).join('<br>')}</div>`;
+      }
+      const hasAnyData = r.gps || Object.keys(r.camera||{}).length || Object.keys(r.datetime||{}).length || Object.keys(r.exposure||{}).length || txtKeys.length || (r.comments&&r.comments.length) || r.xmp;
+      if(!hasAnyData){
+        html += `<div style="color:var(--text-2);margin-top:10px">✅ لم يُعثر على بيانات وصفية مخفية (EXIF/XMP). هذه الصورة لا تكشف الجهاز أو الموقع.</div>`;
+      }
+      if(r.notes && r.notes.length) html += `<div style="color:var(--text-2);font-size:11px;margin-top:8px">${r.notes.map(esc).join(' · ')}</div>`;
+
+      const rawJson = JSON.stringify(r.tags && Object.keys(r.tags).length ? r.tags : {text:r.text, comments:r.comments}, null, 2);
+      html += `<details style="margin-top:12px"><summary style="cursor:pointer;color:var(--text-2);font-size:12px">🔍 عرض كل الحقول الخام (JSON)</summary><pre style="white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font-size:11px;color:var(--text-2)">${esc(rawJson)}</pre></details>`;
+      html += '</div>';
+      box.innerHTML = html;
     } catch(err){ box.textContent = '⚠️ '+err.message; }
   });
   // Crypto
