@@ -1429,8 +1429,24 @@ function buildIdentity(key){
   const langRule = isAr() ? 'أجب دائمًا بالعربية الفصحى المبسطة.' : 'Always reply in English.';
   return `${id}\n${langRule}\nقاعدة أخلاقية صارمة: لا تساعد في اختراق/تتبّع/مراقبة أي طرف ثالث بدون إذن صريح.`;
 }
-function toOpenAIVision(msgs){ return msgs.map(m => { if(m.images?.length){ const c = [{type:'text',text:m.content||''}]; m.images.forEach(img => c.push({type:'image_url',image_url:{url:img.dataUrl}})); return {role:m.role,content:c}; } return {role:m.role,content:m.content}; }); }
-function stripPlain(msgs){ return msgs.map(m => ({role:m.role,content:m.content||''})); }
+// The history as providers get it: images whose data was purged are dropped, turns left
+// with neither text nor an image are skipped, and back-to-back turns of the same role are
+// joined (Perplexity, deepseek-reasoner and others reject [user, user]).
+function providerTurns(msgs){
+  const out = [];
+  msgs.forEach(m => {
+    const content = String(m.content ?? '').trim() ? String(m.content) : '';
+    const images = (m.images || []).filter(img => img?.dataUrl?.includes(','));
+    if(!content && !images.length) return;
+    const prev = out[out.length-1];
+    if(prev && prev.role === m.role){ prev.content = [prev.content, content].filter(Boolean).join('\n\n'); prev.images.push(...images); }
+    else out.push({role:m.role, content, images});
+  });
+  return out;
+}
+// No empty text block next to an image (providers reject it; image-only turns are fine).
+function toOpenAIVision(msgs){ return msgs.map(m => { if(m.images?.length){ const c = m.content ? [{type:'text',text:m.content}] : []; m.images.forEach(img => c.push({type:'image_url',image_url:{url:img.dataUrl}})); return {role:m.role,content:c}; } return {role:m.role,content:m.content}; }); }
+function stripPlain(msgs){ return msgs.map(m => ({role:m.role,content:m.content || (m.images?.length ? (isAr() ? '[صورة]' : '[image]') : '')})); }
 
 // A provider can be called without the user's own key only when the site has a proxy for it.
 // Per-provider time limit in "Ask all" (localStorage override is for tests).
@@ -1457,8 +1473,8 @@ async function callProviderOnce(key, messages, opts = {}){
   const useProxy = !apiKey && p.proxy;
   const useDirect = !!apiKey;
   const identity = buildIdentity(key);
-  const restMsgs = messages.filter(m => m.role !== 'system');
-  const fullMessages = identity ? [{role:'system',content:identity}, ...restMsgs] : messages;
+  const restMsgs = providerTurns(messages.filter(m => m.role !== 'system'));
+  const fullMessages = identity ? [{role:'system',content:identity}, ...restMsgs] : providerTurns(messages);
   if(!useProxy && !useDirect) throw new Error(t('apiKeyMissing'));
   const signal = opts.signal;
   if(p.isClaude) return callClaude(key, fullMessages, {apiKey, model, useProxy, signal});
@@ -1489,29 +1505,39 @@ async function callProviderOnce(key, messages, opts = {}){
 async function streamOpenAI(res, onToken){
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = '', full = '';
+  let buffer = '', full = '', failed = '';
   const handle = line => {
-    if(!line.startsWith('data:')) return;
+    if(failed || !line.startsWith('data:')) return;
     const payload = line.slice(5).trim();
     if(!payload || payload === '[DONE]') return;
-    try { const j = JSON.parse(payload); const tok = j.choices?.[0]?.delta?.content || ''; if(tok){ full += tok; if(onToken) onToken(tok); } } catch(e){}
+    let j; try { j = JSON.parse(payload); } catch(e){ return; }
+    // A stream that breaks after it started ends with {"error":{"message":...}} (our relay,
+    // OpenRouter): the reply failed even though the response itself ended normally.
+    if(j?.error){ failed = String((typeof j.error === 'string' ? j.error : j.error.message) || 'stream error'); return; }
+    const tok = j.choices?.[0]?.delta?.content || '';
+    if(tok){ full += tok; if(onToken) onToken(tok); }
   };
-  while(true){
-    const {done, value} = await reader.read();
-    if(done) break;
-    buffer += decoder.decode(value, {stream:true});
-    const lines = buffer.split('\n');
-    buffer = lines.pop();
-    lines.forEach(handle);
-  }
+  // The error carries the text received so far (err.partial), so the caller can keep it.
+  const fail = e => { const err = e instanceof Error ? e : new Error(String(e)); err.partial = full; return err; };
+  try {
+    while(!failed){
+      const {done, value} = await reader.read();
+      if(done) break;
+      buffer += decoder.decode(value, {stream:true});
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      lines.forEach(handle);
+    }
+  } catch(e){ throw fail(e); }
   buffer += decoder.decode();
   if(buffer) handle(buffer); // last event when the stream didn't end with a newline
+  if(failed){ reader.cancel().catch(() => {}); throw fail(failed); }
   return full;
 }
 async function callClaude(key, messages, {apiKey, model, useProxy, signal}){
   const system = messages.find(m => m.role === 'system')?.content;
   const rest = messages.filter(m => m.role !== 'system').map(m => {
-    if(m.images?.length){ const c = [{type:'text',text:m.content||''}]; m.images.forEach(img => c.push({type:'image',source:{type:'base64',media_type:img.mime||'image/jpeg',data:img.dataUrl.split(',')[1]}})); return {role:m.role==='assistant'?'assistant':'user',content:c}; }
+    if(m.images?.length){ const c = m.content ? [{type:'text',text:m.content}] : []; m.images.forEach(img => c.push({type:'image',source:{type:'base64',media_type:img.mime||'image/jpeg',data:img.dataUrl.split(',')[1]}})); return {role:m.role==='assistant'?'assistant':'user',content:c}; }
     return {role:m.role==='assistant'?'assistant':'user',content:m.content||''};
   });
   const endpoint = useProxy ? '/api/claude' : 'https://api.anthropic.com/v1/messages';
@@ -1521,14 +1547,17 @@ async function callClaude(key, messages, {apiKey, model, useProxy, signal}){
   const res = await fetch(endpoint, {method:'POST',headers,body:JSON.stringify(body),signal});
   if(!res.ok) throwProviderError(res.status, await res.text());
   const data = await res.json();
-  if(data.stop_reason === 'refusal') throw new Error('رفض Claude هذا الطلب' + (data.stop_details?.category ? ' (' + data.stop_details.category + ')' : '') + '. أعد صياغته أو جرّب مزوّدًا آخر.');
+  if(data.stop_reason === 'refusal'){
+    const cat = data.stop_details?.category ? ' (' + data.stop_details.category + ')' : '';
+    throw new Error(isAr() ? 'رفض Claude هذا الطلب' + cat + '. أعد صياغته أو جرّب مزوّدًا آخر.' : 'Claude declined this request' + cat + '. Rephrase it or try another provider.');
+  }
   return (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n') || '';
 }
 async function callGemini(messages, {apiKey, model, useProxy, signal}){
   const system = messages.find(m => m.role === 'system')?.content;
   const rest = messages.filter(m => m.role !== 'system');
   const contents = rest.map(m => {
-    const parts = [{text:m.content||''}];
+    const parts = m.content ? [{text:m.content}] : [];
     if(m.images?.length) m.images.forEach(img => { if(!img.dataUrl?.includes(',')) return; parts.push({inline_data:{mime_type:img.mime||'image/jpeg',data:img.dataUrl.split(',')[1]}}); });
     return {role:m.role==='assistant'?'model':'user', parts};
   });
@@ -1785,13 +1814,17 @@ function renderMessages(keep){
     }
     if(isAskAllReply){
       wrap.appendChild(div);
-      const choose = document.createElement('button');
-      choose.className = 'btn';
-      choose.style.cssText = 'flex:0 0 auto;align-self:flex-start;margin-top:4px;width:30px;height:30px;border-radius:50%;padding:0;font-size:13px';
-      choose.textContent = cur.continueProvider === m.providerKey ? '✓' : '○';
-      if(cur.continueProvider === m.providerKey){ choose.style.background = 'var(--grad)'; choose.style.color = '#fff'; choose.style.border = 'none'; }
-      choose.onclick = () => { cur.continueProvider = m.providerKey; saveState(); renderAll(true); };
-      wrap.appendChild(choose);
+      // "Continue with this provider" only on real answers, not on failure notices;
+      // tapping the chosen one again goes back to asking everyone.
+      if(!m.failed){
+        const choose = document.createElement('button');
+        choose.className = 'btn';
+        choose.style.cssText = 'flex:0 0 auto;align-self:flex-start;margin-top:4px;width:30px;height:30px;border-radius:50%;padding:0;font-size:13px';
+        choose.textContent = cur.continueProvider === m.providerKey ? '✓' : '○';
+        if(cur.continueProvider === m.providerKey){ choose.style.background = 'var(--grad)'; choose.style.color = '#fff'; choose.style.border = 'none'; }
+        choose.onclick = () => { cur.continueProvider = cur.continueProvider === m.providerKey ? undefined : m.providerKey; saveState(); renderAll(true); };
+        wrap.appendChild(choose);
+      }
       messagesEl.appendChild(wrap);
     } else messagesEl.appendChild(div);
   });
@@ -1952,7 +1985,24 @@ document.addEventListener('click', e => { if(emojiPicker.classList.contains('ope
 
 /* ═══ Send Prompt ═══ */
 const sendBtn = $('#btnSend');
+let sending = false; // one request at a time (Enter and voice chat bypass the disabled button)
+// One provider's answer as a chat message. An empty reply becomes a notice; a reply cut
+// off mid-way keeps its text plus a note. Notes are shown, never sent back (apiText).
+function pushReply(cur, key, reply, cut){
+  const name = PROVIDERS[key].name;
+  if(!reply?.trim()){
+    cur.messages.push({role:'assistant', content:'⚠️ '+(isAr() ? 'وصل ردّ فارغ من '+name+'. أعد المحاولة أو جرّب مزوّدًا آخر.' : name+' sent an empty reply. Try again or use another provider.'), providerKey:key, providerLabel:name, notice:true});
+    return;
+  }
+  const {code, explanation} = extractReply(reply);
+  if(code && !cut) cur.code = code; // a cut-off reply's code may be incomplete: offer it, don't apply it
+  const answer = explanation||(code && !cut ? t('buildSuccess') : '');
+  const msg = {role:'assistant', content:answer, code, providerKey:key, providerLabel:name};
+  if(cut){ msg.apiText = answer; msg.content = [answer, '⚠️ '+(isAr() ? 'انقطع الرد قبل اكتماله: ' : 'The reply was cut off: ')+cut.message].filter(Boolean).join('\n\n'); }
+  cur.messages.push(msg);
+}
 async function sendPrompt(){
+  if(sending) return; // what was typed stays in the box
   const promptEl = $('#prompt');
   const text = promptEl.value.trim();
   if(!text && !pendingAttachments.length) return;
@@ -1968,7 +2018,7 @@ async function sendPrompt(){
   cur.messages.push({role:'user', content:text||'📎', attachments: attachments.length ? attachments : undefined, apiText, apiImages: images.length ? images : undefined});
   promptEl.value = ''; pendingAttachments = []; renderAttachStrip(); renderAll(); saveState();
 
-  sendBtn.disabled = true; sendBtn.innerHTML = '<span class="spinner"></span>';
+  sending = true; sendBtn.disabled = true; sendBtn.innerHTML = '<span class="spinner"></span>';
   const thinking = document.createElement('div');
   thinking.className = 'msg assistant';
   thinking.innerHTML = '<span class="provider-tag" style="color:var(--primary-2)">⚡ جارٍ العمل...</span><div>'+t('building')+'</div>';
@@ -1988,10 +2038,7 @@ async function sendPrompt(){
     });
 
     if(customProvider){
-      const reply = await callProvider(customProvider, apiMsgs);
-      const {code, explanation} = extractReply(reply);
-      if(code) cur.code = code;
-      cur.messages.push({role:'assistant', content:explanation||(code?t('buildSuccess'):''), code, providerKey:customProvider, providerLabel:PROVIDERS[customProvider].name});
+      pushReply(cur, customProvider, await callProvider(customProvider, apiMsgs));
     } else if(askAll){
       // Only providers that can actually be called (a site proxy, or the user's own key).
       const enabled = PROVIDER_ORDER.filter(k => localStorage.getItem('aiapp_include_'+k) !== 'false' && canCallProvider(k));
@@ -2013,7 +2060,9 @@ async function sendPrompt(){
         if(result.contributors.length > 1) notes.push('— '+t('mergeContributors')+result.contributors.join('، ')+` (${result.contributors.length})`);
         if(result.failed.length) notes.push('— '+t('mergeFailedNote')+'\n'+result.failed.map(f => '  • '+f.name+': '+f.reason).join('\n'));
         if(result.verifierModel) notes.push('— ✓ تحقق: '+PROVIDERS[result.verifierModel].name);
-        cur.messages.push({role:'assistant', content:(explanation||(code?t('buildSuccess'):''))+(notes.length?'\n\n'+notes.join('\n'):''), code, providerLabel:t('mergedLabel'), merged:true, autoApplied:!!code, sources:result.sources.map(s => ({key:s.key, label:s.label, text:s.text.slice(0, 3000), score:s.score}))});
+        const answer = explanation||(code?t('buildSuccess'):'');
+        // The notes (contributors, failures) are shown; only the answer goes back as history.
+        cur.messages.push({role:'assistant', content:answer+(notes.length?'\n\n'+notes.join('\n'):''), apiText:answer, code, providerLabel:t('mergedLabel'), merged:true, autoApplied:!!code, sources:result.sources.map(s => ({key:s.key, label:s.label, text:s.text.slice(0, 3000), score:s.score}))});
       } else {
         thinking.querySelector('div').textContent = '✓ '+good.length+' إجابة';
         let applied = false;
@@ -2027,23 +2076,22 @@ async function sendPrompt(){
         const reasons = [...new Set(failed.map(f => f.reason))];
         if(failed.length > 1 && reasons.length === 1){
           cur.messages.push({role:'assistant', content:'⚠️ '+reasons[0]+'\n('+failed.map(f => f.name).join('، ')+')', providerLabel: isAr() ? 'المزوّدون' : 'Providers', notice:true});
-        } else failed.forEach(f => cur.messages.push({role:'assistant', content:'⚠️ '+f.reason, providerKey:f.key, providerLabel:f.name, askAllReply:true}));
+        } else failed.forEach(f => cur.messages.push({role:'assistant', content:'⚠️ '+f.reason, providerKey:f.key, providerLabel:f.name, askAllReply:true, failed:true}));
       }
     } else {
       const defKey = localStorage.getItem('aiapp_provider') || 'deepseek';
       thinking.querySelector('.provider-tag').textContent = PROVIDERS[defKey].name;
       const contentDiv = thinking.querySelector('div');
       contentDiv.classList.add('streaming-cursor');
-      let buf = '';
-      const reply = await callProvider(defKey, apiMsgs, {stream:true, onToken: tok => { buf += tok; contentDiv.textContent = buf; messagesEl.scrollTop = messagesEl.scrollHeight; }});
+      let buf = '', reply, cut = null;
+      try { reply = await callProvider(defKey, apiMsgs, {stream:true, onToken: tok => { buf += tok; contentDiv.textContent = buf; messagesEl.scrollTop = messagesEl.scrollHeight; }}); }
+      catch(e){ reply = e.partial || buf; if(!reply.trim()) throw e; cut = e; } // broke mid-way: keep what arrived
       contentDiv.classList.remove('streaming-cursor');
-      const {code, explanation} = extractReply(reply);
-      if(code) cur.code = code;
-      cur.messages.push({role:'assistant', content:explanation||(code?t('buildSuccess'):''), code, providerKey:defKey, providerLabel:PROVIDERS[defKey].name});
+      pushReply(cur, defKey, reply, cut);
     }
-  } catch(err){ cur.messages.push({role:'assistant', content:'⚠️ '+err.message}); }
+  } catch(err){ cur.messages.push({role:'assistant', content:'⚠️ '+err.message, notice:true}); } // shown, never sent back
   finally {
-    sendBtn.disabled = false; sendBtn.innerHTML = '<span>'+t('send')+'</span> <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
+    sending = false; sendBtn.disabled = false; sendBtn.innerHTML = '<span>'+t('send')+'</span> <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
     saveState(); renderAll();
     if($('#btnVoiceChat').classList.contains('active')){ const last = cur.messages[cur.messages.length-1]; if(last?.role === 'assistant' && last.content) speakSmart(mdStrip(last.content)); }
     if(window.innerWidth <= 860 && cur.code){ document.querySelector('.tab[data-tab="preview"]')?.click(); setTimeout(() => openDrawer($('#workarea')), 300); }
