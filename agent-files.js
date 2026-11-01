@@ -118,7 +118,9 @@
   function occurrences(hay, needle) {
     if (!needle) return 0;
     let n = 0, i = 0;
-    while ((i = hay.indexOf(needle, i)) !== -1) { n++; i += needle.length; }
+    // Step one char, not needle.length, so overlapping matches count too:
+    // '}\n}' occurs twice in '}\n}\n}' and must be rejected as ambiguous.
+    while ((i = hay.indexOf(needle, i)) !== -1) { n++; i += 1; }
     return n;
   }
 
@@ -237,26 +239,39 @@
   }
 
   // ---- preview ------------------------------------------------------------
-  function resolveRef(ref, files) {
-    const clean = String(ref || '').split(/[?#]/)[0];
+  // Resolves ref the way a browser would from the page at `base` (a project
+  // path such as 'site/index.html'; '' means a page at the root): relative to
+  // that page's folder, or to the project root when it starts with '/'.
+  // Returns the project path if that file exists, else null.
+  function resolveRef(ref, files, base) {
+    const clean = String(ref || '').split(/[?#]/)[0].trim().replace(/\\/g, '/');
     if (/^[a-z][a-z0-9+.-]*:|^\/\//i.test(clean)) return null; // external URL
-    const p = safePath(clean);
+    const parts = clean.startsWith('/') ? [] : String(base || '').split('/').slice(0, -1);
+    for (const seg of clean.split('/')) {
+      if (seg === '' || seg === '.') continue;
+      if (seg === '..') { if (!parts.length) return null; parts.pop(); } // above the root
+      else parts.push(seg);
+    }
+    const p = safePath(parts.join('/'));
     return p && Object.prototype.hasOwnProperty.call(files, p) ? p : null;
   }
 
   // Inlines <link rel=stylesheet href=local.css> and <script src=local.js> so a
   // multi-file project renders in a srcdoc iframe. External URLs are left alone.
-  function inlineAssets(html, files) {
+  // htmlPath is the page's own project path (e.g. mainHtml(files)), so refs
+  // resolve from its folder; omit it for a page at the root.
+  function inlineAssets(html, files, htmlPath) {
     const f = files || {};
+    const base = htmlPath || '';
     let out = String(html || '');
     out = out.replace(/<link\b[^>]*>/gi, (tag) => {
       if (!/rel\s*=\s*["']?stylesheet/i.test(tag)) return tag;
       const m = tag.match(/href\s*=\s*["']([^"']+)["']/i);
-      const p = m && resolveRef(m[1], f);
+      const p = m && resolveRef(m[1], f, base);
       return p ? '<style data-src="' + p + '">\n' + String(f[p]).replace(/<\/style/gi, '<\\/style') + '\n</style>' : tag;
     });
     out = out.replace(/<script\b([^>]*)\bsrc\s*=\s*["']([^"']+)["']([^>]*)>\s*<\/script>/gi, (tag, pre, src, post) => {
-      const p = resolveRef(src, f);
+      const p = resolveRef(src, f, base);
       if (!p) return tag;
       const attrs = (pre + post).replace(/\s+/g, ' ').trim();
       return '<script' + (attrs ? ' ' + attrs : '') + ' data-src="' + p + '">\n' + String(f[p]).replace(/<\/script/gi, '<\\/script') + '\n</script>';
