@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
     // so stale client caches (old JS, old localStorage) never hit a hard error.
     const DEPRECATED_MODELS = new Set(['command-r-plus', 'command-r', 'command-r-plus-08-2024', 'command-r-08-2024', 'command']);
     if (!model || DEPRECATED_MODELS.has(String(model).trim().toLowerCase())) {
-      model = 'command-a-03-2025';
+      model = 'command-a-plus-05-2026';
     }
     if (!messages) {
       res.status(400).json({ error: 'Missing messages' });
@@ -53,7 +53,7 @@ module.exports = async (req, res) => {
         'Authorization': 'Bearer ' + apiKey,
       },
       body: JSON.stringify({
-        model: model || 'command-a-03-2025',
+        model: model || 'command-a-plus-05-2026',
         messages,
         temperature: 0.7,
       }),

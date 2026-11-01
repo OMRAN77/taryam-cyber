@@ -47,7 +47,7 @@ module.exports = async (req, res) => {
         'Authorization': 'Bearer ' + apiKey,
       },
       body: JSON.stringify({
-        model: model || 'openai/gpt-4o-mini',
+        model: model || 'openai/gpt-5.6',
         messages,
         temperature: 0.7,
       }),

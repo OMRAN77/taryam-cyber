@@ -47,7 +47,7 @@ module.exports = async (req, res) => {
         'Authorization': 'Bearer ' + apiKey,
       },
       body: JSON.stringify({
-        model: model || 'mistral-small-latest',
+        model: model || 'mistral-large-latest',
         messages,
         temperature: 0.7,
       }),

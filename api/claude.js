@@ -40,7 +40,7 @@ module.exports = async (req, res) => {
       return;
     }
 
-    let useModel = model || 'claude-3-5-sonnet-latest';
+    let useModel = model || 'claude-haiku-5-5';
 
     const doRequest = (m) => fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -51,7 +51,7 @@ module.exports = async (req, res) => {
       },
       body: JSON.stringify({
         model: m,
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: system || undefined,
         messages,
       }),

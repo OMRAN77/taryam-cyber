@@ -47,7 +47,7 @@ module.exports = async (req, res) => {
         'Authorization': 'Bearer ' + apiKey,
       },
       body: JSON.stringify({
-        model: model || 'gpt-4o-mini',
+        model: model || 'gpt-5.6',
         messages,
         // Reasoning models (o1/o3/o4, gpt-5) reject any temperature but the default.
         ...(/^(o\d|gpt-5)/i.test(String(model || '')) ? {} : { temperature: 0.7 }),
