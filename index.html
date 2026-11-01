@@ -683,9 +683,10 @@ dialog select option{background:#0f1219;color:var(--text)}
   }
   #sidebar{transform:translateX(-100%);max-width:340px}
   #workarea{transform:translateX(-100%)}
-  html[dir="rtl"] #sidebar,html[dir="rtl"] #workarea{
-    inset-inline-start:auto;inset-inline-end:0;transform:translateX(100%);
-  }
+  /* inset-inline-start:0 already pins the drawers to the right edge in RTL, so only
+     the slide direction flips; pinning them to inline-end (= left) left the closed
+     drawers on screen, covering the dock. */
+  html[dir="rtl"] #sidebar,html[dir="rtl"] #workarea{transform:translateX(100%)}
   #sidebar.open,#workarea.open{transform:translateX(0)!important}
   #chatcol{width:100%}
   #messages{padding:16px 12px calc(var(--dock-h, 128px) + 24px)}
@@ -743,7 +744,7 @@ html.mobile-ui #workarea{
 }
 html.mobile-ui #sidebar{transform:translateX(-100%)}
 html.mobile-ui #workarea{transform:translateX(-100%)}
-html.mobile-ui[dir="rtl"] #sidebar,html.mobile-ui[dir="rtl"] #workarea{inset-inline-start:auto;inset-inline-end:0;transform:translateX(100%)}
+html.mobile-ui[dir="rtl"] #sidebar,html.mobile-ui[dir="rtl"] #workarea{transform:translateX(100%)}
 html.mobile-ui #sidebar.open,html.mobile-ui #workarea.open{transform:translateX(0)!important}
 html.mobile-ui #chatcol{width:100%}
 html.mobile-ui .resizer{display:none}

@@ -49,6 +49,7 @@ for (const [label, viewport] of [['desktop', { width: 1280, height: 760 }], ['mo
         togglesInside: inside(box(document.querySelector('#chat-toggles'))),
         askAllReachable: reachable(document.querySelector('#chip-askall')),
         mergeReachable: reachable(document.querySelector('#chip-merge')),
+        attachReachable: reachable(document.querySelector('#btnAttach')),
         dockHeight: Math.round(dock.height),
         messagesPadBottom: parseFloat(getComputedStyle(messages).paddingBottom),
       };
@@ -60,6 +61,8 @@ for (const [label, viewport] of [['desktop', { width: 1280, height: 760 }], ['mo
     assert.ok(r.firstChipReachable, 'first attachment chip is not covered');
     assert.ok(r.togglesInside, 'provider toggles are within the dock');
     assert.ok(r.askAllReachable && r.mergeReachable, 'provider toggles can be clicked');
+    // In Arabic (the default, RTL) a closed drawer used to sit over this button on phones.
+    assert.ok(r.attachReachable, 'attach button is not covered');
     assert.ok(r.messagesPadBottom >= r.dockHeight, `messages keep clear of the dock (${r.messagesPadBottom} < ${r.dockHeight})`);
 
     // The toggles really work from their new place.
