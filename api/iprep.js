@@ -10,6 +10,7 @@ const STORE_ID = process.env.BLOB_STORE_ID || '6tfgxvttzyoiavtu';
 const PUBLIC_BASE = 'https://' + STORE_ID + '.public.blob.vercel-storage.com/';
 
 const DAILY_LIMIT = 40;
+const { quotaEnabled } = require('./_quota');
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -80,14 +81,18 @@ module.exports = async (req, res) => {
 
     const id = String(body.guestId || req.headers['x-forwarded-for'] || 'anon').slice(0, 100);
     const today = todayStr();
-    let usage = await readBlobJson(usagePath(id), null);
-    if (!usage || usage.date !== today) usage = { date: today, count: 0 };
-    if (usage.count >= DAILY_LIMIT) {
-      res.status(429).json({ error: 'limit', message: 'وصلت للحد اليومي المسموح لهذه الأداة (' + DAILY_LIMIT + ' فحوصات/يوم). حاول غدًا.' });
-      return;
+    // Daily per-tool limit, only when QUOTA=on (see api/_quota.js).
+    const limited = quotaEnabled();
+    let usage = { date: today, count: 0 };
+    if (limited) {
+      usage = await readBlobJson(usagePath(id), null);
+      if (!usage || usage.date !== today) usage = { date: today, count: 0 };
+      if (usage.count >= DAILY_LIMIT) {
+        res.status(429).json({ error: 'limit', message: 'وصلت للحد اليومي المسموح لهذه الأداة (' + DAILY_LIMIT + ' فحوصات/يوم). حاول غدًا.' });
+        return;
+      }
     }
-    usage.count += 1;
-    await writeBlobJson(usagePath(id), usage);
+    if (limited) { usage.count += 1; await writeBlobJson(usagePath(id), usage); }
 
     const upstream = await fetch(
       'https://api.abuseipdb.com/api/v2/check?ipAddress=' + encodeURIComponent(ip) + '&maxAgeInDays=90&verbose',
@@ -117,7 +122,7 @@ module.exports = async (req, res) => {
         comment: (r.comment || '').slice(0, 200),
         categories: r.categories || [],
       })),
-      remaining: DAILY_LIMIT - usage.count,
+      remaining: limited ? DAILY_LIMIT - usage.count : null,
     });
   } catch (e) {
     res.status(500).json({ error: 'Proxy error: ' + (e && e.message ? e.message : String(e)) });

@@ -8,7 +8,10 @@ const PROVIDER_KEYS = {
 };
 
 // Fake upstream AI provider: counts calls, remembers the Authorization header used.
+// Limits are off by default (private deployment); these tests turn them on with QUOTA=on
+// so the limit logic stays covered. Pass { QUOTA: undefined } to test the default.
 function setup(env = {}) {
+  env = { QUOTA: 'on', ...env };
   const blob = createBlobFake();
   const upstream = { calls: 0, auth: [] };
   const restore = installFetch(blob.fetchImpl(async (url, opts) => {
@@ -25,6 +28,26 @@ function setup(env = {}) {
 const chat = (handler, ip, extra = {}) => callApi(handler, {
   body: { messages: [{ role: 'user', content: 'hi' }], ...extra },
   headers: { 'x-forwarded-for': ip },
+});
+
+test('by default (QUOTA unset) nothing is capped and nothing is counted', async () => {
+  const { blob, upstream, restore } = setup({ QUOTA: undefined });
+  try {
+    const ds = require('../../api/deepseek');
+    for (let i = 0; i < 25; i++) assert.strictEqual((await chat(ds, '198.51.100.90')).status, 200, 'message ' + (i + 1));
+    assert.strictEqual(upstream.calls, 25);
+    assert.strictEqual(blob.log.length, 0, 'no quota counters read or written');
+  } finally { restore(); }
+});
+
+test('by default the voice and chat endpoints work even without Blob configured', async () => {
+  const { upstream, restore } = setup({ QUOTA: undefined, BLOB_READ_WRITE_TOKEN: undefined });
+  try {
+    assert.strictEqual((await chat(require('../../api/openai'), '198.51.100.91')).status, 200);
+    const tts = await callApi(require('../../api/tts'), { body: { text: 'hi', voice: 'nova' }, headers: { 'x-forwarded-for': '198.51.100.91' } });
+    assert.strictEqual(tts.status, 200);
+    assert.strictEqual(upstream.calls, 2);
+  } finally { restore(); }
 });
 
 test('guest quota is per IP: a new guestId on every request does not reset it', async () => {

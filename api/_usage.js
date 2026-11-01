@@ -4,9 +4,12 @@
 // The guestId the browser sends is not used for this, since anyone can change it.
 // Counters are stored encrypted at unguessable Blob paths (see _store.js) and reset
 // automatically each day (UTC).
+// Limits apply only when the deployment sets QUOTA=on (see _quota.js); otherwise every
+// request is allowed and nothing is read from or written to Blob.
 const { verifyToken } = require('./_secrets');
 const store = require('./_store');
 const { clientIp } = require('./_client');
+const { quotaEnabled } = require('./_quota');
 
 // Combined daily chat limit shared across all server-proxied chat providers and STT.
 const DAILY_LIMIT = 20;
@@ -35,6 +38,7 @@ async function checkAndConsume(token, req, bucket = 'chat') {
   const limits = LIMITS[bucket];
   const session = verifyToken(token);
   const username = session ? session.u : null;
+  if (!quotaEnabled()) return { allowed: true, username, remaining: null };
   const ip = clientIp(req);
   if (!username && !ip) return { allowed: false, reason: 'auth', username: null };
   const limit = username ? limits.account : limits.guest;
@@ -70,4 +74,4 @@ function rejectUsage(res, usage) {
   }
 }
 
-module.exports = { checkAndConsume, rejectUsage, DAILY_LIMIT, GUEST_LIMIT, LIMITS };
+module.exports = { checkAndConsume, rejectUsage, quotaEnabled, DAILY_LIMIT, GUEST_LIMIT, LIMITS };
