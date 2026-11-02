@@ -248,7 +248,9 @@ export function reportPayload(session, createdAt) {
   if (r.rng) {
     out.results.rng = {
       input: r.rng.inputId, kind: r.rng.parsed.kind, bits: r.rng.parsed.nBits, values: r.rng.parsed.nValues,
-      nist: r.rng.nist.results.map((t) => ({ id: t.id, applicable: t.applicable, pass: t.pass ?? null, pValues: t.pValues || null })),
+      nist: r.rng.nist.results.map((t) => ({ id: t.id, applicable: t.applicable, pass: t.pass ?? null, status: t.status ?? null, pValues: t.pValues || null })),
+      twoLevel: r.rng.nist.twoLevel ? { sequences: r.rng.nist.sequences, sequenceLength: r.rng.nist.sequenceLength } : null,
+      family: r.rng.family || null,
       chiSquare: r.rng.chi, serialCorrelation: r.rng.serial,
     };
   }
@@ -332,34 +334,64 @@ function actualSection(L, ac) {
     L.kv('declaredRtp', pct(dd.rtp, 4));
     L.kv('difference', (dd.difference >= 0 ? '+' : '') + pct(dd.difference, 4));
     L.kv('zScore', num(dd.z, 3));
-    L.kv('pValue', fmtP(dd.pValue));
-    const color = dd.verdict === 'normal' ? C.pass : dd.verdict === 'review' ? C.warn : C.fail;
+    L.kv('pBelow', fmtP(dd.pBelow ?? dd.pValue));
+    const color = dd.verdict === 'normal' ? C.pass : dd.verdict === 'suspicious' ? C.fail : C.warn;
     L.badge(null, color, VERDICT[dd.verdict]);
+    if (dd.verdict === 'insufficient') L.note('insufficientNote');
+    if (dd.aboveDeclared) L.note('aboveDeclared');
     if (dd.roundsToDetect) L.kv('roundsToDetect', dd.roundsToDetect.toLocaleString('en-US'));
   }
-  L.badge(null, a.reliable ? C.pass : C.warn, pair(a.reliable ? 'reliableYes' : 'reliableNo'));
+  if (a.reliable === null) { L.badge('reliableUnknownShort', C.warn); L.note('reliableUnknown'); }
+  else L.badge(null, a.reliable ? C.pass : C.warn, pair(a.reliable ? 'reliableYes' : 'reliableNo'));
   L.table([{ key: 'margin', w: 0.5 }, { key: 'roundsChecked', w: 0.5, mono: true }], a.roundsNeeded.map((r) => ['± ' + pct(r.margin, 1), r.rounds.toLocaleString('en-US')]));
+  if (a.modes) {
+    L.section('byMode');
+    L.table([{ key: 'modeName', w: 0.4 }, { key: 'roundsChecked', w: 0.3, mono: true }, { key: 'observedRtp', w: 0.3, mono: true }],
+      a.modes.map((m) => [m.mode, m.rounds.toLocaleString('en-US'), pct(m.rtp, 3)]));
+    L.note('modesNote');
+  }
+  const mg = a.merged;
+  if (mg && (mg.freeRows || mg.sameRoundRows)) L.kv('mergedRows', (mg.freeRows + mg.sameRoundRows).toLocaleString('en-US'));
   if (ac.skipped) L.kv('skippedRows', ac.skipped.toLocaleString('en-US'));
+  if (a.sigmaSource !== 'declared') L.note('ciObservedNote');
   L.note('confidenceNote');
 }
+
+const STATUS_COLOR = { pass: C.pass, flag: C.warn, fail: C.fail };
+const statusOf = (r) => r.status || (r.pass ? 'pass' : 'fail');
+const statusCell = (status) => ({ text: pair(status).join(' / '), color: STATUS_COLOR[status] || C.fail, bold: true });
 
 function rngSection(L, rg) {
   L.section('tabRng');
   L.kv('rngMode', rg.parsed.kind);
   L.kv('bitsCount', rg.parsed.nBits.toLocaleString('en-US'));
   L.kv('valuesCount', rg.parsed.nValues.toLocaleString('en-US'));
+  if (rg.nist.twoLevel) L.kv('twoLevel', `${rg.nist.sequences} × ${rg.nist.sequenceLength.toLocaleString('en-US')}`);
   for (const n of rg.parsed.notes || []) L.note(null, [n, n]);
+  const fam = rg.family;
+  if (fam) {
+    L.kv('familyDetail', `${fam.belowAlpha} / ${fam.pValueCount}  (${pair('familyExpected').join(' / ')} ≈ ${num(fam.expectedBelowAlpha, 1)})`);
+    L.badge(fam.pass ? 'familyPassShort' : 'familyFailShort', fam.pass ? C.pass : C.fail);
+    L.note(fam.pass ? 'familyPass' : 'familyFail');
+  }
   const rows = rg.nist.results.map((r) => {
     const [ar, en] = NIST_NAMES[r.id];
     if (!r.applicable) return [`${ar} / ${en}`, r.reason || r.requirement, { text: pair('na').join(' / '), color: C.muted }];
-    const ps = r.pValues;
-    const shown = ps.length === 1 ? fmtP(ps[0]) : `min ${fmtP(Math.min(...ps))} (${ps.filter((p) => p < 0.01).length}/${ps.length} < 0.01)`;
-    return [`${ar} / ${en}`, shown, { text: pair(r.pass ? 'pass' : 'fail').join(' / '), color: r.pass ? C.pass : C.fail, bold: true }];
+    let shown;
+    if (rg.nist.twoLevel) {
+      shown = `${r.sequences} seq, min ${(r.minProportion * 100).toFixed(1)}%` + (r.minUniformityP === null ? '' : `, P_T ${fmtP(r.minUniformityP)}`)
+        + (r.subtestCount > 1 ? `, ${r.subtestsFailing}/${r.subtestCount} out (~${num(r.subtestsExpectedFailing, 1)})` : '');
+    } else {
+      const ps = r.pValues;
+      shown = ps.length === 1 ? fmtP(ps[0]) : `min ${fmtP(Math.min(...ps))} (${ps.filter((p) => p < 0.01).length}/${ps.length} < 0.01)`;
+    }
+    return [`${ar} / ${en}`, shown, statusCell(statusOf(r))];
   });
-  rows.push([pair('chiSquare').join(' / '), `χ² = ${num(rg.chi.chi2, 2)}, df ${rg.chi.df}, P ${fmtP(rg.chi.pValue)}`, { text: pair(rg.chi.pass ? 'pass' : 'fail').join(' / '), color: rg.chi.pass ? C.pass : C.fail, bold: true }]);
-  rows.push([pair('serialCorr').join(' / '), rg.serial.r === null ? '—' : `r = ${num(rg.serial.r, 6)}, P ${fmtP(rg.serial.pValue)}`, { text: pair(rg.serial.pass ? 'pass' : 'fail').join(' / '), color: rg.serial.pass ? C.pass : C.fail, bold: true }]);
+  rows.push([pair('chiSquare').join(' / '), `χ² = ${num(rg.chi.chi2, 2)}, df ${rg.chi.df}, P ${fmtP(rg.chi.pValue)}`, statusCell(rg.chi.status || (rg.chi.pass ? 'pass' : 'fail'))]);
+  rows.push([pair('serialCorr').join(' / '), rg.serial.r === null ? '—' : `r = ${num(rg.serial.r, 6)}, P ${fmtP(rg.serial.pValue)}`, statusCell(rg.serial.status || (rg.serial.pass ? 'pass' : 'fail'))]);
   L.table([{ key: 'test', w: 0.46 }, { key: 'pValue', w: 0.34, mono: true }, { key: 'result', w: 0.2 }], rows);
   L.note('nistPassRule');
+  if (rg.nist.twoLevel) L.note('twoLevelRule');
 }
 
 function fairSection(L, fr) {
@@ -455,7 +487,9 @@ function asciiSummary(payload, reportId, digest) {
   if (r.actual) lines.push(`  Observed RTP: ${(r.actual.rtp * 100).toFixed(4)}% over ${r.actual.rounds} rounds, ${(r.actual.confidence * 100).toFixed(1)}% CI ${(r.actual.ci[0] * 100).toFixed(3)}% - ${(r.actual.ci[1] * 100).toFixed(3)}%` + (r.actual.declared ? `, declared ${(r.actual.declared.rtp * 100).toFixed(2)}%, p = ${r.actual.declared.pValue.toPrecision(4)} (${r.actual.declared.verdict})` : ''));
   if (r.rng) {
     const app = r.rng.nist.filter((t) => t.applicable);
-    lines.push(`  RNG: NIST SP 800-22 passed ${app.filter((t) => t.pass).length} of ${app.length} applicable tests; chi-square ${r.rng.chiSquare.pass ? 'pass' : 'fail'}; serial correlation ${r.rng.serialCorrelation.pass ? 'pass' : 'fail'}`);
+    const fam = r.rng.family;
+    lines.push(`  RNG: NIST SP 800-22 passed ${app.filter((t) => (t.status || (t.pass ? 'pass' : 'fail')) === 'pass').length} of ${app.length} applicable tests` + (r.rng.twoLevel ? ` (two-level, ${r.rng.twoLevel.sequences} sequences)` : '') + `; chi-square ${r.rng.chiSquare.status || (r.rng.chiSquare.pass ? 'pass' : 'fail')}; serial correlation ${r.rng.serialCorrelation.status || (r.rng.serialCorrelation.pass ? 'pass' : 'fail')}`);
+    if (fam) lines.push(`  Family verdict (Holm over ${fam.pValueCount} P-values, alpha ${fam.alpha}): ${fam.pass ? 'no gross statistical defect detected' : 'statistical defect detected'}; ${fam.belowAlpha} below alpha, ~${fam.expectedBelowAlpha.toFixed(1)} expected by chance`);
   }
   if (r.fair) lines.push(`  Provably fair (${r.fair.scheme}): ${r.fair.ok ? 'all rounds verified' : 'FAILURES FOUND'}`);
   if (r.montecarlo) lines.push(`  Monte Carlo: ${r.montecarlo.spins} rounds, seed "${r.montecarlo.seed}", RTP ${(r.montecarlo.result.rtp * 100).toFixed(4)}%, result SHA-256 ${r.montecarlo.resultSha256}`);

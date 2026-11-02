@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';
 import * as N from '../../lab/core/nist.js';
+import { Xoshiro128ss } from '../../lab/core/prng.js';
 
 const FIX = new URL('./fixtures/', import.meta.url);
 const pi = (n) => N.bitsFromBytes(fs.readFileSync(new URL('pi.bin', FIX)), n);
@@ -88,11 +89,32 @@ test('aperiodic template counts match the publication (m = 2..10)', () => {
   assert.deepStrictEqual([2, 3, 4, 5, 6, 7, 8, 9, 10].map((m) => N.aperiodicTemplates(m).length), [2, 4, 6, 12, 20, 40, 74, 148, 284]);
 });
 
+test('2.8 overlapping template probabilities are the exact ones of section 3.8', () => {
+  const pi = N.overlappingProbabilities(new Array(9).fill(1), 1032, 5);
+  [0.364091, 0.185659, 0.139381, 0.100571, 0.070432, 0.139865].forEach((v, i) => near(pi[i], v, 6, 'pi' + i));
+  near(pi.reduce((a, b) => a + b, 0), 1, 12, 'sum');
+  // Brute force on a tiny case: every 8-bit string, template 11, K = 3.
+  const counts = [0, 0, 0, 0];
+  for (let v = 0; v < 256; v++) {
+    let c = 0;
+    for (let i = 0; i < 7; i++) if (((v >> i) & 3) === 3) c++;
+    counts[Math.min(c, 3)]++;
+  }
+  assert.deepStrictEqual(N.overlappingProbabilities([1, 1], 8, 3).map((p) => p * 256), counts);
+});
+
 test('2.8 overlapping template matching (first 1,000,000 bits of e)', () => {
+  // The publication's worked example (2.8.8) uses the reference code's approximate
+  // probabilities: 'reference' reproduces it exactly.
+  const ref = N.overlappingTemplate(E1M, 9, 1032, 5, null, { probabilities: 'reference' });
+  assert.deepStrictEqual(ref.stats.nu, [329, 164, 150, 111, 78, 136]);
+  near(ref.stats.chi2, 8.965859);
+  near(ref.pValues[0], 0.110434);
+  // Same counts with the exact probabilities of section 3.8 (the default).
   const r = N.overlappingTemplate(E1M, 9, 1032, 5);
-  assert.deepStrictEqual(r.stats.nu, [329, 164, 150, 111, 78, 136]);
-  near(r.stats.chi2, 8.965859);
-  near(r.pValues[0], 0.110434);
+  assert.deepStrictEqual(r.stats.nu, ref.stats.nu);
+  near(r.stats.chi2, 7.949564);
+  near(r.pValues[0], 0.159037);
 });
 
 test('2.9 Maurer universal statistical test', () => {
@@ -178,6 +200,68 @@ test('runNist applies size limits and marks short inputs not applicable', () => 
   // As in the publication's example, state x = -1 of the random excursions test gives
   // P = 0.007779 < 0.01 for e; every other test passes.
   assert.deepStrictEqual(full.results.filter((r) => !r.pass).map((r) => r.id), ['randomExcursions']);
+  // One P-value below 0.01 among ~160 is expected by chance: flagged, not failed.
+  assert.strictEqual(full.results.find((r) => r.id === 'randomExcursions').status, 'flag');
+  assert.strictEqual(full.family.pass, true);
+  assert.ok(full.family.pValueCount > 150, String(full.family.pValueCount));
   const zeros = N.runNist(new Uint8Array(1000000));
   assert.ok(zeros.results.filter((r) => r.applicable).every((r) => !r.pass), 'all-zero input must fail');
+  assert.ok(zeros.results.filter((r) => r.applicable).every((r) => r.status === 'fail'), 'all-zero input must fail the family test');
+  assert.strictEqual(zeros.family.pass, false);
+});
+
+test('binomial tail and Holm', () => {
+  near(N.binomialUpperTail(4, 100, 0.01), 0.018374, 6);
+  assert.strictEqual(N.binomialUpperTail(0, 10, 0.3), 1);
+  near(N.binomialUpperTail(10, 10, 0.5), 2 ** -10, 15);
+  assert.deepStrictEqual(N.holm([0.001, 0.02, 0.04], 0.05), [true, true, true]);
+  assert.deepStrictEqual(N.holm([0.01, 0.04, 0.03], 0.05), [true, false, false]);
+  assert.deepStrictEqual(N.holm([0.2, 0.3], 0.05), [false, false]);
+});
+
+// Bits from a fixed xoshiro128** stream: deterministic, no flaky test.
+function streamBits(n, seed, p1 = 0.5) {
+  const g = new Xoshiro128ss(seed, seed * 7 + 1, seed * 13 + 2, seed * 31 + 3);
+  const out = new Uint8Array(n);
+  if (p1 === 0.5) { for (let i = 0; i < n; i += 32) { const w = g.nextU32(); for (let j = 0; j < 32 && i + j < n; j++) out[i + j] = (w >>> (31 - j)) & 1; } }
+  else for (let i = 0; i < n; i++) out[i] = g.nextU32() / 4294967296 < p1 ? 1 : 0;
+  return out;
+}
+
+test('family verdict: good random data is not called defective; the per-test rule alone often is', () => {
+  let perTestRed = 0, familyFail = 0;
+  const runs = 30;
+  for (let s = 1; s <= runs; s++) {
+    const r = N.runNist(streamBits(400000, s));
+    if (r.results.some((t) => t.applicable && !t.pass)) perTestRed++;
+    if (!r.family.pass) familyFail++;
+    assert.ok(r.results.every((t) => t.status !== 'fail') === r.family.pass);
+  }
+  // Holm keeps the family error at or below 1% per run.
+  assert.ok(familyFail <= 1, `family false alarms ${familyFail}/${runs}`);
+  assert.ok(perTestRed >= 2, `per-test rule flagged ${perTestRed}/${runs}`);
+});
+
+test('two-level assessment (section 4.2): proportion bound, uniformity and verdict', () => {
+  // 96 of 100 passing is outside (1 - 0.01) - 3 sqrt(0.01 * 0.99 / 100) = 0.96015; 97 is inside.
+  const ps = (below) => Array.from({ length: 100 }, (_, i) => (i < below ? 0.005 : 0.01 + 0.99 * (i + 0.5) / 100));
+  assert.strictEqual(N.secondLevel(ps(4)).proportionOk, false);
+  assert.strictEqual(N.secondLevel(ps(3)).proportionOk, true);
+  near(N.secondLevel(ps(3)).proportionChance, 0.018374, 6);
+  // P-values bunched in one bin fail uniformity.
+  const bunched = N.secondLevel(Array.from({ length: 60 }, (_, i) => 0.5 + i / 1000));
+  assert.strictEqual(bunched.uniformityOk, false);
+  assert.strictEqual(N.secondLevel(ps(0).slice(0, 40)).uniformityP, null); // fewer than 55 sequences
+
+  const good = N.runNistMulti(streamBits(12 * 100000, 99), { sequenceLength: 100000 });
+  assert.strictEqual(good.sequences, 12);
+  assert.strictEqual(good.family.pass, true);
+  const freq = good.results.find((r) => r.id === 'frequency');
+  assert.strictEqual(freq.sequences, 12);
+  assert.strictEqual(freq.subtests.length, 1);
+  // A 52% ones generator fails frequency on nearly every sequence.
+  const biased = N.runNistMulti(streamBits(12 * 100000, 5, 0.52), { sequenceLength: 100000 });
+  assert.strictEqual(biased.family.pass, false);
+  assert.strictEqual(biased.results.find((r) => r.id === 'frequency').status, 'fail');
+  assert.throws(() => N.runNistMulti(streamBits(500000, 1), { sequenceLength: 100000 }), /at least 10 sequences/);
 });

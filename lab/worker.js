@@ -4,7 +4,7 @@ import { normalizeModel, canonicalJson } from './core/slot-model.js';
 import { analyzeExact } from './core/slot-exact.js';
 import { parsePlayLog, analyzePlayLog } from './core/actual.js';
 import { parseRngInput, chiSquareUniform, serialCorrelation } from './core/rng-basic.js';
-import { runNist } from './core/nist.js';
+import { runNist, runNistMulti, assessFamily } from './core/nist.js';
 import { parseFairCsv, verifyHmacRounds, verifyHashChain, sha256Hex, hmacSha256, floatFromBytes, mapOutcome, toHex } from './core/fair.js';
 import { prngFromSeed, PRNG_DESCRIPTION } from './core/prng.js';
 import { simulate } from './core/montecarlo.js';
@@ -16,11 +16,16 @@ const encode = (text) => new TextEncoder().encode(text);
 // Keeps P-values and scalar statistics; drops large per-block arrays.
 function slimNist(n) {
   return {
-    n: n.n, alpha: n.alpha,
+    n: n.n, alpha: n.alpha, twoLevel: !!n.twoLevel, sequenceLength: n.sequenceLength || null, sequences: n.sequences || null,
     results: n.results.map((r) => {
       const stats = {};
       for (const [k, v] of Object.entries(r.stats || {})) if (!Array.isArray(v) || v.length <= 20) stats[k] = v;
-      return { id: r.id, applicable: r.applicable, requirement: r.requirement, reason: r.reason, pass: r.pass, pValues: r.pValues, stats };
+      const out = { id: r.id, applicable: r.applicable, requirement: r.requirement, reason: r.reason, pass: r.pass, status: r.status, pValues: r.pValues, stats };
+      if (n.twoLevel && r.applicable) {
+        Object.assign(out, { sequences: r.sequences, subtestsFailing: r.subtestsFailing, subtestsExpectedFailing: r.subtestsExpectedFailing, minProportion: r.minProportion, minUniformityP: r.minUniformityP, subtestCount: r.subtests.length });
+        if (r.subtests.length <= 20) out.subtests = r.subtests;
+      }
+      return out;
     }),
   };
 }
@@ -36,10 +41,23 @@ const TASKS = {
   rng: ({ bytes, options }, progress) => {
     const parsed = parseRngInput(new Uint8Array(bytes), options);
     if (parsed.bits.length < 100) throw Object.assign(new Error('need at least 100 bits'), { ar: 'يلزم 100 بت على الأقل', en: 'At least 100 bits are needed' });
-    const nist = slimNist(runNist(parsed.bits, { onProgress: progress }));
+    const nist = slimNist(options.twoLevel ? runNistMulti(parsed.bits, { onProgress: progress }) : runNist(parsed.bits, { onProgress: progress }));
+    const chi = chiSquareUniform(parsed.values, parsed.min, parsed.max);
+    const serial = serialCorrelation(parsed.values);
+    // One family verdict over every P-value shown, including the two value-level tests.
+    const family = assessFamily([
+      ...nist.results,
+      { id: 'chiSquare', applicable: chi.enoughData, pValues: [chi.pValue], pass: chi.pass },
+      { id: 'serialCorr', applicable: true, pValues: [serial.pValue], pass: serial.pass },
+    ], nist.alpha);
+    nist.results.forEach((r, i) => { r.status = family.statuses[i]; });
+    const k = nist.results.length;
+    chi.status = chi.enoughData ? family.statuses[k] : chi.pass ? 'pass' : 'flag';
+    serial.status = family.statuses[k + 1];
+    delete family.statuses;
     return {
       parsed: { kind: parsed.kind, nBits: parsed.bits.length, nValues: parsed.values.length, min: parsed.min, max: parsed.max, notes: parsed.notes },
-      nist, chi: chiSquareUniform(parsed.values, parsed.min, parsed.max), serial: serialCorrelation(parsed.values),
+      nist, chi, serial, family,
     };
   },
 

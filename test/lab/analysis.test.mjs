@@ -53,12 +53,113 @@ test('play log: a clearly lower RTP is flagged suspicious; rounds needed follow 
   assert.strictEqual(r.roundsNeeded.find((x) => x.margin === 0.01).rounds, Math.ceil((1.959963985 * 0.9 / 0.01) ** 2));
 });
 
-test('play log: variable bets use the ratio estimator; bad rows are reported, not counted', () => {
+test('play log: variable bets use the ratio estimator; bad rows are reported, free rounds are kept', () => {
   const log = parsePlayLog('round,bet,win,note\n1,1,0,a\n2,3,6,b\n3,oops,1,c\n4,0,1,d\n5,2,1,e\n');
   assert.strictEqual(log.bets.length, 3);
-  assert.deepStrictEqual(log.skipped.map((s) => s.line), [4, 5]);
+  assert.deepStrictEqual(log.skipped.map((s) => s.line), [4]);
+  assert.strictEqual(log.merged.freeRows, 1);
+  // Round 4 (bet 0) paid 1: it belongs to the paid round before it.
+  assert.deepStrictEqual([...log.wins], [0, 7, 1]);
+  near(analyzePlayLog(log).rtp, 8 / 6, 1e-12);
+});
+
+test('play log: free-spin rows (bet 0) are added to their paid spin, not dropped', () => {
+  // One paid spin of 1 that triggers free spins paying 2 + 3 + 3, then two losing spins.
+  const log = parsePlayLog('bet,win\n1,0\n0,2\n0,3\n0,3\n1,0\n1,0\n');
+  assert.strictEqual(log.bets.length, 3);
+  assert.strictEqual(log.merged.freeRows, 3);
+  assert.strictEqual(log.skipped.length, 0);
+  near(analyzePlayLog(log).rtp, 8 / 3, 1e-12); // dropping the bet-0 rows gave 0
+  // A free row before any paid row has nothing to belong to.
+  const orphan = parsePlayLog('bet,win\n0,5\n1,1\n1,0\n');
+  assert.deepStrictEqual(orphan.skipped, [{ line: 2, reason: 'free round before any paid round' }]);
+});
+
+test('play log: rows sharing a round id are one round; modes are summarized separately', () => {
+  const csv = 'round_id,mode,bet,win\nA,base,1,0\nA,base,0,4\nB,base,1,0.5\nC,buy,100,0\nC,buy,0,60\nC,buy,0,20\nD,buy,100,90\n';
+  const log = parsePlayLog(csv);
+  assert.deepStrictEqual([...log.bets], [1, 1, 100, 100]);
+  assert.deepStrictEqual([...log.wins], [4, 0.5, 80, 90]);
+  assert.deepStrictEqual(log.modes, ['base', 'base', 'buy', 'buy']);
   const r = analyzePlayLog(log);
-  near(r.rtp, 7 / 6, 1e-12);
+  near(r.rtp, 174.5 / 202, 1e-12);
+  assert.deepStrictEqual(r.modes.map((m) => [m.mode, m.rounds, +m.rtp.toFixed(6)]), [['base', 2, 2.25], ['buy', 2, 0.85]]);
+  // A paid row with the same id as the round before is still the same round.
+  assert.strictEqual(parsePlayLog('round,bet,win\n7,1,1\n7,1,1\n8,1,0\n').bets.length, 2);
+});
+
+test('play log: decimal commas, thousands dots and Arabic-Indic digits', () => {
+  const semi = parsePlayLog('bet;win\n1,5;3\n2;1.234,5\n');
+  assert.strictEqual(semi.delimiter, ';');
+  assert.deepStrictEqual([...semi.bets], [1.5, 2]);
+  assert.deepStrictEqual([...semi.wins], [3, 1234.5]);
+  const ar = parsePlayLog('الرهان;الربح\n١٫٥;٣\n۲;۰\n');
+  assert.deepStrictEqual([...ar.bets], [1.5, 2]);
+  assert.deepStrictEqual([...ar.wins], [3, 0]);
+  // In a comma-separated file a comma can only be a delimiter.
+  assert.deepStrictEqual([...parsePlayLog('bet,win\n1.5,3\n').bets], [1.5]);
+});
+
+// A fair high-volatility game: RTP 96%, top prize 5000x (sigma about 22.7 per bet).
+const HV_PAYS = [0, 0.5, 1, 2, 5, 20, 100, 1000, 5000];
+const HV_PROBS = (() => {
+  const p = [0, 0.18, 0.1, 0.06, 0.04, 0.0075, 0.0011, 1.66e-4, 1.34e-5];
+  const big = 1000 * p[7] + 5000 * p[8];
+  const small = p.slice(0, 7).reduce((s, q, i) => s + q * HV_PAYS[i], 0);
+  for (let i = 1; i < 7; i++) p[i] *= (0.96 - big) / small; // tune the small prizes to hit 96%
+  p[0] = 1 - p.slice(1).reduce((s, q) => s + q, 0);
+  return p;
+})();
+const HV_SIGMA = Math.sqrt(HV_PROBS.reduce((s, q, i) => s + q * HV_PAYS[i] ** 2, 0) - 0.96 ** 2);
+function hvLog(rng, n, payScale = 1) {
+  const cum = []; HV_PROBS.reduce((s, q, i) => (cum[i] = s + q), 0);
+  const bets = new Float64Array(n).fill(1), wins = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const u = rng.nextU32() / 4294967296;
+    let k = 0; while (k < cum.length - 1 && u >= cum[k]) k++;
+    wins[i] = HV_PAYS[k] * payScale;
+  }
+  return { bets, wins };
+}
+
+test('observed RTP: a fair high-volatility game is not accused (P < alpha with the declared sigma)', () => {
+  near(HV_PROBS.reduce((s, q, i) => s + q * HV_PAYS[i], 0), 0.96, 1e-12, 'rtp');
+  assert.ok(HV_SIGMA > 22 && HV_SIGMA < 23.5, `sigma ${HV_SIGMA}`);
+  const rng = new Xoshiro128ss(11, 22, 33, 44);
+  for (const [n, trials] of [[1000, 400], [10000, 150]]) {
+    let flagged = 0, insufficient = 0, observedFlag = 0;
+    for (let t = 0; t < trials; t++) {
+      const log = hvLog(rng, n);
+      const withSigma = analyzePlayLog(log, { declaredRtp: 0.96, sigma: HV_SIGMA }).declared.verdict;
+      if (withSigma === 'review' || withSigma === 'suspicious') flagged++;
+      const noSigma = analyzePlayLog(log, { declaredRtp: 0.96 }).declared.verdict;
+      if (noSigma === 'insufficient') insufficient++;
+      if (noSigma === 'review' || noSigma === 'suspicious') observedFlag++;
+    }
+    // Nominal one-sided level is 5%; heavy right skew makes the test conservative.
+    assert.ok(flagged / trials <= 0.05, `n=${n}: fair game flagged in ${flagged}/${trials}`);
+    // Without sigma, a shortfall is never called suspicious; it is "insufficient evidence".
+    assert.strictEqual(observedFlag, 0);
+    assert.ok(insufficient > 0, `n=${n}: the old test would have accused this game (${insufficient}/${trials})`);
+  }
+});
+
+test('observed RTP: a game paying 10% less is caught once the declared sigma is known', () => {
+  const rng = new Xoshiro128ss(5, 6, 7, 8);
+  const r = analyzePlayLog(hvLog(rng, 1500000, 0.9), { declaredRtp: 0.96, sigma: HV_SIGMA });
+  assert.strictEqual(r.declared.direction, 'below');
+  assert.strictEqual(r.declared.verdict, 'suspicious');
+  assert.ok(r.declared.pBelow < 0.001);
+  near(r.declared.pBelow + r.declared.pAbove, 1, 1e-12);
+  // +-1% at 95% needs (1.96 * 22.7 / 0.01)^2, about 20 million rounds, for this game.
+  assert.strictEqual(r.reliable, false);
+  assert.strictEqual(analyzePlayLog(hvLog(rng, 5000), { sigma: 0.3 }).reliable, true);
+  // Above the declared RTP is never "suspicious" for the player, only noted.
+  const above = analyzePlayLog({ bets: new Float64Array(1000).fill(1), wins: new Float64Array(1000).fill(1.2) }, { declaredRtp: 0.96, sigma: 0.5 });
+  assert.strictEqual(above.declared.verdict, 'normal');
+  assert.strictEqual(above.declared.aboveDeclared, true);
+  // With sigma from the data, "enough rounds" is unknown.
+  assert.strictEqual(analyzePlayLog(hvLog(rng, 1000)).reliable, null);
 });
 
 // ---- RNG input, chi-square, serial correlation ----

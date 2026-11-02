@@ -112,7 +112,7 @@ progress { flex: 1; min-width: 160px; height: 8px; accent-color: var(--primary);
 
 .verdict { padding: 12px 16px; border-radius: 12px; font-weight: 700; border: 1px solid; }
 .verdict.normal, .verdict.pass { background: rgba(52, 211, 153, 0.08); border-color: rgba(52, 211, 153, 0.35); color: var(--green); }
-.verdict.review, .verdict.warn { background: rgba(251, 191, 36, 0.08); border-color: rgba(251, 191, 36, 0.35); color: var(--amber); }
+.verdict.review, .verdict.warn, .verdict.insufficient { background: rgba(251, 191, 36, 0.08); border-color: rgba(251, 191, 36, 0.35); color: var(--amber); }
 .verdict.suspicious, .verdict.fail { background: rgba(248, 113, 113, 0.08); border-color: rgba(248, 113, 113, 0.35); color: var(--red); }
 
 h3.sub { font-size: 15px; color: var(--primary-2); margin-top: 22px; }

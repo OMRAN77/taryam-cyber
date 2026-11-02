@@ -246,19 +246,35 @@ function renderActual() {
     { k: 'hitFrequency', v: pct(a.hitRate, 3) },
     { k: 'sigmaSource', v: fmt(a.sigmaUsed, 4), s: a.sigmaSource === 'declared' ? tr('declaredWord') : tr('observed') },
   ]));
+  if (a.sigmaSource !== 'declared') box.append(el('p', { class: 'muted' }, tr('ciObservedNote')));
   if (a.declared) {
     const dd = a.declared;
     box.append(cards([
       { k: 'declaredRtp', v: pct(dd.rtp, 4) },
       { k: 'difference', v: (dd.difference >= 0 ? '+' : '') + pct(dd.difference, 4) },
       { k: 'zScore', v: fmt(dd.z, 3) },
-      { k: 'pValue', v: fmtP(dd.pValue) },
+      { k: 'pBelow', v: fmtP(dd.pBelow) },
     ]));
     box.append(el('div', { class: 'verdict ' + dd.verdict }, tr('verdict') + ': ' + pick(VERDICT[dd.verdict])));
+    if (dd.verdict === 'insufficient') box.append(el('p', { class: 'muted' }, tr('insufficientNote')));
+    if (dd.aboveDeclared) box.append(el('p', { class: 'muted' }, tr('aboveDeclared') + ' · P = ' + fmtP(dd.pAbove)));
     if (dd.roundsToDetect) box.append(el('p', { class: 'muted' }, tr('roundsToDetect') + ': ' + dd.roundsToDetect.toLocaleString('en-US')));
   }
-  box.append(el('div', { class: 'verdict ' + (a.reliable ? 'pass' : 'warn') }, tr(a.reliable ? 'reliableYes' : 'reliableNo')));
+  if (a.reliable === null) box.append(el('div', { class: 'verdict warn' }, tr('reliableUnknown')));
+  else box.append(el('div', { class: 'verdict ' + (a.reliable ? 'pass' : 'warn') }, tr(a.reliable ? 'reliableYes' : 'reliableNo')));
   box.append(sub('roundsNeeded'), table(['margin', 'roundsChecked'], a.roundsNeeded.map((r) => [{ v: '± ' + pct(r.margin, 1), cls: 'num' }, { v: r.rounds.toLocaleString('en-US'), cls: 'num' }])));
+  if (a.modes) {
+    box.append(sub('byMode'), table(['modeName', 'roundsChecked', 'totalBet', 'totalWin', 'observedRtp'], a.modes.map((m) => [
+      m.mode, { v: m.rounds.toLocaleString('en-US'), cls: 'num' }, { v: fmt(m.totalBet, 2), cls: 'num' }, { v: fmt(m.totalWin, 2), cls: 'num' }, { v: pct(m.rtp, 3), cls: 'num' },
+    ])), el('p', { class: 'muted' }, tr('modesNote')));
+  }
+  const mg = a.merged;
+  if (mg && (mg.freeRows || mg.sameRoundRows)) {
+    const parts = [];
+    if (mg.freeRows) parts.push(mg.freeRows.toLocaleString('en-US') + ' ' + tr('mergedFree'));
+    if (mg.sameRoundRows) parts.push(mg.sameRoundRows.toLocaleString('en-US') + ' ' + tr('mergedSame'));
+    box.append(el('p', { class: 'muted' }, tr('mergedRows') + ': ' + parts.join(' · ')));
+  }
   if (ac.skipped) box.append(el('p', { class: 'muted' }, tr('skippedRows') + ': ' + ac.skipped + ' (' + tr('line') + ' ' + a.skippedSample.map((s) => s.line).join(', ') + ')'));
 }
 
@@ -268,7 +284,7 @@ async function runRng() {
     const input = session.inputs.get('rng');
     if (!input) throw { ar: tr('noFile'), en: t('noFile', 'en') };
     const num = (s) => (String(s).trim() === '' ? null : Number(s));
-    const options = { mode: $('#r-mode').value, min: num($('#r-min').value), max: num($('#r-max').value) };
+    const options = { mode: $('#r-mode').value, min: num($('#r-min').value), max: num($('#r-max').value), twoLevel: $('#r-twoLevel').checked };
     const result = await runTask('rng', { bytes: input.bytes, options }, progress);
     input.kind = result.parsed.kind === 'binary' ? 'binary' : 'text';
     session.results.rng = { inputId: 'rng', options, ...result };
@@ -276,29 +292,51 @@ async function runRng() {
   });
 }
 
+// "12 sequences" / "عدد التسلسلات: 12" (Arabic counted nouns change form with the number).
+const seqText = (n) => (lang === 'en' ? `${n} ${tr('sequences')}` : `${tr('sequences')}: ${n}`);
+const STATUS_CLASS = { pass: 'pass', flag: 'warn', fail: 'fail' };
+function statusCell(status) {
+  if (status === 'na') return { v: tr('notApplicable'), cls: 'na' };
+  return { v: tr(status), cls: STATUS_CLASS[status] || 'fail' };
+}
+// Older saved results have only pass/fail.
+const statusOf = (r) => r.status || (r.pass ? 'pass' : 'fail');
+
 function renderRng() {
   const box = $('#res-rng');
   box.replaceChildren();
   const rg = session.results.rng;
   if (!rg) return;
   const applicable = rg.nist.results.filter((r) => r.applicable);
-  const passed = applicable.filter((r) => r.pass).length;
+  const passed = applicable.filter((r) => statusOf(r) === 'pass').length;
+  const fam = rg.family;
   box.append(cards([
-    { k: 'test', v: `${passed} / ${applicable.length}`, s: 'NIST SP 800-22', cls: passed === applicable.length ? 'good' : 'bad' },
+    fam && { k: 'familyVerdict', v: tr(fam.pass ? 'pass' : 'fail'), s: `Holm · ${fam.pValueCount} P · α = ${fam.alpha}`, cls: fam.pass ? 'good' : 'bad' },
+    { k: 'test', v: `${passed} / ${applicable.length}`, s: 'NIST SP 800-22' + (rg.nist.twoLevel ? ' · ' + seqText(rg.nist.sequences) : ''), cls: passed === applicable.length ? 'good' : fam && fam.pass ? '' : 'bad' },
+    fam && { k: 'familyDetail', v: `${fam.belowAlpha} / ${fam.pValueCount}`, s: tr('familyExpected') + ' ≈ ' + fmt(fam.expectedBelowAlpha, 1) },
     { k: 'bitsCount', v: rg.parsed.nBits.toLocaleString('en-US') },
     { k: 'valuesCount', v: rg.parsed.nValues.toLocaleString('en-US'), s: rg.parsed.kind + ' · ' + rg.parsed.min + '..' + rg.parsed.max },
   ]));
+  if (fam) box.append(el('div', { class: 'verdict ' + (fam.pass ? 'pass' : 'fail') }, tr(fam.pass ? 'familyPass' : 'familyFail')));
   for (const n of rg.parsed.notes) box.append(el('p', { class: 'muted small' }, n));
-  const resCell = (ok) => ({ v: tr(ok ? 'pass' : 'fail'), cls: ok ? 'pass' : 'fail' });
+  const pText = (r) => {
+    if (rg.nist.twoLevel) {
+      return `${seqText(r.sequences)} · ${tr('minProportion')} ${(r.minProportion * 100).toFixed(1)}%`
+        + (r.minUniformityP === null ? '' : ` · min P_T ${fmtP(r.minUniformityP)}`)
+        + (r.subtestCount > 1 ? ` · ${tr('subtestsFailing')}: ${r.subtestsFailing} ${tr('ofWord')} ${r.subtestCount} (${tr('familyExpected')} ≈ ${fmt(r.subtestsExpectedFailing, 1)})` : '');
+    }
+    const ps = r.pValues;
+    return ps.length === 1 ? fmtP(ps[0]) : `min ${fmtP(Math.min(...ps))} · ${ps.filter((p) => p < 0.01).length}/${ps.length} < 0.01`;
+  };
   const rows = rg.nist.results.map((r) => {
     const name = pick(NIST_NAMES[r.id]);
     if (!r.applicable) return [name, { v: r.requirement + (r.reason ? ' · ' + r.reason : ''), cls: 'na' }, { v: tr('notApplicable'), cls: 'na' }];
-    const ps = r.pValues;
-    return [name, { v: ps.length === 1 ? fmtP(ps[0]) : `min ${fmtP(Math.min(...ps))} · ${ps.filter((p) => p < 0.01).length}/${ps.length} < 0.01`, cls: 'mono' }, resCell(r.pass)];
+    return [name, { v: pText(r), cls: 'mono' }, statusCell(statusOf(r))];
   });
-  rows.push([tr('chiSquare'), { v: `χ² ${fmt(rg.chi.chi2, 2)} · df ${rg.chi.df} · P ${fmtP(rg.chi.pValue)}`, cls: 'mono' }, resCell(rg.chi.pass)]);
-  rows.push([tr('serialCorr'), { v: rg.serial.r === null ? '—' : `r ${fmt(rg.serial.r, 6)} · P ${fmtP(rg.serial.pValue)}`, cls: 'mono' }, resCell(rg.serial.pass)]);
+  rows.push([tr('chiSquare'), { v: `χ² ${fmt(rg.chi.chi2, 2)} · df ${rg.chi.df} · P ${fmtP(rg.chi.pValue)}`, cls: 'mono' }, statusCell(rg.chi.status || (rg.chi.pass ? 'pass' : 'fail'))]);
+  rows.push([tr('serialCorr'), { v: rg.serial.r === null ? '—' : `r ${fmt(rg.serial.r, 6)} · P ${fmtP(rg.serial.pValue)}`, cls: 'mono' }, statusCell(rg.serial.status || (rg.serial.pass ? 'pass' : 'fail'))]);
   box.append(table(['test', 'pValue', 'result'], rows), el('p', { class: 'muted small' }, tr('nistPassRule')));
+  if (rg.nist.twoLevel) box.append(el('p', { class: 'muted small' }, tr('twoLevelRule')));
 }
 
 // ---------- provably fair ----------
