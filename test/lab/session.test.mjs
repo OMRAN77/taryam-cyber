@@ -206,3 +206,100 @@ test('distribution tests use the whole-round pmf; a log drawn from the game is n
   const out2 = auditDistribution(log, [base], { alpha: 0.01, replicates: 999, totalReplicates: 999 }, await prngFromSeed('audit'));
   assert.strictEqual(out2.fit.verdict, 'consistent');
 });
+
+// ---------- review fixes ----------
+
+// log P(K > n/2), K ~ Binomial(n, 18/37), summed in log space term by term
+// (log C(n, k) built up as a running sum of logs): an independent reference far below
+// what a double-precision transform can resolve.
+function logAhead(n) {
+  const lp = Math.log(18 / 37), lq = Math.log(19 / 37);
+  let logC = 0;
+  const terms = [];
+  for (let k = 0; k <= n; k++) {
+    if (k > 0) logC += Math.log((n - k + 1) / k);
+    if (2 * k > n) terms.push(logC + k * lp + (n - k) * lq);
+  }
+  const m = Math.max(...terms);
+  return m + Math.log(terms.reduce((a, t) => a + Math.exp(t - m), 0));
+}
+
+test('session: a probability under the transform noise is an upper bound, not a value', () => {
+  const r = RED.result;
+  // 20,000 rounds: about 6.4e-5, far above the noise: a value, within 1e-6 relative.
+  const f20 = sessionFunnel(r.round.pmf, { rounds: 20000, rtp: r.rtp.fraction, sd: r.distribution.sd });
+  const e20 = Math.exp(logAhead(20000));
+  assert.ok(Math.abs(f20.pAhead - e20) <= 1e-6 * e20, `${f20.pAhead} vs ${e20}`);
+  assert.strictEqual(f20.pAheadBelow, null);
+  // 100,000 rounds: about 6.1e-18, under the noise (the raw transform gave ~2.6e-12):
+  // no value; the bound is true and informative (Chernoff, under 1e-15).
+  for (const n of [100000, 200000]) {
+    const f = sessionFunnel(r.round.pmf, { rounds: n, rtp: r.rtp.fraction, sd: r.distribution.sd });
+    const exact = Math.exp(logAhead(n));
+    assert.strictEqual(f.pAhead, null, `n=${n}`);
+    assert.ok(f.pAheadBelow >= exact && f.pAheadBelow < 1e-15, `n=${n}: bound ${f.pAheadBelow} vs ${exact}`);
+    assert.ok(f.precision.error > 0 && f.precision.floor >= 1e-13);
+  }
+});
+
+test('session: ruin under the precision floor is a bound; the bound holds against a direct DP', () => {
+  // Desert Gold, 100 rounds, budget 97 bets: a direct dynamic programme over the
+  // bankroll (all terms positive, so tiny values keep their accuracy) gives about
+  // 1.2e-19 for the round pmf; the true game differs by at most 100 x the mass the pmf
+  // left out (each round can land there at most with that probability).
+  const r = DG.result;
+  const inp = sessionInputs(r.round.pmf);
+  const A = Number(inp.a), B = Number(inp.b), n = 100, start = 97 * B;
+  const top = (n + 1) * B;
+  let cur = new Float64Array(top + 1);
+  cur[start] = 1;
+  let direct = 0;
+  for (let k = 0; k < n; k++) {
+    const nx = new Float64Array(top + 1);
+    for (let y = 0; y <= top; y++) {
+      const p = cur[y];
+      if (!p) continue;
+      for (let i = 0; i < inp.xs.length; i++) {
+        const z = y - B + inp.xs[i] * A;
+        if (z < B) direct += p * inp.ps[i]; else nx[Math.min(z, top)] += p * inp.ps[i];
+      }
+    }
+    cur = nx;
+  }
+  assert.ok(direct < 1e-15, 'direct ' + direct);
+  const f = sessionFunnel(r.round.pmf, { rounds: n, budget: '97', rtp: r.rtp.fraction, sd: r.distribution.sd });
+  assert.strictEqual(f.ruin.method, 'dp');
+  assert.strictEqual(f.ruin.p, null);
+  assert.ok(f.ruin.below >= direct + n * inp.droppedMass, `bound ${f.ruin.below}`);
+  assert.ok(f.ruin.below < 1e-7, 'still informative');
+  // A large ruin chance is a value (budget 10 over 100 rounds: about 0.6).
+  const g = sessionFunnel(r.round.pmf, { rounds: n, budget: '10', rtp: r.rtp.fraction, sd: r.distribution.sd });
+  assert.ok(g.ruin.p > 0.1 && g.ruin.below === null);
+  // Sums of positive terms on an exact pmf keep tiny values: roulette, 50 rounds with a
+  // budget of 50 bets runs out only if all 50 are lost, (19/37)^50 = 3.3e-15 by hand.
+  const red = RED.result;
+  const h = sessionFunnel(red.round.pmf, { rounds: 50, budget: '50', rtp: red.rtp.fraction, sd: red.distribution.sd });
+  const all = new Fraction(19n ** 50n, 37n ** 50n).toNumber();
+  assert.ok(Math.abs(h.ruin.p - all) <= 1e-12 * all, `${h.ruin.p} vs ${all}`);
+});
+
+test('session Monte Carlo: no hit in m sessions is a 95% bound, not 0 ± 0', async () => {
+  // A round paying 0 or half a bet can never finish ahead: by hand P(ahead) = 0, and a
+  // budget of 50 bets cannot run out in 10 rounds (each round loses at most 1 bet).
+  const pmf = { entries: [{ units: 0, p: 0.5 }, { units: 1, p: 0.5 }], unitBets: '1/2', droppedMass: 0 };
+  const f = sessionFunnel(pmf, { rounds: 10, budget: '50', rtp: '1/4', sd: 0.25, rng: await prngFromSeed('none'), forceMonteCarlo: true });
+  const m = f.sessions;
+  // 1 - 0.05^(1/m): the exact one-sided 95% Clopper-Pearson bound for 0 of m.
+  assert.strictEqual(f.pAhead, 0);
+  assert.ok(Math.abs(f.pAheadUpper95 - (1 - Math.pow(0.05, 1 / m))) < 1e-15);
+  assert.ok(Math.abs(f.ruin.upper95 - (1 - Math.pow(0.05, 1 / m))) < 1e-15);
+  // Without simulation the same impossibility is an exact 0, not a bound.
+  const exact = sessionFunnel(pmf, { rounds: 10, rtp: '1/4', sd: 0.25 });
+  assert.deepStrictEqual([exact.method, exact.pAhead, exact.pAheadBelow], ['fft', 0, null]);
+  // A game that never pays, budget 2 bets, 5 rounds: by hand every session runs out
+  // (after the second round less than one bet is left), so the bound is the lower one.
+  const zero = { entries: [{ units: 0, p: 1 }], unitBets: '1', droppedMass: 0 };
+  const g = sessionFunnel(zero, { rounds: 5, budget: '2', rtp: '0', sd: 0, rng: await prngFromSeed('all'), forceMonteCarlo: true });
+  assert.strictEqual(g.ruin.p, 1);
+  assert.ok(Math.abs(g.ruin.lower95 - Math.pow(0.05, 1 / g.sessions)) < 1e-15);
+});

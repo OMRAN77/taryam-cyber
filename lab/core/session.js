@@ -1,19 +1,27 @@
 // The session funnel (player protection): what n paid rounds at a flat bet cost,
-// computed from the exact whole-round win distribution (round-dist.js). It describes
-// a session; it does not suggest bet sizes or when to stop, and no stopping rule
-// changes the expected loss.
+// computed from the whole-round win distribution (round-dist.js). It describes a
+// session; it does not suggest bet sizes or when to stop. Whatever the bet size or
+// stopping rule, the expected loss is (1 - RTP) times the total amount staked.
 //
 //  * Net result after n rounds: the n-fold sum of the round's win by FFT, the
 //    spectrum raised to the power n by repeated squaring, on a grid long enough that
 //    the wrapped mass is below 1e-13 (Chernoff bound); negative rounding noise is
 //    clipped and the result renormalized. From it: percentiles 5/25/50/75/95, the
 //    median, P(finish ahead). Too large a grid: seeded Monte Carlo (alias table,
-//    labeled), with standard errors.
+//    labeled), with standard errors (no simulated hit: a 95% upper bound instead).
 //  * P(the budget runs out within the n rounds): path dependent. "Runs out" = what is
 //    left is less than one bet (another round cannot be paid). Dynamic programming
 //    over the bankroll with absorbing ruin (a bankroll that can no longer reach it in
 //    the rounds left is dropped as safe) for moderate sizes, else the same seeded
 //    Monte Carlo.
+//  * Precision. A probability from the transform or the dynamic programming carries an
+//    error estimate: twice the rounding noise clipped from the transforms (the noise
+//    is about symmetric, so this covers what stayed in the positive cells), the
+//    wrapped-mass bound, and n times the round pmf's mass left out under its own noise
+//    floor (the n rounds differ from the true ones with at most that probability).
+//    Below PRECISION_FACTOR times that error (and at least 1e-13) a probability is not
+//    shown as a value but as an upper bound: the value plus the error, or for
+//    P(finish ahead) a Chernoff bound when that is smaller.
 //  * Expected loss n * bet * (1 - RTP), exact; N* = (z sigma / edge)^2 with
 //    z = 1.645: by the normal approximation (labeled), after about N* rounds the
 //    chance of being ahead is below 5%.
@@ -31,6 +39,8 @@ export const MAX_SESSION_ROUNDS = 1000000;
 const WRAP_TARGET = 1e-13;
 const RUIN_WORK_LIMIT = 4e8;
 const MC_DRAWS = 4e7;
+export const FLOOR_MIN = 1e-13;
+export const PRECISION_FACTOR = 100;
 
 const fail = (en, ar) => Object.assign(new Error(en), { ar, en });
 const SAFE = 9007199254740991n;
@@ -93,28 +103,53 @@ function powC(zr, zi, n) {
   PR = rr; PI = ri;
 }
 
-// Grid length L with P(sum of n rounds >= L) <= target (Chernoff), at most n * max + 1.
-function sumGrid(xs, ps, n, target = WRAP_TARGET) {
+// log M(theta) of one round on a geometric grid of theta (per lattice step).
+function mgfTable(xs, ps) {
   const K = xs[xs.length - 1];
-  const exact = n * K + 1;
-  if (K === 0) return { L: 1, bound: 0 };
+  if (K === 0) return [];
   const lp = Array.from(ps, Math.log);
   const table = [];
   for (let j = 0; j <= 200; j++) {
     const th = (40 / K) * 2 ** (-j / 4);
     table.push({ th, logM: lse(Array.from(xs, (x, i) => lp[i] + th * x)) });
   }
+  return table;
+}
+// Chernoff: P(sum of n rounds >= s steps) <= min over theta of M(theta)^n e^{-theta s}.
+function chernoffAtLeast(table, n, s) {
+  let b = 1;
+  for (const { th, logM } of table) b = Math.min(b, Math.exp(n * logM - th * s));
+  return b;
+}
+
+// Grid length L with P(sum of n rounds >= L) <= target (Chernoff), at most n * max + 1.
+function sumGrid(xs, ps, n, target = WRAP_TARGET) {
+  const K = xs[xs.length - 1];
+  const exact = n * K + 1;
+  if (K === 0) return { L: 1, bound: 0, table: [] };
+  const table = mgfTable(xs, ps);
   // P(S >= L) <= M(theta)^n e^{-theta L}: the smallest L that reaches the target.
   let need = Infinity;
   for (const { th, logM } of table) need = Math.min(need, (n * logM - Math.log(target)) / th);
   const L = Math.min(exact, Math.ceil(need) + 1);
-  let bound = 0; // the bound actually reached at L (0: nothing can wrap)
-  if (L < exact) {
-    bound = Infinity;
-    for (const { th, logM } of table) bound = Math.min(bound, Math.exp(n * logM - th * L));
-  }
-  return { L, bound };
+  // the bound actually reached at L (0: nothing can wrap)
+  const bound = L < exact ? chernoffAtLeast(table, n, L) : 0;
+  return { L, bound, table };
 }
+
+// A probability with the precision its computation allows: the value when it is at
+// least PRECISION_FACTOR times the error estimate (and minFloor: FLOOR_MIN for a
+// transform, whose rounding noise is never 0; 0 for sums of positive terms only), else
+// value null and an upper bound `below` (the value plus the error, or `bound` when
+// smaller).
+export function withPrecision(value, error, bound = Infinity, minFloor = FLOOR_MIN) {
+  const floor = Math.max(minFloor, PRECISION_FACTOR * error);
+  if (value >= floor) return { value, below: null, error, floor };
+  return { value: null, below: Math.min(1, Math.max(0, value) + error, bound), error, floor };
+}
+// No hit in m simulated sessions: the exact one-sided 95% upper bound 1 - 0.05^(1/m)
+// (about 3 / m); all m: the matching lower bound.
+const upper95 = (m) => -Math.expm1(Math.log(0.05) / m);
 
 // The spectrum of one round on a grid of N points, for powering.
 function roundSpectrum(xs, ps, N) {
@@ -148,7 +183,7 @@ export function sumDistribution(xs, ps, n, { limit = SESSION_GRID_LIMIT } = {}) 
   const N = nextPowerOfTwo(Math.max(2, g.L));
   if (N > limit) return null;
   const spec = roundSpectrum(xs, ps, N);
-  return { ...powerSum(spec, n), N, wrapBound: g.bound, spec };
+  return { ...powerSum(spec, n), N, wrapBound: g.bound, spec, table: g.table };
 }
 
 // Round counts at which the funnel is drawn: n/8, 2n/8, ..., n (distinct, >= 1).
@@ -161,8 +196,9 @@ export function funnelPoints(n) {
 // work would pass `maxWork`.
 export function ruinProbability(xs, ps, a, b, n, start, { maxWork = RUIN_WORK_LIMIT } = {}) {
   const A = Number(a), B = Number(b);
-  if (start < B) return { p: 1, method: 'dp' };
-  if (start >= (n + 1) * B) return { p: 0, method: 'dp' };
+  // Certain either way, whatever the rounds pay.
+  if (start < B) return { p: 1, method: 'dp', certain: true, noise: 0 };
+  if (start >= (n + 1) * B) return { p: 0, method: 'dp', certain: true, noise: 0 };
   const top = (n + 1) * B; // at or above: can never run out in the rounds left
   // Win sizes in bankroll steps; wins at or above `top` always end safe.
   const wins = [];
@@ -178,7 +214,7 @@ export function ruinProbability(xs, ps, a, b, n, start, { maxWork = RUIN_WORK_LI
   if (Math.min(fftWork, directWork) > maxWork) return null;
   let dist = new Float64Array(top); // dist[y] for bankroll y in [B, H)
   dist[start] = 1;
-  let ruin = 0, H = top;
+  let ruin = 0, H = top, clipped = 0;
   let fft = null, wr = null, wi = null;
   if (fftWork < directWork) {
     fft = new Fft(size);
@@ -199,6 +235,7 @@ export function ruinProbability(xs, ps, a, b, n, start, { maxWork = RUIN_WORK_LI
       for (let k = 0; k < size; k++) { const t = re[k] * wr[k] - im[k] * wi[k]; im[k] = re[k] * wi[k] + im[k] * wr[k]; re[k] = t; }
       fft.inverse(re, im);
       c = re; // c[j] = mass at bankroll j - B after paying the bet
+      for (let j = 0; j < size; j++) if (c[j] < 0) clipped -= c[j]; // rounding noise
       for (let z = 0; z < B; z++) ruin += Math.max(0, c[z + B]);
       for (let z = B; z < Hafter; z++) next[z] = Math.max(0, c[z + B]);
     } else {
@@ -214,7 +251,9 @@ export function ruinProbability(xs, ps, a, b, n, start, { maxWork = RUIN_WORK_LI
     }
     dist = next; H = Hafter;
   }
-  return { p: Math.min(1, Math.max(0, ruin)), method: 'dp', bigWinShare: big };
+  // noise: twice the clipped rounding noise of the transform steps (0 for the direct
+  // sums, whose terms are all positive).
+  return { p: Math.min(1, Math.max(0, ruin)), method: 'dp', bigWinShare: big, transform: Boolean(fft), noise: 2 * clipped };
 }
 
 // Seeded Monte Carlo of `sessions` sessions of n rounds; S in bankroll steps, also
@@ -239,6 +278,14 @@ function monteCarlo(inp, n, start, rng, { sessions, points = [n], onProgress = (
 }
 
 const se = (p, m) => Math.sqrt(Math.max(p * (1 - p), 0) / m);
+// A Monte Carlo count of k in m: with none (or all) the standard error is 0, which
+// would read as a certainty; the exact 95% one-sided bound is given instead.
+function mcBounds(prefix, k, m) {
+  const key = (s) => (prefix ? prefix + s[0].toUpperCase() + s.slice(1) : s);
+  if (k === 0) return { [key('upper95')]: upper95(m) };
+  if (k === m) return { [key('lower95')]: 1 - upper95(m) };
+  return {};
+}
 const GENERATOR = 'xoshiro128** 1.1 (seed via SHA-256), Vose alias table over the whole-round pmf';
 
 // opts: { rounds, budget (bets, number or decimal string; null = no ruin figure),
@@ -294,6 +341,9 @@ export function sessionFunnel(pmf, opts) {
     }
     return pct;
   };
+  // n rounds of the round pmf differ from n true rounds with probability at most
+  // n * (mass it left out under its noise floor).
+  const truncation = n * inp.droppedMass;
   if (sums) {
     const q = sums.q;
     let ahead = 0, even = 0;
@@ -307,8 +357,16 @@ export function sessionFunnel(pmf, opts) {
       onProgress(0.6 * (i + 1) / points.length);
       return { rounds: m, mean: meanAt(m), percentiles: m === n ? pct : quantilesOf(powerSum(sums.spec, m).q, m) };
     });
+    // Finishing ahead: more than n * B / A lattice steps won.
+    const error = 2 * sums.clipped + sums.wrapBound + truncation;
+    const aheadSteps = nb / A + 1n;
+    const chernoff = aheadSteps <= BigInt(Number.MAX_SAFE_INTEGER) ? chernoffAtLeast(sums.table, n, Number(aheadSteps)) + truncation : Infinity;
+    // Out of reach (n rounds at the largest win of an untruncated pmf): exactly 0.
+    const impossible = truncation === 0 && aheadSteps > BigInt(n) * BigInt(inp.xs[inp.xs.length - 1]);
+    const ah = impossible ? { value: 0, below: null, floor: 0 } : withPrecision(ahead, error, chernoff);
     Object.assign(out, {
-      method: 'fft', pAhead: ahead, pEven: even, percentiles: pct, median: pct.find((x) => x.q === 0.5).net, funnel,
+      method: 'fft', pAhead: ah.value, pAheadBelow: ah.below, pEven: even, percentiles: pct, median: pct.find((x) => x.q === 0.5).net, funnel,
+      precision: { error, floor: ah.floor },
       grid: { size: sums.N, wrapBound: sums.wrapBound, clipped: sums.clipped, renormalizedFrom: sums.renormalizedFrom },
     });
   } else {
@@ -326,21 +384,25 @@ export function sessionFunnel(pmf, opts) {
     const pct = funnel[funnel.length - 1].percentiles;
     Object.assign(out, {
       method: 'mc', sessions: m, generator: GENERATOR,
-      pAhead: ahead / m, pAheadSe: se(ahead / m, m), pEven: even / m, percentiles: pct, median: pct.find((x) => x.q === 0.5).net, funnel,
+      pAhead: ahead / m, pAheadSe: se(ahead / m, m), ...mcBounds('pAhead', ahead, m), pEven: even / m, percentiles: pct, median: pct.find((x) => x.q === 0.5).net, funnel,
     });
   }
   // Ruin.
   if (start !== null) {
     const dp = opts.forceMonteCarlo ? null : ruinProbability(inp.xs, inp.ps, A, B, n, start);
-    if (dp) out.ruin = { p: dp.p, method: 'dp', startSteps: start };
-    else {
+    if (dp && dp.certain) out.ruin = { p: dp.p, below: null, method: 'dp', startSteps: start, transform: false, error: 0 };
+    else if (dp) {
+      const r = withPrecision(dp.p, dp.noise + truncation, Infinity, dp.transform ? FLOOR_MIN : 0);
+      out.ruin = { p: r.value, below: r.below, method: 'dp', startSteps: start, transform: dp.transform, error: r.error, floor: r.floor };
+    } else {
       if (!mc) {
         if (!opts.rng) throw fail('a seeded generator is needed for Monte Carlo', 'يلزم مولّد ببذرة لمونت كارلو');
         mc = monteCarlo(inp, n, start, opts.rng, { onProgress: (v) => onProgress(0.6 + 0.4 * v) });
         out.sessions = mc.sessions;
         out.generator = GENERATOR;
       }
-      out.ruin = { p: mc.ruined / mc.sessions, se: se(mc.ruined / mc.sessions, mc.sessions), method: 'mc', startSteps: start, sessions: mc.sessions };
+      const m = mc.sessions, k = mc.ruined;
+      out.ruin = { p: k / m, se: se(k / m, m), ...mcBounds('', k, m), method: 'mc', startSteps: start, sessions: m };
     }
   } else out.ruin = null;
   onProgress(1);
