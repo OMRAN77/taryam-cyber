@@ -6,6 +6,7 @@ import { modelFromForm, formFromModel, applyCsv, parseModelJson, normalizeModel,
 import { sha256Hex } from './core/fair.js';
 import { buildReport } from './report.js';
 import * as samples from './samples.js';
+import { lutFileKind } from './core/lut.js';
 
 const $ = (s) => document.querySelector(s);
 let lang = getLang();
@@ -437,8 +438,123 @@ function renderMc() {
   box.append(again);
 }
 
+// ---------- outcome tables (LUT, P0-7) ----------
+// The selected files: [{ name, bytes, mime }]; book files (.jsonl.zst) keep bytes null,
+// are not read and are not attached to the report.
+let lutSelection = [];
+let lutInputIds = [];
+async function setLutFiles(files, tag = '') {
+  for (const id of lutInputIds) session.inputs.delete(id);
+  lutInputIds = [];
+  let total = 0;
+  for (const f of files) {
+    if (!f.bytes) continue;
+    const id = 'lut:' + f.name;
+    await registerInput(id, f.name, lutFileKind(f.name) === 'index' ? 'json' : 'csv', f.bytes, f.mime);
+    lutInputIds.push(id);
+    total += f.bytes.length;
+  }
+  lutSelection = files;
+  delete session.results.lut; // results always match the files listed
+  fileNames.lut = (tag ? tag + ': ' : '') + files.map((f) => f.name + (f.bytes ? '' : ' (' + tr('lutIgnored') + ')')).join(' · ') + ' · ' + total.toLocaleString('en-US') + ' ' + tr('bytes');
+  $('#name-lut').textContent = fileNames.lut;
+  renderLut();
+}
+
+async function runLut() {
+  await withTask('lut', async (progress) => {
+    if (!lutSelection.length) throw { ar: t('noFile', 'ar'), en: t('noFile', 'en') };
+    const result = await runTask('lut', { files: lutSelection.map((f) => ({ name: f.name, bytes: f.bytes })) }, progress);
+    session.results.lut = { inputIds: lutInputIds.slice(), result };
+    renderLut();
+  });
+}
+
+const lutProb = (v) => (v === null || v === undefined ? '—' : v === 0 ? '0%' : v < 1e-5 ? (v * 100).toExponential(2) + '%' : pct(v, 4));
+const lutOneIn = (n) => (n === null || n === undefined ? '—' : tr('lutOneIn') + ' ' + fmt(n, n < 100 ? 2 : 0));
+const lutBig = (s) => (/^\d+$/.test(String(s)) ? BigInt(s).toLocaleString('en-US') : String(s));
+const iso = (s) => '\u2066' + s + '\u2069'; // keeps "50×" in that order inside Arabic text
+function lutValue(unit, v) {
+  if (typeof v === 'string') return lutBig(v);
+  if (unit === 'rtp') return pct(v, 4);
+  if (unit === 'p') return lutProb(v);
+  if (unit === 'x' || unit === 'xc') return fmt(v, 4) + '×';
+  return fmt(v, 4);
+}
+
+function renderLut() {
+  const box = $('#res-lut');
+  box.replaceChildren();
+  const lu = session.results.lut;
+  if (!lu) return;
+  const x = lu.result;
+  box.append(sub('lutModes'), table(['lutMode', 'lutCostShort', 'rtp', 'lutHitShort', 'lutSdShort', 'lutMaxShort', 'probability'], x.modes.map((m) => [
+    m.name, { v: m.cost.text + '×', cls: 'num' }, { v: m.rtp.percent + '%', cls: 'num' }, { v: pct(m.hitRate.value, 4), cls: 'num' },
+    { v: fmt(m.sd, 4), cls: 'num' }, { v: fmt(m.maxWin.multiplier.value, 2) + '×', cls: 'num' }, lutOneIn(m.maxWin.oneIn),
+  ])), el('p', { class: 'muted small' }, tr('lutCostNote')));
+
+  for (const m of x.modes) {
+    const fraction = m.rtp.fraction.length > 60 ? m.rtp.fraction.slice(0, 57) + '…' : m.rtp.fraction;
+    box.append(el('h3', { class: 'lut-mode' }, `${tr('lutMode')}: ${m.name} · ${tr('lutCostShort')}: ${iso(m.cost.text + '×')}`));
+    box.append(cards([
+      { k: 'rtp', v: m.rtp.percent + '%', s: tr('exactFraction') + ': ' + fraction, title: m.rtp.fraction, cls: 'accent' },
+      { k: 'lutHit', v: pct(m.hitRate.value, 4), s: lutOneIn(m.hitRate.oneIn) },
+      { k: 'lutLdw', v: pct(m.ldw.value, 4), s: m.ldwShareOfWins ? tr('lutLdwShare') + ': ' + pct(m.ldwShareOfWins.value, 2) : null },
+      { k: 'lutBelowCost', v: pct(m.belowCost.value, 4) },
+      { k: 'lutSd', v: fmt(m.sd, 4), s: tr('lutVariance') + ': ' + fmt(m.variance.value, 4) },
+      { k: 'lutMaxWin', v: fmt(m.maxWin.multiplier.value, 2) + '×', s: lutOneIn(m.maxWin.oneIn) + ' · ' + tr('lutInCost') + ': ' + iso(fmt(m.maxWin.costMultiple.value, 2) + '×') },
+      { k: 'lutCvar', v: fmt(m.cvar999.absolute.value, 2) + '×', s: tr('lutInCost') + ': ' + iso(fmt(m.cvar999.relative.value, 2) + '×') + ' · ' + tr('lutQuantile') + ': ' + iso(fmt(m.cvar999.quantile.value, 2) + '×') },
+    ]));
+    box.append(sub('lutTail'), table(['lutCheck', 'lutContribution', 'lutShare'], [
+      [tr('lutRtpFrom40'), { v: pct(m.tail.rtpFrom40xCost.value, 4), cls: 'num' }, { v: m.tail.shareFrom40xCost ? pct(m.tail.shareFrom40xCost.value, 2) : '—', cls: 'num' }],
+      [tr('lutRtpFrom10k'), { v: pct(m.tail.rtpFrom10kx.value, 4), cls: 'num' }, { v: m.tail.shareFrom10kx ? pct(m.tail.shareFrom10kx.value, 2) : '—', cls: 'num' }],
+    ]));
+    box.append(sub('lutBigWins'), table(['lutWinAtLeast', 'probability', ''], m.bigWins.map((b) => [
+      { v: b.threshold.toLocaleString('en-US') + '×', cls: 'num' }, { v: lutProb(b.probability.value), cls: 'num' }, lutOneIn(b.oneIn),
+    ])));
+    const maxP = Math.max(...m.buckets.map((b) => b.probability.value)) || 1;
+    box.append(sub('lutBuckets'), table(['range', 'probability', 'lutContribution', ''], m.buckets.map((b) => [
+      { v: b.to === 0 ? '0' : b.to === null ? '≥ ' + b.from : b.from + ' – ' + b.to, cls: 'num' }, { v: lutProb(b.probability.value), cls: 'num' },
+      { v: pct(b.rtp.value, 4), cls: 'num' }, { v: bar(b.probability.value / maxP) },
+    ])), el('p', { class: 'muted small' }, tr('lutCvarNote')));
+    const tp = m.transparency;
+    box.append(sub('lutTransparency'), cards([
+      { k: 'lutRows', v: tp.rows.toLocaleString('en-US') },
+      { k: 'lutZeroRows', v: tp.zeroWeightRows.toLocaleString('en-US') },
+      { k: 'lutDistinct', v: tp.distinctPayouts.toLocaleString('en-US') },
+      { k: 'lutEss', v: fmt(tp.effectiveSize.value, 1), s: tr('lutOfRows') + ': ' + pct(tp.effectiveShare, 1) },
+      { k: 'lutMaxRow', v: lutProb(tp.maxRowProbability.value), s: 'id ' + tp.maxRowProbability.id + ' · ' + lutOneIn(tp.maxRowProbability.oneIn) },
+      { k: 'lutKl', v: fmt(tp.klBits, 4), s: tr('lutKlMax') + ': ' + fmt(tp.klMaxBits, 2) },
+    ]), el('div', {}, el('span', { class: 'muted small' }, tr('lutTotalWeight')), el('div', { class: 'hash' }, lutBig(m.totalWeight))));
+  }
+  box.append(el('p', { class: 'muted small' }, tr('lutTransparencyNote')));
+
+  const pr = x.profile;
+  box.append(el('h3', { class: 'lut-mode' }, tr('lutStake')), el('p', { class: 'muted small' }, tr('lutStakeSource')));
+  box.append(el('div', { class: 'verdict ' + (pr.submissionIssues ? 'fail' : 'pass'), id: 'lut-submission' },
+    pr.submissionIssues ? tr('lutSubmissionBad') + ': ' + pr.submissionIssues : tr('lutSubmissionOk')));
+  box.append(cards([
+    { k: 'lutRiskPassing', v: `${pr.riskPassing} / ${pr.riskCategories}`, cls: pr.riskPassing === pr.riskCategories ? 'good' : 'bad' },
+    { k: 'lutMaxBet', v: '$' + fmt(pr.maxBaseBet.value, 2), s: tr('lutTemplate') + ': ' + pr.maxBaseBet.template },
+  ]));
+  box.append(el('p', { class: 'muted small' }, tr('lutStakeRiskNote')));
+  const modeName = (mo) => (mo === null ? tr('lutAllModes') : mo);
+  box.append(sub('lutSubmission'), table(['lutCheck', 'lutMode', 'lutValue', 'lutLimit', 'result'], pr.submission.map((c) => [
+    tr('lutChk_' + c.id), modeName(c.mode),
+    { v: c.id === 'rtp' ? pct(c.value, 4) + ' → ' + pct(c.rounded, 2) : lutValue(c.unit, c.value), cls: 'num' },
+    { v: Array.isArray(c.limit) ? c.limit.map((v) => pct(v, 1)).join(' – ') : lutValue(c.unit, c.limit), cls: 'num' },
+    statusCell(c.ok ? 'pass' : 'fail'),
+  ])));
+  box.append(sub('lutRisk'), table(['lutCheck', 'lutMode', 'lutValue', 'lutLimit', 'result'], pr.risk.map((c) => [
+    tr('lutCat_' + c.category) + ': ' + tr('lutMea_' + c.measure), c.mode,
+    { v: lutValue(c.unit, c.value), cls: 'num' }, { v: lutValue(c.unit, c.limit), cls: 'num' }, statusCell(c.ok ? 'pass' : 'fail'),
+  ])));
+  box.append(el('p', { class: 'muted small' }, tr('lutStakeNotCert')), el('p', { class: 'muted small' }, tr('lutStakeExactNote')));
+  if (x.ignored.length) box.append(el('p', { class: 'muted small' }, tr('lutIgnored') + ': ' + x.ignored.join(' · ') + '. ' + tr('lutBooksNote')));
+}
+
 // ---------- report ----------
-const SECTION_KEYS = { theoretical: 'tabTheory', actual: 'tabActual', rng: 'tabRng', fair: 'tabFair', montecarlo: 'tabMc' };
+const SECTION_KEYS = { theoretical: 'tabTheory', actual: 'tabActual', rng: 'tabRng', fair: 'tabFair', montecarlo: 'tabMc', lut: 'tabLut' };
 function renderReportSections() {
   const names = Object.keys(SECTION_KEYS).filter((k) => session.results[k]).map((k) => tr(SECTION_KEYS[k]));
   $('#rep-sections').textContent = names.length ? names.join(' · ') : tr('sectionsNone');
@@ -447,7 +563,7 @@ function renderReportSections() {
 
 async function runReport() {
   await withTask('report', async (progress) => {
-    const used = new Set(Object.values(session.results).map((r) => r.inputId).filter(Boolean));
+    const used = new Set(Object.values(session.results).flatMap((r) => [r.inputId, ...(r.inputIds || [])]).filter(Boolean));
     if (session.results.montecarlo) used.add('model');
     const report = await buildReport({
       meta: { title: $('#rep-title').value.trim(), auditor: $('#rep-auditor').value.trim(), notes: $('#rep-notes').value.trim() },
@@ -475,7 +591,7 @@ function renderReport() {
 }
 
 function renderAll() {
-  renderTheory(); renderActual(); renderRng(); renderFair(); renderMc(); renderMcModel(); renderReportSections(); renderReport();
+  renderTheory(); renderActual(); renderRng(); renderFair(); renderMc(); renderMcModel(); renderLut(); renderReportSections(); renderReport();
   syncFairFields();
 }
 
@@ -543,6 +659,24 @@ function init() {
 
   $('#run-mc').addEventListener('click', () => runMc());
   $('#stop-mc').addEventListener('click', () => { stopWorker(); $('#stop-mc').hidden = true; });
+
+  $('#lutFiles').addEventListener('change', async (e) => {
+    showError('lut', null);
+    try {
+      const files = [];
+      for (const f of e.target.files) {
+        const books = lutFileKind(f.name) === 'books';
+        files.push({ name: f.name, bytes: books ? null : new Uint8Array(await f.arrayBuffer()), mime: f.type || (f.name.endsWith('.json') ? 'application/json' : 'text/csv') });
+      }
+      await setLutFiles(files);
+    } catch (err) { showError('lut', err); }
+    e.target.value = '';
+  });
+  $('#sample-lut').addEventListener('click', () => withTask('lut', async () => {
+    const files = await runTask('sampleLut', {});
+    await setLutFiles(files.map((f) => ({ ...f, mime: f.name.endsWith('.json') ? 'application/json' : 'text/csv' })), tr('lutSampleTag'));
+  }));
+  $('#run-lut').addEventListener('click', runLut);
 
   $('#run-report').addEventListener('click', runReport);
 

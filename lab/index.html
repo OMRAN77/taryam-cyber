@@ -28,6 +28,7 @@
     <button role="tab" id="tab-rng" aria-controls="panel-rng" aria-selected="false" data-t="tabRng"></button>
     <button role="tab" id="tab-fair" aria-controls="panel-fair" aria-selected="false" data-t="tabFair"></button>
     <button role="tab" id="tab-mc" aria-controls="panel-mc" aria-selected="false" data-t="tabMc"></button>
+    <button role="tab" id="tab-lut" aria-controls="panel-lut" aria-selected="false" data-t="tabLut"></button>
     <button role="tab" id="tab-report" aria-controls="panel-report" aria-selected="false" data-t="tabReport"></button>
   </nav>
 
@@ -162,6 +163,20 @@
       </div>
       <div class="error" id="err-mc" hidden></div>
       <div class="results" id="res-mc"></div>
+    </section>
+
+    <section class="panel" id="panel-lut" role="tabpanel" hidden>
+      <p class="muted" data-t="lutIntro"></p>
+      <div class="toolbar">
+        <label class="file-btn"><input type="file" id="lutFiles" accept=".json,.csv,application/json,text/csv" multiple><span data-t="lutUpload"></span></label>
+        <button type="button" id="sample-lut" data-t="lutSample"></button>
+        <span class="muted file-name" id="name-lut" data-t="noFile"></span>
+      </div>
+      <p class="lut-pf" id="lut-pf" data-t="lutNotPf"></p>
+      <p class="muted small" data-t="lutBooksNote"></p>
+      <div class="actions"><button type="button" class="primary" id="run-lut" data-t="run"></button><progress id="prog-lut" max="1" value="0" hidden></progress></div>
+      <div class="error" id="err-lut" hidden></div>
+      <div class="results" id="res-lut"></div>
     </section>
 
     <section class="panel" id="panel-report" role="tabpanel" hidden>

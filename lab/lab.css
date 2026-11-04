@@ -186,3 +186,9 @@ td.na { color: var(--muted); }
 .table-view summary { cursor: pointer; color: var(--primary-2); font-size: 13.5px; margin: 10px 0 8px; }
 .help ul { margin: 0; padding-inline-start: 20px; }
 .help li + li { margin-top: 6px; }
+
+/* Outcome tables (LUT, P0-7) */
+.lut-pf { padding: 10px 14px; border-radius: 12px; background: rgba(251, 191, 36, 0.08); border: 1px solid rgba(251, 191, 36, 0.35); color: #fde68a; font-size: 13.5px; }
+h3.lut-mode { font-size: 16.5px; color: var(--text); margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+/* Card values mixing a number and a word ("1 in 333,161") take their direction from the word. */
+#res-lut .card .v, #res-lut .card .s { unicode-bidi: plaintext; }
