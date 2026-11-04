@@ -10,8 +10,12 @@
 //   "wild": { "symbol": "W", "pays": [...] }, substitutes for paying symbols
 //   "scatter": { "symbol": "S", "pays": [...] (x total bet, by count anywhere),
 //                "freeSpins": { "trigger": 3, "spins": 10, "multiplier": 2,
-//                               "retrigger": true, "reels": [[...], ...] } }
+//                               "retrigger": true, "reels": [[...], ...],
+//                               "maxSpins": 50, "maxRetriggers": 3 } }
 // }
+// Free-spin caps (optional, with retrigger only): "maxSpins" caps the spins one
+// feature awards in all (start included; a retrigger past it adds only what is left)
+// and "maxRetriggers" the retriggers that add spins (later ones still pay).
 //
 // Weighted stops and reel sets (optional):
 //   "weights": [[3, 1, ...], ...]             one positive integer per stop, parallel to
@@ -183,6 +187,32 @@ function reelSource(raw, what, setsWhat) {
   return out;
 }
 
+// ---- Free-spin caps (whole-round distribution, P0-8) ----
+export const MAX_FREE_SPINS_CAP = 10000;
+export const MAX_RETRIGGERS_CAP = 1000;
+const capValue = (v) => (v === undefined || v === null || v === '' ? null : Number(v));
+// { maxSpins?, maxRetriggers? }: only the caps that are set, so a model without them
+// normalizes exactly as before.
+function freeSpinCaps(f, spins) {
+  const maxSpins = capValue(f.maxSpins), maxRetriggers = capValue(f.maxRetriggers);
+  if (maxSpins === null && maxRetriggers === null) return {};
+  if (!f.retrigger) throw err('حدود اللفات المجانية (maxSpins وmaxRetriggers) لا تعمل إلا مع إعادة التفعيل', 'Free-spin caps (maxSpins, maxRetriggers) apply only with retrigger');
+  const out = {};
+  if (maxSpins !== null) {
+    if (!Number.isInteger(maxSpins) || maxSpins < spins || maxSpins > MAX_FREE_SPINS_CAP) {
+      throw err(`الحد الأقصى للفات المجانية (maxSpins) يجب أن يكون عددًا صحيحًا من ${spins} إلى ${MAX_FREE_SPINS_CAP}`, `freeSpins.maxSpins must be a whole number from ${spins} to ${MAX_FREE_SPINS_CAP}`);
+    }
+    out.maxSpins = maxSpins;
+  }
+  if (maxRetriggers !== null) {
+    if (!Number.isInteger(maxRetriggers) || maxRetriggers < 0 || maxRetriggers > MAX_RETRIGGERS_CAP) {
+      throw err(`الحد الأقصى لإعادات التفعيل (maxRetriggers) يجب أن يكون عددًا صحيحًا من 0 إلى ${MAX_RETRIGGERS_CAP}`, `freeSpins.maxRetriggers must be a whole number from 0 to ${MAX_RETRIGGERS_CAP}`);
+    }
+    out.maxRetriggers = maxRetriggers;
+  }
+  return out;
+}
+
 // True when a raw model has a "weights" or "reelSets" key anywhere, which the form
 // cannot show, so the page edits it as JSON. This is about the keys, not the odds:
 // normalizeModel(raw).weighted is false when they change nothing (one reel set, or
@@ -242,7 +272,7 @@ export function normalizeModel(raw) {
       if (fsSets[0].strips.length !== nReels) throw err('بكرات الفري سبين يجب أن تكون بنفس عدد البكرات', 'freeSpins.reels must have the same number of reels');
       fsSets.forEach((set) => set.strips.forEach((s) => s.forEach(idOf)));
     }
-    freeSpins = { trigger, spins, multiplier: mult, retrigger: Boolean(f.retrigger), sameReels: !fsSets };
+    freeSpins = { trigger, spins, multiplier: mult, retrigger: Boolean(f.retrigger), sameReels: !fsSets, ...freeSpinCaps(f, spins) };
   }
 
   const wild = wildName ? idOf(wildName) : -1;
@@ -417,6 +447,9 @@ export function modelFromForm(f) {
     delete paytable[s];
     if (f.fsEnabled) {
       raw.scatter.freeSpins = { trigger: Number(f.fsTrigger), spins: Number(f.fsSpins), multiplier: String(f.fsMultiplier || 1), retrigger: Boolean(f.fsRetrigger) };
+      // Caps: written only when filled in (and only with retrigger), so other models stay as they were.
+      if (f.fsRetrigger && String(f.fsMaxSpins ?? '').trim()) raw.scatter.freeSpins.maxSpins = Number(f.fsMaxSpins);
+      if (f.fsRetrigger && String(f.fsMaxRetriggers ?? '').trim()) raw.scatter.freeSpins.maxRetriggers = Number(f.fsMaxRetriggers);
       const fsReels = String(f.fsReels || '').split(/\r?\n/).map(splitList).filter((r) => r.length);
       if (fsReels.length) raw.scatter.freeSpins.reels = fsReels;
     }
@@ -450,6 +483,8 @@ export function formFromModel(raw) {
     fsMultiplier: fs ? String(fs.multiplier ?? 1) : '1',
     fsRetrigger: fs ? Boolean(fs.retrigger) : false,
     fsReels: fs && fs.reels ? fs.reels.map((r) => r.join(' ')).join('\n') : '',
+    fsMaxSpins: fs && fs.maxSpins !== undefined && fs.maxSpins !== null ? String(fs.maxSpins) : '',
+    fsMaxRetriggers: fs && fs.maxRetriggers !== undefined && fs.maxRetriggers !== null ? String(fs.maxRetriggers) : '',
   };
 }
 

@@ -112,6 +112,9 @@ export function makeRoundPlayer(model) {
   const fsSrc = !fs ? null : fs.reelSets === baseSets || (!fs.reelSets && fs.reels === model.reels) ? baseSrc
     : prepareSets(fs.reelSets || [{ weight: 1n, reels: fs.reels, weights: null }]);
   const mult = fs ? fs.multiplier.toNumber() : 1;
+  const maxSpins = fs && fs.maxSpins != null ? fs.maxSpins : Infinity;
+  const maxRetriggers = fs && fs.maxRetriggers != null ? fs.maxRetriggers : Infinity;
+  const capped = maxSpins !== Infinity || maxRetriggers !== Infinity;
   const stats = { triggered: false, triggers: 0, fsPlayed: 0, capped: 0 };
   const play = (rng) => {
     const base = spin(rng, baseSrc);
@@ -121,11 +124,20 @@ export function makeRoundPlayer(model) {
       stats.triggered = true;
       stats.triggers++;
       let pending = fs.spins, played = 0, fsWin = 0;
+      // Free-spin caps (maxSpins: spins awarded in all; maxRetriggers: retriggers
+      // that add spins). Models without caps take the same steps as before.
+      let awarded = fs.spins, retriggers = 0;
       while (pending > 0) {
         pending--; played++;
         const r = spin(rng, fsSrc);
         fsWin += r.win;
-        if (fs.retrigger && r.scatters >= fs.trigger) pending += fs.spins;
+        if (fs.retrigger && r.scatters >= fs.trigger) {
+          if (!capped) pending += fs.spins;
+          else if (retriggers < maxRetriggers && awarded < maxSpins) {
+            const add = Math.min(fs.spins, maxSpins - awarded);
+            pending += add; awarded += add; retriggers++;
+          }
+        }
         if (played >= FS_CAP) { stats.capped++; break; }
       }
       stats.fsPlayed += played;

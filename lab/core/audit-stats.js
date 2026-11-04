@@ -254,12 +254,15 @@ export function makePmf({ label = 'pmf', scope = 'round', source = 'csv', entrie
   };
 }
 
-// pmf exported by slot-exact.js (distribution.pmf): exact counts over all combinations.
+// pmf exported by slot-exact.js (distribution.pmf, scope 'baseSpin' with free spins):
+// exact counts over all combinations; or by round-dist.js (round.pmf, scope 'round':
+// the whole round, free spins included), whose entries carry a probability p (from
+// the transform for rounds with the feature, under its noise floor left out).
 export function pmfFromExact(exact, label = 'model') {
-  const total = BigInt(exact.total);
+  const total = exact.total ? BigInt(exact.total) : null;
   return makePmf({
     label, scope: exact.scope, source: 'model',
-    entries: exact.entries.map((e) => ({ x: e.x, p: new Fraction(BigInt(e.count), total).toNumber(), trigger: e.trigger })),
+    entries: exact.entries.map((e) => ({ x: e.x, p: typeof e.p === 'number' ? e.p : new Fraction(BigInt(e.count), total).toNumber(), trigger: e.trigger })),
   });
 }
 

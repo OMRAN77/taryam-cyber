@@ -24,6 +24,7 @@
 // free-spin closed forms apply to the mixed single-spin moments.
 import { Fraction } from './fraction.js';
 import { ModelError } from './slot-model.js';
+import { hasCaps, cappedFeature, cappedMaxFeature } from './round-dist.js';
 
 const BUCKETS = [0, 1, 2, 5, 10, 20, 50, 100, 500];
 const SAFE = BigInt(Number.MAX_SAFE_INTEGER);
@@ -348,6 +349,15 @@ export function spinPmf(model, entries, total) {
   };
 }
 
+// cappedFeature (round-dist.js) for analyzeExact: a cap too large for the exact
+// sweep is a model the engine cannot analyse exactly.
+function cappedFeatureOrError(fs, args) {
+  try { return cappedFeature(fs, args); } catch (e) {
+    if (e.tooLarge) throw new ModelError(e.ar + '؛ قلّل الحد الأقصى للفات أو لإعادات التفعيل', e.en + '; lower the free-spin or retrigger cap');
+    throw e;
+  }
+}
+
 // Full exact analysis. Throws ModelError only for invalid input; if the joint
 // distribution is too large, the RTP part is still returned with distribution: null.
 export function analyzeExact(model, opts = {}) {
@@ -379,11 +389,18 @@ export function analyzeExact(model, opts = {}) {
     fsSpinEV = new Fraction(fLine + fScat, fsTotal).mul(fs.multiplier);
     if (fs.retrigger) pRetrig = new Fraction(fsd.reduce((a, c, k) => a + (k >= fs.trigger ? c : 0n), 0n), fsTotal);
     const growth = pRetrig.mul(fs.spins);
-    if (growth.cmp(1) >= 0) {
-      throw new ModelError('إعادة تفعيل الفري سبين تجعل عدد الجولات المتوقع لا نهائيًا (احتمال إعادة التفعيل × عدد الجولات ≥ 1)',
-        'Free-spin retriggers make the expected number of spins infinite (retrigger probability × spins ≥ 1)');
+    let expectedSpins;
+    if (hasCaps(fs)) {
+      // Caps on total spins or retriggers: an exact sweep over the feature's states
+      // (round-dist.js); the expected win is E[spins] * E[win per spin] (Wald).
+      expectedSpins = cappedFeatureOrError(fs, { D: fsTotal, c1: fsd.reduce((a, c, k) => a + (k >= fs.trigger ? c : 0n), 0n) }).expectedSpins;
+    } else {
+      if (growth.cmp(1) >= 0) {
+        throw new ModelError('إعادة تفعيل الفري سبين تجعل عدد الجولات المتوقع لا نهائيًا (احتمال إعادة التفعيل × عدد الجولات ≥ 1)',
+          'Free-spin retriggers make the expected number of spins infinite (retrigger probability × spins ≥ 1)');
+      }
+      expectedSpins = new Fraction(BigInt(fs.spins)).div(new Fraction(1n).sub(growth));
     }
-    const expectedSpins = new Fraction(BigInt(fs.spins)).div(new Fraction(1n).sub(growth));
     fsEV = expectedSpins.mul(fsSpinEV);
     fsInfo = { triggerProbability: frac(pTrigger), retriggerProbability: frac(pRetrig), expectedSpinsPerTrigger: frac(expectedSpins), evPerTrigger: frac(fsEV.div(totalBet)), spinEV: frac(fsSpinEV.div(totalBet)) };
   }
@@ -443,24 +460,34 @@ export function analyzeExact(model, opts = {}) {
   try {
     const progress = opts.onProgress || (() => {});
     const baseEntries = sourceDistribution(model, baseSets, base.mix, opts, (p) => progress(fs && !fs.sameReels ? p / 2 : p));
+    let fsEntries = null;
     const b = spinMoments(model, baseEntries, true);
     const check = new Fraction(b.s1, total).add(evFs);
     if (!check.equals(ev)) throw new Error('internal check failed: distribution EV != per-line EV');
     let ew2 = new Fraction(b.s2, total);
     let maxWin = { base: b.maxAll / totalBet, withFeature: b.maxAll / totalBet, unbounded: false };
     if (fs) {
-      const fsEntries = fs.sameReels ? baseEntries : sourceDistribution(model, fsSets, fsSrc.mix, opts, (p) => progress(0.5 + p / 2));
+      fsEntries = fs.sameReels ? baseEntries : sourceDistribution(model, fsSets, fsSrc.mix, opts, (p) => progress(0.5 + p / 2));
       const x = spinMoments(model, fsEntries, fs.retrigger);
       const m = fs.multiplier, F = BigInt(fs.spins);
       const EX = new Fraction(x.s1, fsTotal).mul(m);
       const EX2 = new Fraction(x.s2, fsTotal).mul(m).mul(m);
       const EXI = new Fraction(x.sXJ, fsTotal).mul(m);
       const p = new Fraction(x.sJ, fsTotal);
-      const oneMinus = new Fraction(1n).sub(p.mul(F));
-      const EZ = EX.div(oneMinus);
-      const EZ2 = EX2.add(EXI.mul(EZ).mul(2n * F)).add(p.mul(F * (F - 1n)).mul(EZ).mul(EZ)).div(oneMinus);
-      const EFv = EZ.mul(F);
-      const EFv2 = EZ2.mul(F).add(EZ.mul(EZ).mul(F * (F - 1n)));
+      let EFv, EFv2;
+      const capped = hasCaps(fs);
+      if (capped) {
+        // The capped feature's spins share one budget, so its moments come from the
+        // exact sweep over its states rather than from independent subtrees.
+        const c = cappedFeatureOrError(fs, { D: fsTotal, c1: x.sJ, sums: { sx: x.s1, sx2: x.s2, sxj: x.sXJ } });
+        EFv = c.ez.mul(m); EFv2 = c.ez2.mul(m).mul(m);
+      } else {
+        const oneMinus = new Fraction(1n).sub(p.mul(F));
+        const EZ = EX.div(oneMinus);
+        const EZ2 = EX2.add(EXI.mul(EZ).mul(2n * F)).add(p.mul(F * (F - 1n)).mul(EZ).mul(EZ)).div(oneMinus);
+        EFv = EZ.mul(F);
+        EFv2 = EZ2.mul(F).add(EZ.mul(EZ).mul(F * (F - 1n)));
+      }
       if (!EFv.equals(fsEV)) throw new Error('internal check failed: free-spin EV mismatch');
       const pJ = new Fraction(b.sJ, total);
       ew2 = ew2.add(new Fraction(b.sXJ, total).mul(EFv).mul(2n)).add(pJ.mul(EFv2));
@@ -471,6 +498,12 @@ export function analyzeExact(model, opts = {}) {
         withFeature: fs.retrigger ? null : Math.max(b.maxNoJ, b.maxJ + fs.spins * maxFsSpin) / totalBet,
         unbounded: fs.retrigger,
       };
+      if (capped) {
+        // A capped feature has a largest total: max-plus over its states.
+        const most = cappedMaxFeature(fs, x.sJ < fsTotal ? x.maxNoJ : -Infinity, x.sJ > 0n ? x.maxJ : -Infinity);
+        maxWin.withFeature = Math.max(b.maxNoJ, b.maxJ + m.mul(BigInt(most)).toNumber()) / totalBet;
+        maxWin.unbounded = false;
+      }
     }
     const variance = ew2.sub(ev.mul(ev)).div(totalBet * totalBet);
     const sdev = Math.sqrt(variance.toNumber());
@@ -490,6 +523,8 @@ export function analyzeExact(model, opts = {}) {
       // Built from the weighted entries, so counts are stop weights over the cycle.
       pmf: spinPmf(model, baseEntries, total),
     };
+    // The per-spin entries, for the whole-round distribution (round-dist.js).
+    if (opts.onEntries) opts.onEntries({ base: { entries: baseEntries, total }, free: fs ? { entries: fsEntries, total: fsTotal } : null });
   } catch (e) {
     if (!(e instanceof ModelError)) throw e;
     result.distributionError = { ar: e.ar, en: e.en };
