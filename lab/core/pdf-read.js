@@ -23,9 +23,36 @@ export class PdfReadError extends Error {
   }
 }
 
-const malformed = (pos, what) => new PdfReadError('malformed',
-  `تعذّرت قراءة بنية ملف الـPDF عند البايت ${pos} (${what}). الملف تالف أو ليس من النوع الذي يكتبه المختبر.`,
-  `Could not read the PDF structure at byte ${pos} (${what}). The file is damaged or not of the kind the lab writes.`, pos);
+// What was wrong at that byte, in Arabic and English; {w} is the word found or
+// expected (PDF syntax from the file, quoted as is).
+const PROBLEMS = {
+  expected: ['كان يُنتظر هنا "{w}"', '"{w}" expected'],
+  integer: ['كان يُنتظر عدد صحيح', 'integer expected'],
+  deep: ['التداخل أعمق من المسموح', 'nesting too deep'],
+  eof: ['انتهى الملف قبل أوانه', 'unexpected end of file'],
+  array: ['مصفوفة لم تُغلق', 'unterminated array'],
+  word: ['كلمة غير متوقعة "{w}"', 'unexpected "{w}"'],
+  char: ['حرف غير متوقع', 'unexpected character'],
+  dict: ['قاموس لم يُغلق', 'unterminated dictionary'],
+  key: ['مفتاح القاموس ليس اسمًا', 'dictionary key must be a name'],
+  string: ['نص لم يُغلق', 'unterminated string'],
+  hex: ['نص ست عشري غير صالح', 'bad hex string'],
+  hexEnd: ['نص ست عشري لم يُغلق', 'unterminated hex string'],
+  number: ['رقم غير صالح', 'bad number'],
+  xref: ['جدول مواقع الكائنات (xref) غير صالح', 'bad xref table'],
+  trailer: ['ذيل الملف (trailer) ليس قاموسًا', 'trailer is not a dictionary'],
+  object: ['كان يُنتظر كائن', 'object expected'],
+  streamDict: ['تدفق بيانات بلا قاموس', 'stream without a dictionary'],
+  streamLength: ['طول تدفق البيانات لا يطابق الطول المذكور', 'stream length does not match'],
+  streamEnd: ['تدفق بيانات لم يُغلق', 'unterminated stream'],
+  objects: ['عدد الكائنات أكبر من الحد', 'too many objects'],
+};
+const malformed = (pos, problem, w = '') => {
+  const [ar, en] = PROBLEMS[problem].map((t) => t.replace('{w}', () => w));
+  return new PdfReadError('malformed',
+    `تعذّرت قراءة بنية ملف الـPDF عند البايت ${pos} (${ar}). الملف تالف أو ليس من النوع الذي يكتبه المختبر.`,
+    `Could not read the PDF structure at byte ${pos} (${en}). The file is damaged or not of the kind the lab writes.`, pos);
+};
 
 export class PdfName { constructor(name) { this.name = name; } }
 export class PdfString { constructor(bytes) { this.bytes = bytes; } }
@@ -82,22 +109,22 @@ class Parser {
   expectWord(w) {
     this.skipWs();
     const at = this.pos;
-    if (this.word() !== w) throw malformed(at, `"${w}" expected`);
+    if (this.word() !== w) throw malformed(at, 'expected', w);
   }
 
   integer() {
     this.skipWs();
     const at = this.pos;
     const w = this.word();
-    if (!/^\d{1,15}$/.test(w)) throw malformed(at, 'integer expected');
+    if (!/^\d{1,15}$/.test(w)) throw malformed(at, 'integer');
     return Number(w);
   }
 
   value(depth = 0) {
-    if (depth > MAX_DEPTH) throw malformed(this.pos, 'nesting too deep');
+    if (depth > MAX_DEPTH) throw malformed(this.pos, 'deep');
     this.skipWs();
     const b = this.b, at = this.pos, c = b[at];
-    if (c === undefined) throw malformed(at, 'unexpected end of file');
+    if (c === undefined) throw malformed(at, 'eof');
     if (c === 0x2f) return this.name();
     if (c === 0x28) return this.literalString();
     if (c === 0x3c && b[at + 1] === 0x3c) return this.dict(depth);
@@ -107,7 +134,7 @@ class Parser {
       const arr = [];
       for (;;) {
         this.skipWs();
-        if (this.pos >= b.length) throw malformed(at, 'unterminated array');
+        if (this.pos >= b.length) throw malformed(at, 'array');
         if (b[this.pos] === 0x5d) { this.pos++; return arr; }
         arr.push(this.value(depth + 1));
       }
@@ -117,7 +144,7 @@ class Parser {
     if (w === 'true') return true;
     if (w === 'false') return false;
     if (w === 'null') return null;
-    throw malformed(at, 'unexpected ' + (w ? `"${w}"` : 'character'));
+    throw (w ? malformed(at, 'word', w) : malformed(at, 'char'));
   }
 
   dict(depth) {
@@ -126,10 +153,10 @@ class Parser {
     const d = new Map();
     for (;;) {
       this.skipWs();
-      if (this.pos >= this.b.length) throw malformed(at, 'unterminated dictionary');
+      if (this.pos >= this.b.length) throw malformed(at, 'dict');
       if (this.b[this.pos] === 0x3e && this.b[this.pos + 1] === 0x3e) { this.pos += 2; return d; }
       const key = this.value(depth + 1);
-      if (!(key instanceof PdfName)) throw malformed(this.pos, 'dictionary key must be a name');
+      if (!(key instanceof PdfName)) throw malformed(this.pos, 'key');
       d.set(key.name, this.value(depth + 1));
     }
   }
@@ -170,7 +197,7 @@ class Parser {
       if (c === 0x29 && --level === 0) return new PdfString(Uint8Array.from(out));
       out.push(c);
     }
-    throw malformed(at, 'unterminated string');
+    throw malformed(at, 'string');
   }
 
   hexString() {
@@ -181,10 +208,10 @@ class Parser {
       const c = b[this.pos++];
       if (WS.has(c)) continue;
       const ch = String.fromCharCode(c);
-      if (!/[0-9a-f]/i.test(ch)) throw malformed(this.pos - 1, 'bad hex string');
+      if (!/[0-9a-f]/i.test(ch)) throw malformed(this.pos - 1, 'hex');
       hex += ch;
     }
-    if (this.pos >= b.length) throw malformed(at, 'unterminated hex string');
+    if (this.pos >= b.length) throw malformed(at, 'hexEnd');
     this.pos++;
     if (hex.length % 2) hex += '0';
     return new PdfString(Uint8Array.from(hex.match(/../g) || [], (h) => parseInt(h, 16)));
@@ -193,7 +220,7 @@ class Parser {
   numberOrRef() {
     const at = this.pos;
     const w = this.word();
-    if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(w)) throw malformed(at, 'bad number');
+    if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(w)) throw malformed(at, 'number');
     if (/^\d+$/.test(w)) {
       // "n g R" is a reference.
       const save = this.pos;
@@ -243,7 +270,7 @@ function readBody(bytes, start) {
           p.skipWs();
           const t = p.peekWord();
           if (t === 'trailer' || p.pos >= bytes.length) break;
-          if (!/^(\d+|f|n)$/.test(t)) throw malformed(p.pos, 'bad xref table');
+          if (!/^(\d+|f|n)$/.test(t)) throw malformed(p.pos, 'xref');
           p.word();
         }
         continue;
@@ -251,7 +278,7 @@ function readBody(bytes, start) {
       if (w === 'trailer') {
         p.word();
         const d = p.value();
-        if (!(d instanceof Map)) throw malformed(at, 'trailer is not a dictionary');
+        if (!(d instanceof Map)) throw malformed(at, 'trailer');
         trailer = d;
         continue;
       }
@@ -261,14 +288,14 @@ function readBody(bytes, start) {
         seenEnd = true;
         continue;
       }
-      if (!/^\d+$/.test(w)) throw malformed(at, 'object expected');
+      if (!/^\d+$/.test(w)) throw malformed(at, 'object');
       const num = p.integer(), gen = p.integer();
       p.expectWord('obj');
       const value = p.value();
       p.skipWs();
       let stream = null;
       if (p.peekWord() === 'stream') {
-        if (!(value instanceof Map)) throw malformed(p.pos, 'stream without a dictionary');
+        if (!(value instanceof Map)) throw malformed(p.pos, 'streamDict');
         p.pos += 6;
         if (bytes[p.pos] === 0x0d) p.pos++;
         if (bytes[p.pos] === 0x0a) p.pos++;
@@ -287,9 +314,9 @@ function readBody(bytes, start) {
         }
         if (end < 0) {
           // No usable length: the data ends at the next "endstream" (minus its EOL).
-          if (source === 'direct' && Number.isInteger(length)) throw malformed(start, 'stream length does not match');
+          if (source === 'direct' && Number.isInteger(length)) throw malformed(start, 'streamLength');
           const found = indexOfBytes(bytes, ENDSTREAM, start);
-          if (found < 0) throw malformed(start, 'unterminated stream');
+          if (found < 0) throw malformed(start, 'streamEnd');
           end = found;
           if (bytes[end - 1] === 0x0a) end--;
           if (bytes[end - 1] === 0x0d) end--;
@@ -301,7 +328,7 @@ function readBody(bytes, start) {
         stream = { dict: value, offset: start, length: end - start, lengthSource: source };
       }
       p.expectWord('endobj');
-      if (objects.size >= MAX_OBJECTS && !objects.has(num)) throw malformed(at, 'too many objects');
+      if (objects.size >= MAX_OBJECTS && !objects.has(num)) throw malformed(at, 'objects');
       objects.set(num, { num, gen, value, stream, offset: at });
     } catch (e) {
       // Bytes after the end of a complete file (e.g. added by a mail gateway) are

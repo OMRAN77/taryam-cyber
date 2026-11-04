@@ -11,6 +11,12 @@
 //
 // Public keys travel as SPKI (RFC 5280 SubjectPublicKeyInfo, DER bytes). A key's
 // fingerprint is the SHA-256 of those bytes.
+//
+// Only one form of each signature is accepted, so nobody without the private key
+// can turn a valid signature into other valid bytes: an ECDSA signature (r, s) is
+// also valid as (r, n - s), so the lab signs with s <= n/2 and refuses s > n/2
+// ("low s"); an Ed25519 signature is refused unless its S is below the group
+// order L, as RFC 8032 5.1.7 requires (S + L would otherwise verify too).
 export const ED25519 = 'Ed25519';
 export const ECDSA_P256 = 'ECDSA-P256-SHA256';
 
@@ -111,8 +117,37 @@ export async function generateKeyPair({ algorithms = SIGNATURE_ALGORITHMS, subtl
   throw new SignError('no-algorithm', 'هذا المتصفح لا يدعم Ed25519 ولا ECDSA P-256 في Web Crypto', 'This browser supports neither Ed25519 nor ECDSA P-256 in Web Crypto');
 }
 
+// Group orders: n of P-256 (FIPS 186-5 / SEC 2, curve secp256r1) and L of the
+// Ed25519 base point (RFC 8032 5.1).
+const P256_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+const ED25519_L = (1n << 252n) + 27742317777372353535851937790883648493n;
+const bigFromBytes = (bytes) => bytes.reduce((acc, b) => (acc << 8n) | BigInt(b), 0n);
+function bytesFromBig(x, length) {
+  const out = new Uint8Array(length);
+  for (let i = length - 1; i >= 0; i--, x >>= 8n) out[i] = Number(x & 255n);
+  return out;
+}
+
+// The one accepted form: 64 bytes; ECDSA with 1 <= s <= n/2; Ed25519 with S < L
+// (S is little-endian).
+export function isCanonicalSignature(alg, signature) {
+  const sig = signature instanceof ArrayBuffer ? new Uint8Array(signature) : signature;
+  if (!(sig instanceof Uint8Array) || sig.length !== 64) return false;
+  if (alg === ECDSA_P256) {
+    const s = bigFromBytes(sig.subarray(32));
+    return s >= 1n && s <= P256_N >> 1n;
+  }
+  if (alg === ED25519) return bigFromBytes(Uint8Array.from(sig.subarray(32)).reverse()) < ED25519_L;
+  return false;
+}
+
 export async function signBytes(key, bytes, { subtle } = {}) {
-  return new Uint8Array(await getSubtle(subtle).sign(ALGS[key.alg].sign, key.privateKey, bytes));
+  const sig = new Uint8Array(await getSubtle(subtle).sign(ALGS[key.alg].sign, key.privateKey, bytes));
+  if (key.alg === ECDSA_P256 && sig.length === 64) {
+    const s = bigFromBytes(sig.subarray(32));
+    if (s > P256_N >> 1n) sig.set(bytesFromBig(P256_N - s, 32), 32); // low s: same signature, the one accepted form
+  }
+  return sig;
 }
 
 // true or false. Throws SignError('unsupported') when this browser cannot check the
@@ -121,6 +156,7 @@ export async function verifyBytes({ alg, spki, signature, bytes }, { subtle } = 
   const s = getSubtle(subtle);
   const a = ALGS[alg];
   if (!a) throw unsupported(alg);
+  if (!isCanonicalSignature(alg, signature)) return false;
   let key;
   try {
     key = await s.importKey('spki', spki, a.key, false, ['verify']);
@@ -214,7 +250,12 @@ export async function loadSigningKey({ idb, algorithms, subtle, timeoutMs = 5000
       if (other) return { ...other, storage: 'persistent' };
       throw e;
     }
-    return { ...key, created, storage: 'persistent', replaced: stored !== undefined && stored !== null };
+    if (stored === undefined || stored === null) return { ...key, created, storage: 'persistent' };
+    // The stored key could not be used and was replaced: the caller must say so, as
+    // the auditor's published fingerprint changes. The old one is given when known.
+    let previousFingerprint = null;
+    try { if (stored.spki instanceof Uint8Array) previousFingerprint = await keyFingerprint(stored.spki, subtle); } catch (e) { /* unknown */ }
+    return { ...key, created, storage: 'persistent', replaced: true, previousFingerprint };
   } catch (e) {
     problem = e;
   } finally {

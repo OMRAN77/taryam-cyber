@@ -71,13 +71,15 @@ export const DEVIATIONS = [
     when: (s) => !!s.results.rng,
   },
   {
-    id: 'nist-proportion-bound', reference: 'NIST SP 800-22 Rev. 1a 4.2.1',
-    text: 'Second level: the proportion bound (1 - alpha) - 3 sqrt(alpha (1 - alpha) / m) is applied without rounding (with m = 100 sequences, at least 97 must pass).',
+    // The lab follows the publication here; the departure is from the reference code.
+    id: 'nist-proportion-bound', reference: 'NIST STS 2.1.2 (assess.c); NIST SP 800-22 Rev. 1a 4.2.1 is followed',
+    text: 'Second level: the proportion bound (1 - alpha) - 3 sqrt(alpha (1 - alpha) / m) is applied as SP 800-22 4.2.1 states it, without rounding: with m = 100 sequences the bound is 0.96015, so at least 97 must pass. STS 2.1.2 (assess.c) truncates the bound times m to an integer and so accepts 96 of 100.',
     when: (s) => !!(s.results.rng && s.results.rng.nist.twoLevel),
   },
 ];
 
-// session: { inputs (from planAttachments), results, signer }.
+// session: { inputs (from planAttachments), results, signer, attachLimit (the limit
+// planAttachments was given; the default when absent) }.
 export function buildManifest(session) {
   const r = session.results;
   const th = r.theoretical, mc = r.montecarlo;
@@ -85,7 +87,7 @@ export function buildManifest(session) {
   return {
     lab: { name: 'TARYAM RTP Lab', version: LAB_VERSION },
     hash: 'SHA-256',
-    attachmentLimitBytes: ATTACH_LIMIT_BYTES,
+    attachmentLimitBytes: session.attachLimit ?? ATTACH_LIMIT_BYTES,
     inputs: session.inputs.map((i) => ({ id: i.id, name: i.name, kind: i.kind, size: i.size, sha256: i.sha256, attachment: i.attachment === undefined ? i.name : i.attachment })),
     model: modelSha256 ? { sha256: modelSha256, input: th ? th.inputId : null, canonicalForm: 'JSON, object keys sorted, no whitespace (canonicalJson)' } : null,
     montecarlo: mc ? { generator: mc.generator, seed: mc.seed, spins: mc.spins, modelSha256: mc.modelSha256, resultSha256: mc.resultSha256 } : null,

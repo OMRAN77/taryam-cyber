@@ -457,10 +457,16 @@ const DEVIATION_TEXT = {
   'nist-family-holm': 'devFamily', 'nist-proportion-bound': 'devProportion',
 };
 
+// "25 MiB (26,214,400 bytes)", in Arabic (lang 0) or English (lang 1).
+function limitText(bytes, lang) {
+  const mib = (bytes / 1048576).toLocaleString('en-US', { maximumFractionDigits: 3 });
+  return `${mib} ${pair('mib')[lang]} (${bytes.toLocaleString('en-US')} ${pair('bytes')[lang]})`;
+}
+
 function manifestSection(L, m) {
   L.section('manifestTitle');
   L.kv('labVersion', m.lab.version, { mono: true });
-  L.kv('attachLimit', `${(m.attachmentLimitBytes / 1048576).toLocaleString('en-US')} MiB (${m.attachmentLimitBytes.toLocaleString('en-US')} ${pair('bytes')[1]})`);
+  L.kv('attachLimit', limitText(m.attachmentLimitBytes, 1));
   if (m.model) L.kv('modelHash', m.model.sha256, { mono: true });
   if (m.montecarlo) L.kv('seed', m.montecarlo.seed, { mono: true });
   L.section('referencesTitle');
@@ -570,7 +576,7 @@ const RENDER = { theoretical: theorySection, actual: actualSection, rng: rngSect
 // Inputs larger than attachLimit are listed by SHA-256 only, not attached.
 export async function buildReport(session, { createCanvas, now = new Date(), onProgress = () => {}, signer = null, attachLimit = ATTACH_LIMIT_BYTES } = {}) {
   const createdAt = now.toISOString().replace(/\.\d{3}Z$/, 'Z');
-  session = { ...session, inputs: planAttachments(session.inputs, { limit: attachLimit }), signer };
+  session = { ...session, inputs: planAttachments(session.inputs, { limit: attachLimit }), signer, attachLimit };
   const payload = reportPayload(session, createdAt);
   const json = canonicalJson(payload);
   const jsonBytes = new TextEncoder().encode(json);
@@ -589,7 +595,7 @@ export async function buildReport(session, { createCanvas, now = new Date(), onP
     if (signer) {
       L.kv('sigAlg', `${ALGORITHM_INFO[signer.alg].label}  (${ALGORITHM_INFO[signer.alg].reference})`);
       L.kv('keyFingerprint', formatFingerprint(signer.fingerprint), { mono: true });
-      L.kv('keyStorage', pair(signer.storage === 'persistent' ? 'keyPersistent' : 'keySession').join(' / '), { color: signer.storage === 'persistent' ? C.text : C.warn });
+      L.kv('keyStorage', pair(signer.storage === 'persistent' ? 'signerKeyPersistent' : 'signerKeySession').join(' / '), { color: signer.storage === 'persistent' ? C.text : C.warn });
       if (signer.storage !== 'persistent') L.note('sessionKeyNote');
       L.note('signedReportNote');
       L.note('signatureMeaning');
@@ -600,8 +606,8 @@ export async function buildReport(session, { createCanvas, now = new Date(), onP
       L.kv('modelHash', i.sha256, { mono: true, labels: ['SHA-256', 'SHA-256'] });
       if (i.attachment === null) L.kv('attachedState', pair('hashOnlyShort').join(' / '), { color: C.warn });
     }
-    if (hashOnly) L.note('hashOnlyNote');
-    L.note('verifyHow');
+    if (hashOnly) L.note(null, pair('hashOnlyNote').map((t, k) => t.replace('{limit}', limitText(attachLimit, k))));
+    L.note(hashOnly ? 'verifyHowHashOnly' : 'verifyHow');
     if (!signer) L.note('signatureNote');
     for (const key of SECTION_ORDER) if (session.results[key]) { L.newPage(); RENDER[key](L, session.results[key]); }
     L.newPage();

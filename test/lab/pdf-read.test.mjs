@@ -127,6 +127,61 @@ test('anything else is refused with a PdfReadError, never a crash', () => {
   assert.strictEqual(tail.problems[0].code, 'trailing-data');
 });
 
+// The Arabic message is Arabic throughout: once the PDF's own words quoted from the
+// file ("...") and the technical names PDF, xref and trailer are taken out, no Latin
+// letter is left. The English one has no Arabic.
+function assertLanguages(e) {
+  assert.ok(e instanceof PdfReadError, e && e.stack);
+  const rest = e.ar.replace(/"[^"]*"/g, '').replace(/PDF|xref|trailer/g, '');
+  assert.doesNotMatch(rest, /[A-Za-z]/, e.ar);
+  assert.match(e.ar, /[؀-ۿ]/);
+  assert.doesNotMatch(e.en, /[؀-ۿ]/, e.en);
+}
+
+test('read errors: the Arabic message has no English fragments, for every kind of problem', () => {
+  // [bytes, the problem as the English message names it]
+  const cases = [
+    ['%PDF-1.4\n1 0 obj\n<< /Type /Catalog', 'unterminated dictionary'],
+    ['%PDF-1.4\nhello world\n', 'object expected'],
+    ['%PDF-1.4\n1 0 obj\n' + '['.repeat(500) + '\nendobj\n', 'nesting too deep'],
+    ['%PDF-1.4\n1 0 obj\n<< /Length 5 >>\nstream\nab\nendstream\nendobj\n', 'stream length does not match'],
+    ['%PDF-1.4\n1 0 obj\n<< /A (abc', 'unterminated string'],
+    ['%PDF-1.4\n1 0 obj\n<0g>\nendobj\n', 'bad hex string'],
+    ['%PDF-1.4\n1 0 obj\nfoo\nendobj\n', 'unexpected "foo"'],
+    ['%PDF-1.4\n1 0 obj\n<< 1 2 >>\nendobj\n', 'dictionary key must be a name'],
+    ['%PDF-1.4\n1 0 obj\n42\nstream\nab\nendstream\nendobj\n', 'stream without a dictionary'],
+    ['%PDF-1.4\n1 0 obj\n<< >>\nxx\n', '"endobj" expected'],
+    ['%PDF-1.4\ntrailer\n5\n', 'trailer is not a dictionary'],
+    ['%PDF-1.4\nxref\n0 1\nzz\n', 'bad xref table'],
+    ['%PDF-1.4\n1 0 obj\n+-\nendobj\n', 'bad number'],
+    ['%PDF-1.4\n1 0 obj\n[1 2', 'unterminated array'],
+    ['%PDF-1.4\n1 0 obj\n', 'unexpected end of file'],
+    ['%PDF-1.4\n1 0 obj\n<< /Length 2 0 R >>\nstream\nab', 'unterminated stream'],
+    ['%PDF-1.4\n1 0 obj\n<< /A <0a', 'unterminated hex string'],
+    ['%PDF-1.4\nx 0 obj\n', 'object expected'],
+    ['%PDF-1.4\n1 x obj\n', 'integer expected'],
+    ['%PDF-1.4\n1 0 obj\n<< /A ) >>\nendobj\n', 'unexpected character'],
+    // A word with "$&" in it is quoted as is (no replacement pattern is applied).
+    ['%PDF-1.4\n1 0 obj\na$&b\nendobj\n', 'unexpected "a$&b"'],
+  ];
+  for (const [text, en] of cases) {
+    assert.throws(() => readPdfAttachments(latin1(text)), (e) => {
+      assertLanguages(e);
+      assert.ok(e.en.includes('(' + en + ')'), e.en + ' / ' + en);
+      if (en.includes('"')) assert.ok(e.ar.includes(en.slice(en.indexOf('"'), en.lastIndexOf('"') + 1)), e.ar);
+      return true;
+    }, text);
+  }
+  // A PDF cut short inside an attachment (the reviewer's case): the stream's stated
+  // length runs past the end of the file.
+  const { bytes, files, offsets } = samplePdf();
+  assert.throws(() => readPdfAttachments(bytes.slice(0, offsets[1] + Math.floor(files[1].bytes.length / 2))), (e) => {
+    assertLanguages(e);
+    assert.ok(e.ar.includes('طول تدفق البيانات لا يطابق الطول المذكور'), e.ar);
+    return true;
+  });
+});
+
 test('fuzz: 600 damaged copies of a report PDF either read or are refused cleanly', () => {
   const { bytes } = samplePdf();
   const rng = new Xoshiro128ss(0x5eed, 0x7a17, 0x0b0b, 0x1234);

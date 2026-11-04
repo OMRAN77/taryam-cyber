@@ -7,7 +7,7 @@ import assert from 'node:assert';
 import nodeCrypto from 'node:crypto';
 import {
   ED25519, ECDSA_P256, toBase64, fromBase64, keyFingerprint, formatFingerprint, parseTrustedFingerprint,
-  generateKeyPair, signBytes, verifyBytes, loadSigningKey, SignError,
+  generateKeyPair, signBytes, verifyBytes, loadSigningKey, SignError, isCanonicalSignature,
 } from '../../lab/core/sign.js';
 
 const hex = (h) => Uint8Array.from(Buffer.from(h, 'hex'));
@@ -215,7 +215,81 @@ test('a stored key that no longer works is replaced, and the caller is told', as
   assert.strictEqual(next.storage, 'persistent');
   assert.strictEqual(next.replaced, true);
   assert.notStrictEqual(next.fingerprint, good.fingerprint);
-  assert.strictEqual((await loadSigningKey({ idb })).fingerprint, next.fingerprint);
+  // The fingerprint the stored record carried, for the page to show: SHA-256 of
+  // its SPKI bytes, recomputed with node:crypto.
+  assert.strictEqual(next.previousFingerprint, nodeSha256(other.spki));
+  const again = await loadSigningKey({ idb });
+  assert.strictEqual(again.fingerprint, next.fingerprint);
+  assert.strictEqual(again.replaced, undefined, 'a key that works is not reported as replaced');
+  // The reviewer's record: no private key and an all-zero 44-byte SPKI.
+  const [k] = [...idb.data.keys()];
+  idb.data.set(k, { alg: ED25519, privateKey: null, spki: new Uint8Array(44) });
+  const fresh = await loadSigningKey({ idb });
+  assert.strictEqual(fresh.replaced, true);
+  assert.strictEqual(fresh.previousFingerprint, nodeSha256(new Uint8Array(44)));
+});
+
+// ---- one accepted form per signature ----
+// n: order of the P-256 group (SEC 2 secp256r1, FIPS 186-5). L: order of the
+// Ed25519 base point, written in RFC 8032 5.1 as 2^252 + 27742317777372353535851937790883648493;
+// its usual hex form is checked against that decimal form here.
+const P256_N = BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551');
+const ED25519_L = 2n ** 252n + 27742317777372353535851937790883648493n;
+const bigBE = (b) => BigInt('0x' + Buffer.from(b).toString('hex'));
+const be32 = (x) => Uint8Array.from(Buffer.from(x.toString(16).padStart(64, '0'), 'hex'));
+
+test('ECDSA: the lab signs with s <= n/2, and refuses (r, n - s), which node:crypto accepts', async () => {
+  const key = await generateKeyPair({ algorithms: [ECDSA_P256] });
+  const pub = nodeCrypto.createPublicKey({ key: Buffer.from(key.spki), format: 'der', type: 'spki' });
+  const nodeOk = (msg, sig) => nodeCrypto.verify('sha256', msg, { key: pub, dsaEncoding: 'ieee-p1363' }, sig);
+  // 64 signatures: each comes out high with probability 1/2, so without the rule at
+  // least one would be high (all low by chance: 2^-64).
+  for (let i = 0; i < 64; i++) {
+    const msg = enc.encode('low-s ' + i);
+    const sig = await signBytes(key, msg);
+    const s = bigBE(sig.subarray(32));
+    assert.ok(s >= 1n && s <= P256_N / 2n, 'signature ' + i + ' has a high s');
+    assert.ok(nodeOk(msg, sig), 'node:crypto accepts signature ' + i);
+    assert.strictEqual(await verifyBytes({ alg: ECDSA_P256, spki: key.spki, signature: sig, bytes: msg }), true);
+    const high = Uint8Array.of(...sig.subarray(0, 32), ...be32(P256_N - s));
+    assert.ok(nodeOk(msg, high), 'the mirrored signature is mathematically valid');
+    assert.strictEqual(await verifyBytes({ alg: ECDSA_P256, spki: key.spki, signature: high, bytes: msg }), false);
+  }
+  // A high-s signature made by node:crypto's own key is refused; its low twin passes.
+  const { privateKey, publicKey } = nodeCrypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const spki = Uint8Array.from(publicKey.export({ type: 'spki', format: 'der' }));
+  const msg = enc.encode('made by node');
+  const raw = Uint8Array.from(nodeCrypto.sign('sha256', msg, { key: privateKey, dsaEncoding: 'ieee-p1363' }));
+  const s = bigBE(raw.subarray(32));
+  const low = Uint8Array.of(...raw.subarray(0, 32), ...be32(s <= P256_N / 2n ? s : P256_N - s));
+  const high = Uint8Array.of(...raw.subarray(0, 32), ...be32(s <= P256_N / 2n ? P256_N - s : s));
+  assert.strictEqual(await verifyBytes({ alg: ECDSA_P256, spki, signature: low, bytes: msg }), true);
+  assert.strictEqual(await verifyBytes({ alg: ECDSA_P256, spki, signature: high, bytes: msg }), false);
+});
+
+test('Ed25519: a signature whose S is not below L is refused (RFC 8032 5.1.7)', async () => {
+  assert.strictEqual(ED25519_L, BigInt('0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed'));
+  for (const v of RFC8032) {
+    const spki = hex('302a300506032b6570032100' + v.pk);
+    const sig = hex(v.sig), bytes = hex(v.msg);
+    assert.strictEqual(await verifyBytes({ alg: ED25519, spki, signature: sig, bytes }), true);
+    // S is little-endian in bytes 32..63; S + L (< 2^253) still fits in 32 bytes.
+    const S = bigBE(Uint8Array.from(sig.subarray(32)).reverse());
+    const plusL = Uint8Array.from(be32(S + ED25519_L)).reverse();
+    const forged = Uint8Array.of(...sig.subarray(0, 32), ...plusL);
+    assert.strictEqual(await verifyBytes({ alg: ED25519, spki, signature: forged, bytes }), false);
+    assert.strictEqual(isCanonicalSignature(ED25519, forged), false);
+    assert.strictEqual(isCanonicalSignature(ED25519, sig), true);
+  }
+  // Wrong lengths are refused for both algorithms, before Web Crypto is asked.
+  for (const alg of [ED25519, ECDSA_P256]) {
+    assert.strictEqual(isCanonicalSignature(alg, new Uint8Array(63)), false);
+    assert.strictEqual(isCanonicalSignature(alg, new Uint8Array(65)), false);
+  }
+  // The check does not change the caller's bytes (a Node Buffer's slice is a view).
+  const buf = Buffer.from(RFC8032[0].sig, 'hex');
+  isCanonicalSignature(ED25519, buf);
+  assert.strictEqual(buf.toString('hex'), RFC8032[0].sig);
 });
 
 test('without usable storage a session-only key is used and the reason is kept', async () => {

@@ -267,16 +267,32 @@ test('inputs over the size limit are listed by SHA-256 only, and can be checked 
   const entry = report.manifest.inputs.find((i) => i.name === 'numbers.bin');
   assert.strictEqual(entry.attachment, null);
   assert.strictEqual(entry.sha256, sha(session.inputs[1].bytes));
-  assert.ok(Buffer.from(r.bytes).toString('latin1').includes('numbers.bin \\(binary, 4096 bytes\\) - HASH ONLY'));
+  // The manifest and the text page state the limit that was applied (2,000 bytes,
+  // given above), not the 25 MiB default.
+  assert.strictEqual(report.manifest.attachmentLimitBytes, 2000);
+  assert.ok(Buffer.from(r.bytes).toString('latin1').includes('numbers.bin \\(binary, 4096 bytes\\) - HASH ONLY: over 2000 bytes, not attached'));
 
   let v = await verifyReportPdf(r.bytes);
   assert.strictEqual(v.status, 'valid');
   assert.strictEqual(v.files.find((f) => f.name === 'numbers.bin').status, 'hash-only');
+  assert.strictEqual(checkOf(v, 'originalsMatch'), undefined, 'no original given, nothing to judge');
   v = await verifyReportPdf(r.bytes, { originals: [{ name: 'renamed.bin', bytes: session.inputs[1].bytes }] });
   assert.strictEqual(v.files.find((f) => f.name === 'numbers.bin').status, 'original-match');
+  assert.strictEqual(checkOf(v, 'originalsMatch'), true);
+  assert.strictEqual(v.status, 'valid');
+  // A different file under the input's name: the file is not the input, but the
+  // report itself is intact, so its status stays valid and only the file fails.
   const wrong = session.inputs[1].bytes.slice(); wrong[0] ^= 1;
   v = await verifyReportPdf(r.bytes, { originals: [{ name: 'numbers.bin', bytes: wrong }] });
   assert.strictEqual(v.files.find((f) => f.name === 'numbers.bin').status, 'original-mismatch');
+  assert.strictEqual(v.files.find((f) => f.name === 'numbers.bin').sha256, sha(wrong));
+  assert.strictEqual(checkOf(v, 'originalsMatch'), false);
+  assert.strictEqual(checkOf(v, 'reportSignature'), true);
+  assert.strictEqual(checkOf(v, 'pdfUnchanged'), true);
+  assert.strictEqual(checkOf(v, 'inputsMatch'), true);
+  assert.strictEqual(v.status, 'valid');
+  // ... while a changed byte of the report still makes it invalid, original or not.
+  v = await verifyReportPdf(flip(r.bytes, attachment(r.bytes, 'report.json').offset + 9), { originals: [{ name: 'numbers.bin', bytes: wrong }] });
   assert.strictEqual(v.status, 'invalid');
   assert.strictEqual(ATTACH_LIMIT_BYTES, 25 * 1024 * 1024);
 });
@@ -329,4 +345,184 @@ test('manifest: references and deviations follow the sections present', () => {
   const p = reportPayload({ meta: {}, inputs: [], results: {}, signer: null }, '2026-11-04T00:00:00Z');
   assert.strictEqual(p.signer, null);
   assert.strictEqual(p.manifest.lab.version, LAB_VERSION);
+});
+
+// ---- review fixes ----
+
+// Rewrites report.sig in place with another JSON text (padded with spaces to its
+// reserved size), as someone editing the PDF would.
+function rewriteSig(bytes, edit) {
+  const sigFile = attachment(bytes, 'report.sig');
+  const obj = JSON.parse(new TextDecoder().decode(sigFile.data));
+  const text = enc.encode(canonicalJson(edit(obj)));
+  assert.ok(text.length <= sigFile.length);
+  const out = bytes.slice();
+  out.fill(0x20, sigFile.offset, sigFile.offset + sigFile.length);
+  out.set(text, sigFile.offset);
+  return out;
+}
+const changedBytes = (a, b) => a.reduce((n, x, i) => n + (x !== b[i]), 0);
+
+for (const alg of [ED25519, ECDSA_P256]) {
+  test(`${alg}: report.sig with an extra key anywhere is refused, so no byte of it can change unnoticed`, async () => {
+    const r = await signedReport(alg);
+    assert.strictEqual((await verifyReportPdf(r.bytes)).status, 'valid');
+    const edits = [
+      (o) => ({ ...o, zz_note: 'Certified by GLI' }),
+      (o) => ({ ...o, pdf: { ...o.pdf, note: 'x' } }),
+      (o) => ({ ...o, pdf: { ...o.pdf, statement: { ...o.pdf.statement, note: 'x' } } }),
+    ];
+    for (const edit of edits) {
+      const forged = rewriteSig(r.bytes, edit);
+      assert.ok(changedBytes(r.bytes, forged) > 0);
+      const v = await verifyReportPdf(forged);
+      assert.strictEqual(v.status, 'invalid');
+      assert.strictEqual(checkOf(v, 'signatureFormat'), false);
+    }
+    // Rewriting the same object gives the same bytes (the helper itself changes nothing).
+    assert.strictEqual(changedBytes(r.bytes, rewriteSig(r.bytes, (o) => o)), 0);
+  });
+}
+
+test('ECDSA: a signature turned into (r, n - s) is refused, although it is mathematically valid', async () => {
+  // n: order of the P-256 group, as published in SEC 2 (secp256r1) and FIPS 186-5.
+  const n = BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551');
+  const malleate = (b64) => {
+    const sig = Buffer.from(fromBase64(b64));
+    const s = BigInt('0x' + sig.subarray(32).toString('hex'));
+    return Buffer.concat([sig.subarray(0, 32), Buffer.from((n - s).toString(16).padStart(64, '0'), 'hex')]).toString('base64');
+  };
+  const r = await signedReport(ECDSA_P256);
+  const forged = rewriteSig(r.bytes, (o) => ({ ...o, signature: malleate(o.signature), pdf: { ...o.pdf, signature: malleate(o.pdf.signature) } }));
+  assert.ok(changedBytes(r.bytes, forged) > 0);
+  // node:crypto accepts the malleated report.json signature: only the lab's
+  // one-form rule tells it apart.
+  const sig = JSON.parse(new TextDecoder().decode(attachment(forged, 'report.sig').data));
+  const pub = nodeCrypto.createPublicKey({ key: Buffer.from(fromBase64(sig.publicKey)), format: 'der', type: 'spki' });
+  assert.ok(nodeCrypto.verify('sha256', attachment(forged, 'report.json').data, { key: pub, dsaEncoding: 'ieee-p1363' }, Buffer.from(fromBase64(sig.signature))));
+  const v = await verifyReportPdf(forged);
+  assert.strictEqual(v.status, 'invalid');
+  assert.strictEqual(checkOf(v, 'reportSignature'), false);
+  assert.strictEqual(checkOf(v, 'pdfUnchanged'), false);
+});
+
+test('the fingerprint used and shown is SHA-256 of the key in report.sig, never the one it claims', async () => {
+  const victim = await generateKeyPair({ algorithms: [ED25519] });
+  const attacker = await generateKeyPair({ algorithms: [ED25519] });
+  // Signs with the attacker's key but writes the victim's fingerprint into
+  // report.json and report.sig.
+  const posing = { ...attacker, fingerprint: victim.fingerprint, storage: 'persistent' };
+  const r = await buildReport(await sampleSession(), { createCanvas: stubCanvas, signer: posing });
+  const v = await verifyReportPdf(r.bytes, { trustedFingerprint: victim.fingerprint });
+  assert.strictEqual(v.status, 'invalid');
+  assert.strictEqual(checkOf(v, 'keyFingerprint'), false);
+  assert.strictEqual(checkOf(v, 'signerInReport'), false, 'report.json names the victim, the key is the attacker\'s');
+  assert.strictEqual(checkOf(v, 'trustedKey'), false);
+  assert.deepStrictEqual(v.trusted, { fingerprint: sha(victim.spki), match: false });
+  assert.strictEqual(v.signer.fingerprint, sha(attacker.spki));
+  // With the attacker's own fingerprint as trusted, the key matches but the claims
+  // inside the report still do not.
+  const w = await verifyReportPdf(r.bytes, { trustedFingerprint: sha(attacker.spki) });
+  assert.strictEqual(checkOf(w, 'trustedKey'), true);
+  assert.strictEqual(w.status, 'invalid');
+});
+
+test('a removed report.sig is caught when report.json names a signer, and a trusted fingerprint never gives "unsigned"', async () => {
+  const r = await signedReport(ED25519);
+  const fp = sha(r.key.spki);
+  const atts = readPdfAttachments(r.bytes).attachments;
+  // The same report.json, byte for byte, and the same inputs, in a PDF without report.sig.
+  const rebuild = (json) => {
+    const pdf = new PdfBuilder();
+    pdf.addPage({ lines: [{ text: 'This report is digitally signed.', x: 40, y: 800 }] });
+    pdf.attach('report.json', json, { mime: 'application/json' });
+    for (const a of atts) if (a.name !== 'report.json' && a.name !== 'report.sig') pdf.attach(a.name, a.data);
+    return pdf.build();
+  };
+  const json = atts.find((a) => a.name === 'report.json').data;
+  const stripped = rebuild(json);
+  assert.strictEqual(attachment(stripped, 'report.sig'), undefined);
+  for (const trusted of [null, fp, 'ab'.repeat(32)]) {
+    const v = await verifyReportPdf(stripped, { trustedFingerprint: trusted });
+    assert.strictEqual(v.status, 'invalid', 'trusted ' + trusted);
+    assert.strictEqual(checkOf(v, 'signaturePresent'), false);
+    assert.strictEqual(v.signer, null);
+    assert.strictEqual(v.report.id, r.reportId, 'the genuine report ID, so the verdict must not be soft');
+  }
+  // report.json edited to name no signer: indistinguishable from an unsigned report,
+  // which only a trusted fingerprint exposes.
+  const report = JSON.parse(new TextDecoder().decode(json));
+  report.signer = null;
+  report.meta.title = 'edited';
+  const unsigned = rebuild(enc.encode(canonicalJson(report)));
+  let v = await verifyReportPdf(unsigned);
+  assert.strictEqual(v.status, 'unsigned');
+  assert.strictEqual(checkOf(v, 'signaturePresent'), undefined);
+  v = await verifyReportPdf(unsigned, { trustedFingerprint: fp });
+  assert.strictEqual(v.status, 'wrong-key');
+  assert.strictEqual(checkOf(v, 'trustedKey'), false);
+  assert.deepStrictEqual(v.trusted, { fingerprint: fp, match: false });
+  // A genuine unsigned report with a trusted fingerprint: not from that key either.
+  const plain = await buildReport(await sampleSession(), { createCanvas: stubCanvas });
+  assert.strictEqual((await verifyReportPdf(plain.bytes, { trustedFingerprint: fp })).status, 'wrong-key');
+  // A signed report whose signature this browser cannot check, and whose key is
+  // not the trusted one: wrong-key, not the milder "unverifiable".
+  const subtle = globalThis.crypto.subtle;
+  const realImport = subtle.importKey;
+  subtle.importKey = function (format, key, alg, ...rest) {
+    if ((alg && alg.name) === 'Ed25519') return Promise.reject(Object.assign(new Error('Unrecognized algorithm name'), { name: 'NotSupportedError' }));
+    return realImport.call(this, format, key, alg, ...rest);
+  };
+  try {
+    assert.strictEqual((await verifyReportPdf(r.bytes, { trustedFingerprint: 'ab'.repeat(32) })).status, 'wrong-key');
+    assert.strictEqual((await verifyReportPdf(r.bytes, { trustedFingerprint: fp })).status, 'unverifiable');
+  } finally {
+    subtle.importKey = realImport;
+  }
+});
+
+test('page 1 of a signed report speaks to its reader: the signer\'s browser, and hash-only inputs are not "attached"', async () => {
+  // A canvas stand-in that keeps every string drawn; wrapped lines are joined back
+  // with spaces so sentences can be searched.
+  const drawn = [];
+  const recording = (w, h) => {
+    const c = stubCanvas(w, h);
+    const ctx = c.getContext();
+    return { ...c, getContext: () => ({ ...ctx, fillText: (s) => drawn.push(String(s)) }) };
+  };
+  const key = { ...(await generateKeyPair({ algorithms: [ED25519] })), storage: 'persistent' };
+  await buildReport(await sampleSession(), { createCanvas: recording, signer: key, attachLimit: 2000 });
+  const text = drawn.join(' ');
+  assert.ok(text.includes('Kept in the signer\'s browser'), 'key storage as the reader should read it');
+  assert.ok(!text.includes('Kept in this browser'));
+  assert.ok(!text.includes('(attached inside this PDF)'), 'the old "how to verify" note is not used when an input is hash only');
+  assert.ok(text.includes('for a file recorded by its SHA-256 only, the original is needed'));
+  // The note states the limit that was applied: 2,000 bytes = 2000 / 1048576 MiB,
+  // which rounds to 0.002 at three decimals.
+  assert.ok(text.includes('Files larger than 0.002 MiB (2,000 bytes) are not attached'), 'limit in the note');
+  assert.ok(!text.includes('{limit}'));
+
+  // Every input attached: the usual note.
+  drawn.length = 0;
+  await buildReport(await sampleSession(), { createCanvas: recording, signer: key });
+  const all = drawn.join(' ');
+  assert.ok(all.includes('(attached inside this PDF)'));
+  assert.ok(!all.includes('Files larger than'));
+});
+
+test('manifest: the proportion-bound entry names STS 2.1.2 as the code departed from, with its numbers', () => {
+  const m = buildManifest({ inputs: [], results: { rng: { inputId: 'rng', options: {}, nist: { twoLevel: true, results: [] } } }, signer: null });
+  const d = m.deviations.find((x) => x.id === 'nist-proportion-bound');
+  assert.match(d.reference, /^NIST STS 2\.1\.2/);
+  // By hand: 0.99 - 3 sqrt(0.01 * 0.99 / 100) = 0.99 - 3 * 0.0099499 = 0.960150;
+  // 97 of 100 reach it (0.97 >= 0.96015 > 0.96), and STS's (int)(0.96015 * 100) is 96.
+  const bound = 0.99 - 3 * Math.sqrt(0.01 * 0.99 / 100);
+  assert.strictEqual(bound.toFixed(5), '0.96015');
+  assert.ok(0.97 >= bound && 0.96 < bound);
+  assert.strictEqual(Math.trunc(bound * 100), 96);
+  assert.match(d.text, /0\.96015/);
+  assert.match(d.text, /at least 97 must pass/);
+  assert.match(d.text, /accepts 96 of 100/);
+  // The default limit is recorded when no other was applied.
+  assert.strictEqual(m.attachmentLimitBytes, 25 * 1024 * 1024);
 });

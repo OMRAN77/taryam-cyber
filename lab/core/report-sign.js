@@ -14,7 +14,10 @@
 //   pdf.signature     signature of the canonical JSON of pdf.statement, base64
 // pdfSha256 is the SHA-256 of the whole PDF with report.sig's own bytes (sigLength
 // bytes at sigOffset) replaced by spaces, so the second signature covers every
-// other byte of the file: pages, attachments, structure.
+// other byte of the file: pages, attachments, structure. report.sig's own bytes are
+// pinned by the strict reading below: exactly these keys, canonical JSON, the
+// fingerprint of the key it carries, and signatures in their one accepted form
+// (core/sign.js), so without the private key no byte of it can change either.
 import { canonicalJson } from './slot-model.js';
 import { signBytes, verifyBytes, toBase64, fromBase64, keyFingerprint, toHex, sha256, parseTrustedFingerprint, ALGORITHM_INFO } from './sign.js';
 import { readPdfAttachments, PdfReadError } from './pdf-read.js';
@@ -58,8 +61,17 @@ export async function sealReportPdf(pdfBytes, sigOffset, key, jsonBytes) {
   return sig;
 }
 
-// Strict reading: the bytes must be exactly the canonical JSON followed by spaces,
-// so no byte of report.sig can change without the check failing.
+// The exact key sets of report.sig, of its pdf part and of the signed statement.
+const SIG_KEYS = 'alg,format,keyFingerprint,pdf,publicKey,signature,signedFile,signedFileSha256';
+const PDF_KEYS = 'signature,statement';
+const STATEMENT_KEYS = 'format,pdfSha256,pdfSize,reportSha256,sigLength,sigOffset';
+const hasKeys = (o, keys) => !!o && typeof o === 'object' && !Array.isArray(o) && Object.keys(o).sort().join(',') === keys;
+const HEX64 = /^[0-9a-f]{64}$/;
+const count = (n) => Number.isSafeInteger(n) && n >= 0;
+
+// Strict reading: the bytes must be exactly the canonical JSON of an object with
+// exactly the keys above, followed by spaces; anything else is refused (an extra
+// key would be text no signature covers).
 function parseSignatureFile(file) {
   if (file.encoded) return null;
   let text;
@@ -67,13 +79,15 @@ function parseSignatureFile(file) {
   const body = text.replace(/ +$/, '');
   let obj;
   try { obj = JSON.parse(body); } catch (e) { return null; }
-  if (!obj || typeof obj !== 'object' || Array.isArray(obj) || canonicalJson(obj) !== body) return null;
+  if (!hasKeys(obj, SIG_KEYS) || canonicalJson(obj) !== body) return null;
   if (obj.format !== SIGNATURE_FORMAT || !ALGORITHM_INFO[obj.alg] || obj.signedFile !== REPORT_FILE) return null;
-  if (!/^[0-9a-f]{64}$/.test(obj.keyFingerprint) || !/^[0-9a-f]{64}$/.test(obj.signedFileSha256)) return null;
-  const pdf = obj.pdf && typeof obj.pdf === 'object' ? obj.pdf : null;
-  const spki = fromBase64(obj.publicKey), signature = fromBase64(obj.signature), pdfSignature = pdf ? fromBase64(pdf.signature) : null;
-  if (!spki || !signature || !pdfSignature || !pdf.statement || typeof pdf.statement !== 'object') return null;
-  return { obj, spki, signature, pdfSignature, statement: pdf.statement };
+  if (!HEX64.test(obj.keyFingerprint) || !HEX64.test(obj.signedFileSha256)) return null;
+  const pdf = obj.pdf, st = hasKeys(pdf, PDF_KEYS) ? pdf.statement : null;
+  if (!hasKeys(st, STATEMENT_KEYS) || typeof st.format !== 'string' || !HEX64.test(st.pdfSha256) || !HEX64.test(st.reportSha256)
+    || !count(st.pdfSize) || !count(st.sigOffset) || !count(st.sigLength)) return null;
+  const spki = fromBase64(obj.publicKey), signature = fromBase64(obj.signature), pdfSignature = fromBase64(pdf.signature);
+  if (!spki || !signature || !pdfSignature) return null;
+  return { obj, spki, signature, pdfSignature, statement: st };
 }
 
 async function pdfUnchanged(bytes, sigFile, s, reportSha256) {
@@ -104,12 +118,19 @@ function figures(report) {
 // report.json, and SignError for a malformed trusted fingerprint. Otherwise returns
 // { status, checks, files, signer, trusted, report, pdf }, where status is
 //   valid         every check passed;
-//   wrong-key     valid, but signed by a key other than the trusted one given;
-//   invalid       something changed after signing, or a signature is wrong;
-//   unsigned      no report.sig (fingerprints only, which do not show who issued it);
+//   invalid       something changed after signing, a signature is wrong, or
+//                 report.json names a signature that is no longer there;
+//   wrong-key     a trusted fingerprint was given and the report is not signed
+//                 with that key (signed with another key, or not signed at all);
+//   unsigned      no report.sig, and report.json names none (fingerprints only,
+//                 which do not show who issued it);
 //   unverifiable  this browser cannot check the signature algorithm.
+// The key's fingerprint is always computed from the public key in report.sig, never
+// taken from what report.sig states.
 // originals: [{ name, bytes }], files the user adds to check inputs that are not
-// attached (hash only).
+// attached (hash only). One that does not match is shown on its own (check
+// originalsMatch, file status original-mismatch): it says the file is not the input
+// the report covers, not that the report changed, so the status does not depend on it.
 export async function verifyReportPdf(input, { trustedFingerprint = null, originals = [] } = {}) {
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
   const trusted = parseTrustedFingerprint(trustedFingerprint);
@@ -132,11 +153,14 @@ export async function verifyReportPdf(input, { trustedFingerprint = null, origin
   check('reportJson', !!report);
 
   const sigFile = byName.get(SIGNATURE_FILE);
-  let s = null, unsupported = false, reportSigned = null, pdfIntact = null;
+  // report.json says the report was signed: report.sig must be there.
+  if (report && report.signer) check('signaturePresent', !!sigFile);
+  let s = null, fingerprint = null, unsupported = false, reportSigned = null, pdfIntact = null;
   if (sigFile) {
     s = parseSignatureFile(sigFile);
     if (check('signatureFormat', !!s)) {
-      check('keyFingerprint', (await keyFingerprint(s.spki)) === s.obj.keyFingerprint);
+      fingerprint = await keyFingerprint(s.spki);
+      check('keyFingerprint', fingerprint === s.obj.keyFingerprint);
       check('reportHash', s.obj.signedFileSha256 === reportSha256);
       try {
         reportSigned = check('reportSignature', await verifyBytes({ alg: s.obj.alg, spki: s.spki, signature: s.signature, bytes: reportFile.data }));
@@ -147,7 +171,7 @@ export async function verifyReportPdf(input, { trustedFingerprint = null, origin
         check('reportSignature', null);
         check('pdfUnchanged', null);
       }
-      check('signerInReport', !!(report && report.signer && report.signer.alg === s.obj.alg && report.signer.keyFingerprint === s.obj.keyFingerprint));
+      check('signerInReport', !!(report && report.signer && report.signer.alg === s.obj.alg && report.signer.keyFingerprint === fingerprint));
     }
   }
 
@@ -185,17 +209,23 @@ export async function verifyReportPdf(input, { trustedFingerprint = null, origin
     if (files.some((f) => f.status === 'extra' && f.attachment === a.name && f.offset === a.offset)) continue;
     files.push({ name: a.name, attachment: a.name, size: a.length, expected: null, sha256: a.encoded ? null : await hashHex(a.data), status: 'extra', offset: a.offset });
   }
-  if (report) check('inputsMatch', files.every((f) => ['match', 'hash-only', 'original-match', 'extra'].includes(f.status)));
+  // Attached inputs must match; the user's own originals are judged separately.
+  if (report) check('inputsMatch', files.every((f) => ['match', 'hash-only', 'original-match', 'original-mismatch', 'extra'].includes(f.status)));
   check('noExtraFiles', !files.some((f) => f.status === 'extra'));
-  const trustedMatch = trusted ? !!(s && s.obj.keyFingerprint === trusted) : null;
+  if (files.some((f) => f.status === 'original-match' || f.status === 'original-mismatch')) {
+    check('originalsMatch', !files.some((f) => f.status === 'original-mismatch'));
+  }
+  const trustedMatch = trusted ? fingerprint === trusted : null;
   if (trusted) check('trustedKey', trustedMatch);
 
-  const failed = checks.some((c) => c.ok === false && c.id !== 'trustedKey');
+  // trustedKey and originalsMatch are not about whether the report changed; they
+  // decide wrong-key and the originals' own result.
+  const failed = checks.some((c) => c.ok === false && c.id !== 'trustedKey' && c.id !== 'originalsMatch');
   let status;
-  if (!sigFile) status = failed ? 'invalid' : 'unsigned';
-  else if (failed) status = 'invalid';
-  else if (unsupported) status = 'unverifiable';
+  if (failed) status = 'invalid';
   else if (trusted && !trustedMatch) status = 'wrong-key';
+  else if (!sigFile) status = 'unsigned';
+  else if (unsupported) status = 'unverifiable';
   else status = 'valid';
 
   return {
@@ -206,7 +236,7 @@ export async function verifyReportPdf(input, { trustedFingerprint = null, origin
     dataIntactPdfChanged: reportSigned === true && pdfIntact === false,
     signer: s ? {
       alg: s.obj.alg, label: ALGORITHM_INFO[s.obj.alg].label, reference: ALGORITHM_INFO[s.obj.alg].reference,
-      fingerprint: s.obj.keyFingerprint, storage: (report && report.signer && report.signer.keyStorage) || null,
+      fingerprint, storage: (report && report.signer && report.signer.keyStorage) || null,
     } : null,
     trusted: trusted ? { fingerprint: trusted, match: trustedMatch } : null,
     report: report ? {
