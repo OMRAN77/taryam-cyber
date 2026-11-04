@@ -328,6 +328,7 @@ function theorySection(L, th) {
     [pair('contribFs').join(' / '), c.freeSpins.percent + '%'],
     [{ text: 'RTP', bold: true }, { text: x.rtp.percent + '%', bold: true }],
   ]);
+  if (ways) L.note('waysWildNote');
   if (x.freeSpins) {
     const f = x.freeSpins;
     L.kv('triggerProb', `${pct(f.triggerProbability.value, 4)}  (1 / ${num(1 / f.triggerProbability.value, 1)})`);
@@ -373,6 +374,7 @@ function waysSection(L, x) {
   if (w.freeSpins) { L.section('fsWindows'); waysSourceKv(L, w.freeSpins); }
   L.kv('multStrategy', w.multiplierStrategy + (w.multiplierStrategy === 'global' ? ` × ${w.globalMultiplier}` : ''));
   L.note('multStrategy_' + w.multiplierStrategy);
+  if (w.multiplierStrategy === 'global') L.note('globalPayNote');
   L.kv('wildReel1', 'wildStartsWin: ' + w.wildStartsWin);
   L.note('wildReel1_' + w.wildStartsWin);
   if (w.multiplierSymbols.length) L.kv('multiplierSymbolsLabel', w.multiplierSymbols.map((m) => `${m.symbol} = ${m.countsAs} × ${m.multiplier}`).join(', '));
@@ -402,11 +404,15 @@ function weightsSection(L, m) {
   L.kv('totalWeight', bigNum(m.totalWeight), { mono: true });
   L.kv('reelSetsCount', m.reelSets.length);
   reelSetsTable(L, m.reelSets);
+  // Ways (P0-6): the top reel's total weight multiplies a set's cycle.
+  if (m.reelSets[0].topReelTotal) L.kv('topReelTotal', bigNum(m.reelSets[0].topReelTotal), { mono: true });
   if (m.freeSpinReelSets) {
     L.kv('fsReelSetsCount', m.freeSpinReelSets.length);
     reelSetsTable(L, m.freeSpinReelSets);
+    if (m.freeSpinReelSets[0].topReelTotal) L.kv('topReelTotal', bigNum(m.freeSpinReelSets[0].topReelTotal), { mono: true });
   }
   L.note('weightsNote');
+  if (m.ways) L.note('waysWeightsNote');
 }
 
 function actualSection(L, ac) {
@@ -778,7 +784,7 @@ function mcSection(L, mc) {
   L.kv(s.scope === 'firstDrop' ? 'simRtpFirstDrop' : 'simRtp', pct(s.rtp, 4), { color: C.accent });
   if (mc.controlVariate) {
     const cv = mc.controlVariate;
-    L.kv('cvRtp', `${pct(cv.rtp, 4)}  (95%: ${pct(cv.ci95[0], 3)} – ${pct(cv.ci95[1], 3)})`);
+    L.kv(s.scope === 'firstDrop' ? 'cvRtpFirstDrop' : 'cvRtp', `${pct(cv.rtp, 4)}  (95%: ${pct(cv.ci95[0], 3)} – ${pct(cv.ci95[1], 3)})`);
     L.note('cvNote');
   }
   L.kv('ci', `95%:  ${pct(s.ci95[0], 3)} – ${pct(s.ci95[1], 3)}`);
@@ -1042,7 +1048,7 @@ function asciiSummary(payload, reportId, digest) {
     lines.push('  Not a certification: provably fair covers outcome derivation only, not RTP, settlement or paytables.');
   } else if (r.fair) lines.push(`  Provably fair (${r.fair.scheme}): ${r.fair.ok ? 'all rounds verified' : 'FAILURES FOUND'}`);
   if (r.montecarlo) lines.push(`  Monte Carlo: ${r.montecarlo.spins} rounds, seed "${r.montecarlo.seed}", RTP ${(r.montecarlo.result.rtp * 100).toFixed(4)}%` + (r.montecarlo.result.scope === 'firstDrop' ? ' (first drop only)' : '') + `, result SHA-256 ${r.montecarlo.resultSha256}`
-    + (r.montecarlo.controlVariate ? `; with the paid spin as a control variate ${(r.montecarlo.controlVariate.rtp * 100).toFixed(4)}% +/- ${(1.959964 * r.montecarlo.controlVariate.standardError * 100).toFixed(4)}%` : ''));
+    + (r.montecarlo.controlVariate ? `; with the paid spin as a control variate ${(r.montecarlo.controlVariate.rtp * 100).toFixed(4)}% +/- ${(1.959964 * r.montecarlo.controlVariate.standardError * 100).toFixed(4)}%` + (r.montecarlo.result.scope === 'firstDrop' ? ' (first drop only)' : '') : ''));
   if (r.lut) lutAscii(lines, r.lut);
   if (sg) {
     lines.push('', 'How to verify: open the RTP Lab\'s "Verify a report" tab and drop this PDF. It checks report.sig',

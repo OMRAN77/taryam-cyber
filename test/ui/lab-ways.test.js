@@ -112,6 +112,16 @@ test('RTP lab: ways / Megaways models end to end', async (t) => {
   assert.strictEqual(await runTheory(), '95.901366%', 'the first drop is the game without cascades');
   assert.strictEqual(await page.textContent('#res-theory .card.accent .k'), 'RTP أول سقوط فقط');
   assert.ok(await page.isVisible('#first-drop-note'));
+  // Its simulation: both the plain and the control-variate RTP say first drop only, and
+  // the standard errors are percentages like the cards.
+  await page.click('#tab-mc');
+  await page.selectOption('#m-spins', '100000');
+  await page.evaluate(() => document.querySelector('#res-mc').replaceChildren());
+  await page.click('#run-mc');
+  await page.waitForSelector('#mc-digest');
+  const mcKeys = await page.$$eval('#res-mc .card .k', (k) => k.map((x) => x.textContent));
+  assert.ok(mcKeys.includes('RTP المحاكاة (أول سقوط فقط)') && mcKeys.includes('RTP بمتغيّر ضابط (أول سقوط فقط)') && !mcKeys.includes('RTP بمتغيّر ضابط'), mcKeys.join(' | '));
+  assert.match(await page.textContent('#mc-cv-note'), /الخطأ المعياري: [0-9.]+% \(دون المتغيّر الضابط: [0-9.]+%\)/);
   await page.click('#tab-report');
   await page.click('#run-report');
   await page.waitForFunction(() => document.querySelector('#res-report .card .v') && !document.querySelector('#run-report').disabled);
@@ -144,6 +154,36 @@ test('RTP lab: ways / Megaways models end to end', async (t) => {
   assert.ok(await page.isVisible('#f-reels'));
   assert.ok(await page.isHidden('#modelJsonBox'));
   assert.strictEqual(await runTheory(), '95.517500%');
+
+  // A line game that declares cascades stays in the JSON editor (the form would drop the
+  // key): its RTP (the line game's 95.5175%, first drop) is labelled first drop only, and
+  // Export JSON keeps the key.
+  const desert = JSON.parse(fs.readFileSync(path.join(SAMPLES, 'desert-gold.json'), 'utf8'));
+  await page.setInputFiles('#modelFile', { name: 'desert-cascades.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...desert, cascades: true })) });
+  await page.waitForSelector('#modelJsonBox:not([hidden])');
+  assert.ok(await page.isVisible('#cascadesJsonNote') && await page.isHidden('#waysJsonNote') && await page.isHidden('#jsonModeNote'));
+  assert.strictEqual(JSON.parse(await page.inputValue('#f-json')).cascades, true);
+  assert.strictEqual(await runTheory(), '95.517500%');
+  assert.strictEqual(await page.textContent('#res-theory .card.accent .k'), 'RTP أول سقوط فقط');
+  assert.ok(await page.isVisible('#first-drop-note'));
+  const [exported] = await Promise.all([page.waitForEvent('download'), page.click('#exportModel')]);
+  assert.strictEqual(JSON.parse(fs.readFileSync(await exported.path(), 'utf8')).cascades, true);
+
+  // A weighted ways model with heights, a joint table and a top reel: per-reel totals of
+  // the windows (24 / 16 / 3, by hand in test/lab/ways-exact.test.mjs), the top reel's 7,
+  // the cycle 8,064; global pays and wild-assisted wins are explained.
+  const weightedWays = { evaluation: 'ways', reels: [['A', 'B', 'W'], ['A', 'B', 'C'], ['C', 'A', 'B']], weights: [[1, 2, 3], null, null],
+    heights: [[{ rows: 1, weight: 1 }, { rows: 2, weight: 3 }], { rows: [1, 2], joint: [[1, 5], [2, 0], [7, 1]] }, 2],
+    topReel: { reel: ['A', 'W', 'C'], weights: [1, 2, 4], covers: [2, 3] },
+    paytable: { A: [0, 1, 3], B: [0, 2, 5], C: [0, 0, 4] }, wild: 'W', multiplierStrategy: 'global', globalMultiplier: 3 };
+  await page.fill('#f-json', JSON.stringify(weightedWays));
+  await runTheory();
+  const setRow = await page.$$eval('#res-theory tbody tr', (rs) => rs.map((r) => [...r.cells].map((c) => c.textContent)).find((c) => c[4] && c[4].includes(' / ')));
+  assert.strictEqual(setRow[4], '24 / 16 / 3');
+  assert.strictEqual(await page.textContent('#res-theory .top-total'), 'مجموع أوزان البكرة العلوية: 7');
+  assert.strictEqual(await page.textContent('#res-theory .weight-total'), 'مجموع أوزان الدورة الكاملة: 8,064');
+  assert.ok(await page.isVisible('#ways-weights-note') && await page.isVisible('#ways-wild-note'));
+  assert.ok((await page.textContent('#ways-rules')).includes('قبل المضاعف العام'));
 
   assert.deepStrictEqual(errors, []);
   const outside = requests.filter((r) => !r.url.startsWith('blob:') && !(r.method === 'GET' && /\/(lab|icons)\//.test(new URL(r.url).pathname)));

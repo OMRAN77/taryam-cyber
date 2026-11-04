@@ -105,7 +105,8 @@ test('every label the ways UI and report use exists in both languages', () => {
     'fsWindows', 'topReelWord', 'topReelValue', 'topReelNone', 'topReelKv', 'betCostLabel', 'waysPayUnit', 'multStrategy', 'multStrategy_symbol', 'multStrategy_board', 'multStrategy_global',
     'globalMultLabel', 'multiplierSymbolsLabel', 'wildReel1', 'wildReel1_true', 'wildReel1_false', 'waysSource', 'waysBoardNote', 'waysNotCert', 'rtpFirstDrop', 'firstDropNote', 'firstDropBadge',
     'firstDropShort', 'hitUnavailable', 'payPerWay', 'probabilityRun', 'averageWays', 'controlVariateLabel', 'cvRtp', 'cvSe', 'cvNote', 'simRtpFirstDrop', 'distFirstDrop', 'sigmaFirstDrop',
-    'refUseWays', 'devWaysBoard', 'devWaysWild', 'contribWays', 'symbolTableWays'];
+    'refUseWays', 'devWaysBoard', 'devWaysWild', 'contribWays', 'symbolTableWays',
+    'cascadesJsonNote', 'waysWildNote', 'globalPayNote', 'topReelTotal', 'waysWeightsNote', 'cvRtpFirstDrop'];
   for (const k of keys) {
     const [ar, en] = pair(k);
     assert.ok(ar !== k && en !== k && ar !== en, k);
@@ -114,4 +115,45 @@ test('every label the ways UI and report use exists in both languages', () => {
   // The source and date of the conventions are named in both languages.
   assert.ok(pair('waysSource')[1].includes('141b4e8') && pair('waysSource')[1].includes('2 Nov 2026'));
   assert.ok(pair('waysSource')[0].includes('141b4e8') && pair('waysSource')[0].includes('2 نوفمبر 2026'));
+});
+
+// A canvas that records every text the PDF layout draws.
+function recordingCanvas(drawn) {
+  return (w, h) => {
+    const c = stubCanvas(w, h);
+    const ctx = c.getContext('2d');
+    ctx.fillText = (t) => drawn.push(String(t));
+    return c;
+  };
+}
+
+test('PDF: a cascading game\'s control-variate RTP is labelled first drop only', async () => {
+  const raw = { ...JSON.parse(JSON.stringify(oasisCaravanWays)), name: 'Oasis Caravan, cascading', cascades: true };
+  const session = await waysSession(raw, { mc: true });
+  const drawn = [];
+  await buildReport(session, { createCanvas: recordingCanvas(drawn), now: new Date('2026-11-04T09:00:00Z') });
+  assert.ok(drawn.includes(pair('cvRtpFirstDrop')[1]) && drawn.includes(pair('cvRtpFirstDrop')[0]), 'first-drop control-variate label');
+  assert.ok(!drawn.includes(pair('cvRtp')[1]), 'no plain control-variate label');
+  assert.ok(drawn.includes(pair('simRtpFirstDrop')[1]));
+  // The text page says it too: its lines (PDF strings, parentheses escaped) joined again.
+  const r = await buildReport(session, { createCanvas: stubCanvas, now: new Date('2026-11-04T09:00:00Z') });
+  const page = [...Buffer.from(r.bytes).toString('latin1').matchAll(/\(((?:\\.|[^\\)])*)\) Tj/g)].map((m) => m[1].replace(/\\(.)/g, '$1')).join(' ').replace(/\s+/g, ' ');
+  assert.match(page, /as a control variate [0-9.]+% \+\/- [0-9.]+% \(first drop only\)/);
+});
+
+test('PDF: a weighted ways model shows window totals and the top reel total; global pays and wild-assisted are explained', async () => {
+  // The totals are checked by hand in ways-exact.test.mjs: 24 / 16 / 3, top reel 7.
+  const raw = { evaluation: 'ways', reels: [['A', 'B', 'W'], ['A', 'B', 'C'], ['C', 'A', 'B']], weights: [[1, 2, 3], null, null],
+    heights: [[{ rows: 1, weight: 1 }, { rows: 2, weight: 3 }], { rows: [1, 2], joint: [[1, 5], [2, 0], [7, 1]] }, 2],
+    topReel: { reel: ['A', 'W', 'C'], weights: [1, 2, 4], covers: [2, 3] },
+    paytable: { A: [0, 1, 3], B: [0, 2, 5], C: [0, 0, 4] }, wild: 'W', multiplierStrategy: 'global', globalMultiplier: 3 };
+  const session = await waysSession(raw);
+  const drawn = [];
+  await buildReport(session, { createCanvas: recordingCanvas(drawn), now: new Date('2026-11-04T09:00:00Z') });
+  for (const v of ['24', '16', '3', '8,064']) assert.ok(drawn.includes(v), v);
+  const top = drawn.indexOf(pair('topReelTotal')[1]);
+  assert.ok(top >= 0, 'top reel total label');
+  assert.ok(drawn.slice(top, top + 3).includes('7'), 'top reel total value');
+  const text = drawn.join(' ');
+  for (const k of ['waysWeightsNote', 'globalPayNote', 'waysWildNote']) assert.ok(text.includes(pair(k)[1].split(' ').slice(0, 6).join(' ')), k);
 });

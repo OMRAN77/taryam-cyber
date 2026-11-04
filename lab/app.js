@@ -161,12 +161,16 @@ function setJsonMode(on) {
   $('#panel-theory').classList.toggle('json-mode', on);
   $('#modelJsonBox').hidden = !on;
 }
+// A model declaring "cascades" (any value but false): the form has no such key and
+// would drop it, so the first-drop label would be lost (P0-6).
+const declaresCascades = (raw) => Boolean(raw && typeof raw === 'object' && raw.cascades !== undefined && raw.cascades !== null && raw.cascades !== false);
 function setModel(raw) {
   // A ways model (P0-6) also stays in JSON: the form edits line games only.
-  if (isWeightedModel(raw) || isWaysModel(raw)) {
+  if (isWeightedModel(raw) || isWaysModel(raw) || declaresCascades(raw)) {
     $('#f-json').value = compactJson(raw) + '\n';
     $('#jsonModeNote').hidden = !isWeightedModel(raw);
     $('#waysJsonNote').hidden = !isWaysModel(raw);
+    $('#cascadesJsonNote').hidden = !declaresCascades(raw);
     setJsonMode(true);
   } else {
     setJsonMode(false);
@@ -189,9 +193,12 @@ function reelSetsTable(sets) {
 }
 function renderWeights(box, m) {
   if (!m.weighted) return;
-  box.append(sub('reelSetsTable'), reelSetsTable(m.reelSets));
-  if (m.freeSpinReelSets) box.append(sub('fsReelSetsCount'), reelSetsTable(m.freeSpinReelSets));
+  // Ways (P0-6): the top reel's total weight, which multiplies a set's cycle.
+  const topTotal = (sets) => (sets[0].topReelTotal ? [el('p', { class: 'muted small top-total' }, tr('topReelTotal') + ': ' + fmtWeight(sets[0].topReelTotal))] : []);
+  box.append(sub('reelSetsTable'), reelSetsTable(m.reelSets), ...topTotal(m.reelSets));
+  if (m.freeSpinReelSets) box.append(sub('fsReelSetsCount'), reelSetsTable(m.freeSpinReelSets), ...topTotal(m.freeSpinReelSets));
   box.append(el('p', { class: 'muted small weight-total' }, tr('totalWeight') + ': ' + fmtWeight(m.totalWeight)), el('p', { class: 'muted small' }, tr('weightsNote')));
+  if (m.ways) box.append(el('p', { class: 'muted small', id: 'ways-weights-note' }, tr('waysWeightsNote')));
 }
 
 // ---------- ways / Megaways (P0-6) ----------
@@ -215,7 +222,7 @@ function renderWays(box, x) {
   box.append(sub('waysTitle'), cards([{ k: 'waysEval', v: tr('waysWord'), cls: 'ways-text' }, { k: 'betCostLabel', v: String(w.betCost) }]), waysSourceCards(w.base), waysHeightsTable(w.base));
   if (w.freeSpins) box.append(sub('fsWindows'), waysSourceCards(w.freeSpins), waysHeightsTable(w.freeSpins));
   const rules = [
-    tr('multStrategy') + ': ' + tr('multStrategy_' + w.multiplierStrategy) + (w.multiplierStrategy === 'global' ? ` (${tr('globalMultLabel')}: ${w.globalMultiplier})` : ''),
+    tr('multStrategy') + ': ' + tr('multStrategy_' + w.multiplierStrategy) + (w.multiplierStrategy === 'global' ? ` (${tr('globalMultLabel')}: ${w.globalMultiplier}). ${tr('globalPayNote')}` : ''),
     tr('wildReel1') + ': ' + tr('wildReel1_' + w.wildStartsWin),
   ];
   if (w.multiplierSymbols.length) rules.push(tr('multiplierSymbolsLabel') + ': ' + w.multiplierSymbols.map((m) => `${m.symbol} = ${m.countsAs} × ${m.multiplier}`).join(' · '));
@@ -270,6 +277,7 @@ function renderTheory() {
   box.append(sub('contributions'), table(['contributions', 'contribution', ['حصة من RTP', 'Share of RTP'], ''], [
     [ways ? 'contribWays' : 'contribLines', c.lines], ['contribWild', c.wildAssistedLines], ['contribScatter', c.scatter], ['contribFs', c.freeSpins],
   ].map(([k, v]) => [tr(k), { v: v.percent + '%', cls: 'num' }, { v: pct(v.value / x.rtp.value, 2), cls: 'num' }, { v: bar(v.value / x.rtp.value) }])));
+  if (ways) box.append(el('p', { class: 'muted small', id: 'ways-wild-note' }, tr('waysWildNote')));
   if (x.freeSpins) {
     const f = x.freeSpins;
     box.append(sub('freeSpins'), cards([
@@ -944,7 +952,7 @@ function renderMc() {
   const cv = mc.controlVariate;
   box.append(cards([
     { k: s.scope === 'firstDrop' ? 'simRtpFirstDrop' : 'simRtp', v: pct(s.rtp, 4), s: '95%: ' + pct(s.ci95[0], 3) + ' – ' + pct(s.ci95[1], 3), cls: 'accent' },
-    cv && { k: 'cvRtp', v: pct(cv.rtp, 4), s: '95%: ' + pct(cv.ci95[0], 3) + ' – ' + pct(cv.ci95[1], 3) },
+    cv && { k: s.scope === 'firstDrop' ? 'cvRtpFirstDrop' : 'cvRtp', v: pct(cv.rtp, 4), s: '95%: ' + pct(cv.ci95[0], 3) + ' – ' + pct(cv.ci95[1], 3) },
     { k: 'vsExact', v: pct(mc.exactRtp, 4), s: 'z = ' + fmt(z, 2), cls: Math.abs(z) < 4 ? 'good' : 'bad' },
     { k: 'hitFrequency', v: pct(s.hitFrequency, 3) },
     { k: 'sd', v: fmt(s.sd, 3) },
@@ -960,7 +968,7 @@ function renderMc() {
     el('p', { class: 'muted small' }, tr('reproduce')),
   ));
   if (s.scope === 'firstDrop') box.append(el('p', { class: 'muted small' }, tr('firstDropNote')));
-  if (cv) box.append(el('p', { class: 'muted small', id: 'mc-cv-note' }, `${tr('cvNote')} ${fill('cvSe', fmt(cv.standardError, 5), fmt(s.standardError, 5))} · μ = ${pct(cv.muX, 4)} · β = ${fmt(cv.beta, 4)}`));
+  if (cv) box.append(el('p', { class: 'muted small', id: 'mc-cv-note' }, `${tr('cvNote')} ${fill('cvSe', pct(cv.standardError, 4), pct(s.standardError, 4))} · μ = ${pct(cv.muX, 4)} · β = ${fmt(cv.beta, 4)}`));
   if (mc.confirmed !== null) box.append(el('div', { class: 'verdict ' + (mc.confirmed ? 'pass' : 'fail') }, tr(mc.confirmed ? 'sameAgain' : 'differentAgain')));
   const again = el('button', { type: 'button', id: 'rerun-mc' }, tr('rerun'));
   again.addEventListener('click', () => runMc(mc.resultSha256));
