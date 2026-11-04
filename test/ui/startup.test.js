@@ -70,3 +70,19 @@ test('header buttons wired at the end of the script respond', async (t) => {
   await page.click('#btnToggleHistory');
   assert.ok(await page.evaluate(() => document.querySelector('#workarea').classList.contains('open')), 'code/preview panel did not open');
 });
+
+test('security operations home: shown on an empty chat, its tiles open the matching tool', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  page.setDefaultTimeout(5000);
+  await page.goto(server.url + '/');
+  await page.click('#btnGuestMode');
+  assert.ok(await page.isVisible('#socHome'), 'SOC home hidden on an empty chat');
+  assert.strictEqual(await page.$$eval('#socHome [data-soc-tool]', (b) => b.length), 8);
+  assert.strictEqual(await page.textContent('#sysChipText'), 'ONLINE');
+  await page.click('#socHome [data-soc-tool="jwt"]');
+  assert.ok(await page.evaluate(() => document.querySelector('#secToolsDialog').open), 'tools dialog did not open');
+  assert.strictEqual(await page.getAttribute('.secToolNavBtn.active', 'data-tool'), 'jwt');
+});
