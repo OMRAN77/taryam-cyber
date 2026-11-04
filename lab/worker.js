@@ -13,7 +13,7 @@ import { auditDistribution, pmfFromExact, parsePmfCsv, examplePmf, pmfCsv, sampl
 import { analyzeLutFiles, makeSampleLut } from './core/lut.js';
 import { verifyReportPdf } from './core/report-sign.js';
 import { selfTest, listAdapters, disabledAdapters } from './core/pf/registry.js';
-import { attachRoundDistribution, capStats, topAwardChecks } from './core/round-dist.js';
+import { attachRoundDistribution, capStats, topAward } from './core/round-dist.js';
 import { sessionFunnel } from './core/session.js';
 import { auditCsv } from './core/pf/audit.js';
 import { makeSample } from './core/pf/sample.js';
@@ -52,11 +52,10 @@ function exactWithRound(model, progress) {
   return attachRoundDistribution(result, model, spins, { onProgress: (p) => progress(0.75 + 0.25 * p) });
 }
 const ROUND_TASKS = {
-  // A max-win cap M on the whole-round pmf; top award = M, or the largest win.
+  // A max-win cap M on the whole-round pmf; top award = min(M, the largest win).
   roundCap: ({ round, cap, rtp }) => {
     const c = cap === null || cap === undefined || String(cap).trim() === '' ? null : capStats(round, String(cap).trim(), rtp);
-    const top = c ? c.reach : round.maxWin.bounded ? round.maxWin : null;
-    return { cap: c, top: top ? { x: c ? c.M : round.maxWin.x, prob: top, checks: topAwardChecks(top) } : null };
+    return { cap: c, top: topAward(round, c) };
   },
   // n paid rounds at a flat bet; budget in bets (null: no ruin figure).
   session: async ({ pmf, rtp, sd, rounds, budget, seed }, progress) => sessionFunnel(pmf, {

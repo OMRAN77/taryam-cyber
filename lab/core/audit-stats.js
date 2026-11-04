@@ -260,7 +260,10 @@ export function makePmf({ label = 'pmf', scope = 'round', source = 'csv', entrie
 // the transform for rounds with the feature, under its noise floor left out).
 // The round pmf also states the game's true largest win (maxX; null when retriggers
 // make it unbounded) and whether cells were left out (truncated): then its last cell is
-// not a top prize, and only the true largest win may bound the e-process.
+// not a top prize, and only the true largest win may bound the e-process. The cells
+// left out are real outcomes (each under the noise floor): `rest` keeps their total
+// mass and where they can lie (multiples of the lattice step, up to the largest win),
+// so that a round there is counted in a cell of its own and never called impossible.
 export function pmfFromExact(exact, label = 'model') {
   const total = exact.total ? BigInt(exact.total) : null;
   const pmf = makePmf({
@@ -268,6 +271,15 @@ export function pmfFromExact(exact, label = 'model') {
     entries: exact.entries.map((e) => ({ x: e.x, p: typeof e.p === 'number' ? e.p : new Fraction(BigInt(e.count), total).toNumber(), trigger: e.trigger })),
   });
   if ('maxX' in exact) Object.assign(pmf, { maxWin: exact.maxX, truncated: Boolean(exact.truncated) });
+  if (exact.truncated && exact.scope === 'round' && exact.unitBets) {
+    const [a, b] = String(exact.unitBets).split('/');
+    const floor = exact.noiseFloor > 0 ? exact.noiseFloor : 0;
+    pmf.rest = {
+      p: Math.max(exact.droppedMass || 0, floor), // at least one left-out cell's worth
+      cell: floor, // a single left-out cell is under the floor
+      unit: Number(a) / Number(b || 1), max: exact.maxX ?? null,
+    };
+  }
   return pmf;
 }
 
@@ -351,13 +363,33 @@ export function buildCells(pmfs) {
   const values = [];
   for (const x of xs) if (!values.length || x - values[values.length - 1] > 1e-12 * Math.max(1, x)) values.push(x);
   const triggerCell = scope === 'baseSpin' ? values.length : -1;
-  const K = values.length + (triggerCell >= 0 ? 1 : 0);
-  const probs = pmfs.map((pmf) => {
+  // A whole-round pmf that left cells out (pmf.rest, see pmfFromExact): one more cell,
+  // last, for the rounds on its lattice that match none of its cells.
+  const rests = scope === 'round' ? pmfs.map((p) => p.rest || null) : pmfs.map(() => null);
+  const restCell = rests.some(Boolean) ? values.length : -1;
+  const K = values.length + (triggerCell >= 0 ? 1 : 0) + (restCell >= 0 ? 1 : 0);
+  const probs = pmfs.map((pmf, v) => {
     const a = new Float64Array(K);
-    for (const e of pmf.entries) a[scope === 'baseSpin' && e.trigger ? triggerCell : nearest(values, e.x)] += e.p;
+    const rest = rests[v];
+    const scale = rest ? 1 - rest.p : 1;
+    for (const e of pmf.entries) a[scope === 'baseSpin' && e.trigger ? triggerCell : nearest(values, e.x)] += e.p * scale;
+    if (rest) {
+      a[restCell] = rest.p;
+      // Another candidate's value that this one left out (on its lattice): at most a
+      // left-out cell's probability, never 0.
+      for (let k = 0; k < values.length; k++) if (a[k] === 0 && onLattice(rest, values[k], 1e-9 * Math.max(1, values[k]))) a[k] = rest.cell;
+    }
     return a;
   });
-  return { scope, values: Float64Array.from(values), triggerCell, K, probs };
+  return { scope, values: Float64Array.from(values), triggerCell, restCell, rests: rests.filter(Boolean), K, probs };
+}
+
+// Whether x (bets) is a whole number of lattice steps of a left-out region, up to its
+// largest win (null: no largest win), within tol.
+function onLattice(rest, x, tol) {
+  if (!(x >= -tol) || !(rest.unit > 0)) return false;
+  if (rest.max !== null && x > rest.max + tol) return false;
+  return Math.abs(x - Math.round(x / rest.unit) * rest.unit) <= tol;
 }
 
 // Decimal resolution of the log (0.01 for cents, 1e-6 for six decimals): the game
@@ -387,13 +419,15 @@ export function classifyRounds(log, cells, resolution = logResolution(log)) {
       'هذا التوزيع يغطي اللفة المدفوعة وحدها؛ يحتاج السجل عمود trigger (‏1 إذا فعّلت الجولة الميزة)');
   }
   const vals = cells.values;
+  const rests = cells.restCell >= 0 ? cells.rests : [];
   for (let i = 0; i < n; i++) {
     if (cells.triggerCell >= 0 && log.triggers[i]) { out[i] = cells.triggerCell; continue; }
     const x = log.wins[i] / log.bets[i];
-    if (!vals.length) { out[i] = -1; continue; }
-    const j = nearest(vals, x);
     const tol = Math.max(1e-9 * Math.max(1, x), resolution ? (resolution / 2 / log.bets[i]) * (1 + 1e-9) : 0);
-    out[i] = Math.abs(vals[j] - x) <= tol ? j : -1;
+    const j = vals.length ? nearest(vals, x) : -1;
+    if (j >= 0 && Math.abs(vals[j] - x) <= tol) out[i] = j;
+    // A value a whole-round pmf left out (under its noise floor) is possible, not impossible.
+    else out[i] = rests.some((r) => onLattice(r, x, tol)) ? cells.restCell : -1;
   }
   return out;
 }
@@ -847,9 +881,9 @@ export function auditDistribution(log, pmfs, options = {}, rng, onProgress = () 
   const fit = { tests: [] };
   out.fit = fit;
   const fitCells = needTrigger && !L.triggers ? null : buildCells([ref]);
-  let counts = null, p0 = null, hits = null, triggered = null;
+  let counts = null, p0 = null, hits = null, triggered = null, refIdx = null;
   if (fitCells) {
-    const refIdx = classifyRounds(L, fitCells, resolution);
+    refIdx = classifyRounds(L, fitCells, resolution);
     counts = new Float64Array(fitCells.K);
     p0 = fitCells.probs[0];
     const off = [];
@@ -927,7 +961,10 @@ export function auditDistribution(log, pmfs, options = {}, rng, onProgress = () 
     const V = fitCells.values.length;
     gof.bins = gof.bins.map((b) => {
       const last = Math.min(b.to, V - 1);
-      return { ...b, lo: b.from < V ? fitCells.values[b.from] : null, hi: last >= b.from ? fitCells.values[last] : null, triggered: fitCells.triggerCell >= b.from && fitCells.triggerCell <= b.to };
+      return {
+        ...b, lo: b.from < V ? fitCells.values[b.from] : null, hi: last >= b.from ? fitCells.values[last] : null, triggered: fitCells.triggerCell >= b.from && fitCells.triggerCell <= b.to,
+        rest: fitCells.restCell >= 0 && fitCells.restCell >= b.from && fitCells.restCell <= b.to,
+      };
     });
     gof.inFamily = gof.applicable && gofInFamily;
     // Its P-value cannot reach alpha / m: no effect is "detectable" by it.
@@ -956,9 +993,13 @@ export function auditDistribution(log, pmfs, options = {}, rng, onProgress = () 
     if (fit.offSupport && !fit.offSupport.count) {
       let sum = 0, s = 0;
       for (const v of xs) sum += v;
-      for (let k = 0; k < fitCells.K; k++) s += counts[k] * fitCells.values[k];
+      for (let k = 0; k < fitCells.values.length; k++) s += counts[k] * fitCells.values[k];
+      // The cell of left-out values has no single value: its rounds add what they paid,
+      // and simulated draws of it add 0 (both make the lower tail larger: conservative).
+      const values = Float64Array.from({ length: fitCells.K }, (_, k) => (k < fitCells.values.length ? fitCells.values[k] : 0));
+      if (fitCells.restCell >= 0) for (let i = 0; i < n; i++) if (refIdx[i] === fitCells.restCell) s += xs[i];
       const R = totalReplicates ?? Math.max(999, Math.min(9999, Math.floor(MC_BUDGET / drawCost(p0, n))));
-      fit.total = { sum, expected: n * ref.mean, ...totalLowerTail(fitCells.values, p0, n, s, { rng, replicates: R, onProgress: stage(0.4, 0.5) }) };
+      fit.total = { sum, expected: n * ref.mean, ...totalLowerTail(values, p0, n, s, { rng, replicates: R, onProgress: stage(0.4, 0.5) }) };
     }
   }
   const rejected = holm(fit.tests.map((t) => t.p), alpha);

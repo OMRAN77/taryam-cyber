@@ -17,11 +17,13 @@ import { normalizeModel } from '../../lab/core/slot-model.js';
 import { analyzeExact } from '../../lab/core/slot-exact.js';
 import { Fraction } from '../../lab/core/fraction.js';
 import {
-  roundDistribution, attachRoundDistribution, exactMomentsOf, featureDistribution, capStats, topAwardChecks,
-  cappedFeature, GRID_LIMIT, FLOOR_MIN,
+  roundDistribution, attachRoundDistribution, exactMomentsOf, featureDistribution, capStats, topAwardChecks, topAward,
+  cappedFeature, GRID_LIMIT, FLOOR_MIN, MIN_BOUND,
 } from '../../lab/core/round-dist.js';
 import { simulate } from '../../lab/core/montecarlo.js';
 import { prngFromSeed } from '../../lab/core/prng.js';
+import { parsePlayLog } from '../../lab/core/actual.js';
+import { auditDistribution, pmfFromExact } from '../../lab/core/audit-stats.js';
 
 const SAMPLES = new URL('../../lab/samples/', import.meta.url);
 const sample = (name) => JSON.parse(fs.readFileSync(new URL(name, SAMPLES), 'utf8'));
@@ -402,4 +404,135 @@ test('max-win cap and top-award odds checks (unverified rules)', () => {
   assert.deepStrictEqual([tiny.gli19.pass, tiny.pa.pass], [false, false]);
   const loose = topAwardChecks({ value: null, fraction: null, method: 'bound', below: 1e-3 });
   assert.deepStrictEqual([loose.gli19.pass, loose.pa.pass], [null, null]);
+});
+
+// ---------- review fixes ----------
+
+// P(W >= M) must count every transform cell, also those under the noise floor that the
+// pmf leaves out: past the pmf's last cell (384x here) the tail is still well above the
+// floor. Reference: the play-sequence enumeration (tinyRef), tail summed by hand.
+test('max-win cap: the chance to reach M counts the cells the pmf leaves out', () => {
+  const { model, spins, result } = analyze(TINY);
+  const round = roundDistribution(model, spins, exactMomentsOf(result));
+  const { round: ref, lost } = tinyRef();
+  const refTail = (M) => { let s = 0; for (const [t, p] of ref) if (t / 10 >= M) s += p; return s; };
+  const last = round.pmf.entries[round.pmf.entries.length - 1].x;
+  assert.ok(last < 400 && round.pmf.droppedMass > 0, 'the pmf is cut before 400x');
+  // 400x: about 7.8e-13 by the enumeration, above the 1e-13 floor: a computed value.
+  const t400 = refTail(400);
+  assert.ok(t400 > 5 * round.floor, 'reference tail ' + t400);
+  const c400 = capStats(round, 400, result.rtp.fraction);
+  assert.strictEqual(c400.reach.method, 'fft');
+  assert.ok(Math.abs(c400.reach.value - t400) <= 1e-4 * t400 + lost, `reach ${c400.reach.value} vs ${t400}`);
+  // 450x: about 4.5e-14, under the floor: an upper bound, and a true one.
+  const t450 = refTail(450);
+  const c450 = capStats(round, 450, result.rtp.fraction);
+  assert.strictEqual(c450.reach.method, 'bound');
+  assert.ok(c450.reach.below >= t450 + lost, `bound ${c450.reach.below} vs ${t450}`);
+  // At a threshold's own point the cap reads the same value as the table.
+  assert.strictEqual(capStats(round, 100, result.rtp.fraction).reach.value, round.thresholds[0].value);
+});
+
+// A top win whose Chernoff bound underflows (200 capped free spins, each at the
+// largest win) is shown as a bound, never as a computed 0.
+test('capped Desert Gold: the top win is possible, so its probability is a bound, not 0', () => {
+  const raw = sample('desert-gold.json');
+  raw.scatter.freeSpins.maxSpins = 200;
+  const { model, spins, result } = analyze(raw);
+  const round = roundDistribution(model, spins, exactMomentsOf(result));
+  // Largest win by hand from the published spin pmf (same reels in the feature): the
+  // largest trigger spin, then 19 retriggers (10 + 19 * 10 = 200 spins) each paying the
+  // largest trigger-spin win, and 181 spins at the largest spin win; free spins x3.
+  const pmf = result.distribution.pmf;
+  const tmax = Math.max(...pmf.entries.filter((e) => e.trigger).map((e) => e.units));
+  const xmax = Math.max(...pmf.entries.map((e) => e.units));
+  assert.strictEqual(round.maxWin.x, (tmax + 3 * (19 * tmax + 181 * xmax)) / 20);
+  assert.strictEqual(round.maxWin.method, 'bound');
+  assert.strictEqual(round.maxWin.value, null);
+  assert.ok(round.maxWin.below >= MIN_BOUND, 'a positive bound');
+  // A probability under 1e-300 fails both odds rules.
+  const ch = topAwardChecks(round.maxWin);
+  assert.deepStrictEqual([ch.gli19.pass, ch.pa.pass], [false, false]);
+});
+
+test('a free-spin game that never pays: one cell at 0 with probability 1', () => {
+  // Every spin pays 0 (base and free): by hand the round pays 0 with probability 1;
+  // 1 combination in 6 triggers 2 free spins.
+  const F = (a) => new Fraction(BigInt(a));
+  const model = { scatterPays: [0, 0, 0, 0], totalBetUnits: 1, freeSpins: { trigger: 3, spins: 2, multiplier: F(2), retrigger: false } };
+  const spins = {
+    base: { entries: [{ lineWin: 0, scat: 0, count: 5n }, { lineWin: 0, scat: 3, count: 1n }], total: 6n },
+    free: { entries: [{ lineWin: 0, scat: 0, count: 3n }], total: 3n },
+  };
+  const round = roundDistribution(model, spins, { rtp: F(0), variance: F(0) });
+  let mass = 0;
+  for (const e of round.pmf.entries) { assert.strictEqual(e.x, 0); mass += e.p; }
+  assert.ok(Math.abs(mass - 1) < 1e-15);
+  assert.ok(Math.abs(round.triggerProbability - 1 / 6) < 1e-15);
+  assert.strictEqual(round.thresholds[0].value, 0);
+});
+
+// The top award the odds rules see is the smaller of M and the game's largest win.
+test('odds checks: a cap above the largest win does not replace the top award', () => {
+  // European roulette, red: the largest win is 2 bets with probability 18/37 (by hand).
+  const red = analyze(sample('roulette-european.json'));
+  const round = roundDistribution(red.model, red.spins, exactMomentsOf(red.result));
+  const c = capStats(round, '5', red.result.rtp.fraction);
+  assert.strictEqual(c.aboveMax, true);
+  assert.deepStrictEqual([c.reach.fraction, c.lost.fraction, c.rtpCapped.fraction], ['0', '0', '36/37']);
+  const top = topAward(round, c);
+  assert.deepStrictEqual([top.x, top.fromCap, top.prob.fraction, top.checks.gli19.pass, top.checks.pa.pass], [2, false, '18/37', true, true]);
+  // A cap under the largest win is the top award: P(W >= 1) = 18/37.
+  const t1 = topAward(round, capStats(round, '1', red.result.rtp.fraction));
+  assert.deepStrictEqual([t1.x, t1.fromCap, t1.prob.fraction], [1, true, '18/37']);
+  // Tiny game without retrigger (bounded; largest win 140x with P = 1/180^4 by hand,
+  // see above): a cap of 200x removes nothing, exactly, and the top award stays 140x,
+  // which is rarer than 1 in 100,000,000 (180^4 = 1,049,760,000).
+  const t = analyze(withFs(TINY, { retrigger: false }));
+  const tr = roundDistribution(t.model, t.spins, exactMomentsOf(t.result));
+  const c200 = capStats(tr, 200, t.result.rtp.fraction);
+  assert.strictEqual(c200.aboveMax, true);
+  assert.deepStrictEqual([c200.lost.value, c200.lost.upper, c200.rtpCapped.fraction, c200.reach.fraction], [0, 0, t.result.rtp.fraction, '0']);
+  const top2 = topAward(tr, c200);
+  assert.deepStrictEqual([top2.x, top2.prob.fraction, top2.checks.gli19.pass, top2.checks.pa.pass], [140, new Fraction(1n, 180n ** 4n).toString(), false, false]);
+  // Without a cap: the largest win; uncapped retriggers: no top award at all.
+  assert.strictEqual(topAward(tr, null).x, 140);
+  const u = analyze(TINY);
+  assert.strictEqual(topAward(roundDistribution(u.model, u.spins, exactMomentsOf(u.result)), null), null);
+});
+
+// A round the whole-round pmf leaves out (under its noise floor) is a real outcome:
+// the distribution tests count it in a cell of its own and never call it impossible.
+// A win off the lattice (not a multiple of the step) still is impossible.
+test('distribution tests: a round in a cell under the noise floor is possible', async () => {
+  const { model, spins, result } = analyze(TINY);
+  const round = roundDistribution(model, spins, exactMomentsOf(result));
+  const kept = new Set(round.pmf.entries.map((e) => Math.round(e.x * 10)));
+  // A win the enumeration gives a positive probability but the pmf left out.
+  const { round: ref } = tinyRef();
+  const left = [...ref].filter(([t, p]) => p > 0 && !kept.has(t)).map(([t]) => t / 10).sort((a, b) => a - b);
+  assert.ok(left.length > 0);
+  const rare = left[0];
+  const rng = await prngFromSeed('tiny round log');
+  const lines = ['bet,win,trigger'];
+  for (let i = 0; i < 3000; i++) {
+    const s = simulate(model, rng, 1, { progressEvery: 1e9 });
+    lines.push('1,' + +(s.totalWinUnits / model.totalBetUnits).toFixed(6) + ',' + s.triggers);
+  }
+  const pmf = pmfFromExact(round.pmf, 'tiny');
+  // The lattice step: the tiny game pays multiples of 0.5 bet in the base game and
+  // 2 x that in the feature.
+  assert.ok(pmf.rest && pmf.rest.p >= round.pmf.droppedMass && pmf.rest.unit === 0.5);
+  const run = async (extra) => {
+    const log = parsePlayLog([...lines, `1,${extra},1`].join('\n') + '\n');
+    return auditDistribution(log, [pmf], { alpha: 0.01, replicates: 199, totalReplicates: 199 }, await prngFromSeed('audit'));
+  };
+  const ok = await run(rare);
+  assert.strictEqual(ok.fit.offSupport.count, 0, 'win ' + rare);
+  assert.notStrictEqual(ok.fit.verdict, 'impossible');
+  assert.ok(ok.fit.gof.bins.some((b) => b.rest), 'a bin holds the left-out values');
+  // 0.25 bet past it is not a multiple of the 0.5-bet step: impossible.
+  const off = await run(rare + 0.25);
+  assert.strictEqual(off.fit.offSupport.count, 1);
+  assert.strictEqual(off.fit.verdict, 'impossible');
 });

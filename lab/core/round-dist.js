@@ -562,7 +562,7 @@ function exactRound(ctx, exact) {
   const prob = (f) => ({ value: f.toNumber(), fraction: f.toString(), method: 'exact', below: null });
   const thresholds = BIG_WINS.map((t) => {
     const xmin = ceilFrac(pb.mul(t));
-    return { x: t, ...prob(tailFrac(xmin)) };
+    return { x: t, units: Number(xmin), ...prob(tailFrac(xmin)) };
   });
   const quantiles = QUANTILES.map((q) => {
     let acc = 0n;
@@ -575,13 +575,28 @@ function exactRound(ctx, exact) {
     unit: { modelUnits: ctx.unit.toString(), perBet: pb.toString() },
     grid: null, floor: 0, noise: 0, aliasBound: 0,
     checks, triggerProbability: 0,
-    maxWin: { bounded: true, x: toBets(ctx, maxX), ...prob(tailFrac(BigInt(maxX))) },
+    maxWin: { bounded: true, x: toBets(ctx, maxX), units: maxX, ...prob(tailFrac(BigInt(maxX))) },
     thresholds, quantiles, mgf: [],
     pmf: { scope: 'round', exact: true, unitsPerBet: pb.toNumber(), unitBets: new Fraction(1n).div(pb).toString(), total: T.toString(), droppedMass: 0, noiseFloor: 0, maxX: toBets(ctx, maxX), truncated: false, entries },
   };
 }
 
 function relErr(a, b) { return b === 0 ? Math.abs(a) : Math.abs(a - b) / Math.abs(b); }
+
+// The smallest upper bound shown: a Chernoff bound that underflows (a top win of a
+// long capped feature) is still below it, so "< 1e-300" stays true.
+export const MIN_BOUND = 1e-300;
+// P(W >= x) from its exact part exV (rounds without the feature), the transform's
+// tail sum t over every cell (when x is on the grid) and the Chernoff bound p0 of the
+// trigger rounds: the transform's value when it is at or above the noise floor; else
+// the exact part alone when the rest is negligible next to it (a million times
+// smaller); else an upper bound, never a computed-looking number (also not 0).
+function floorRule(exV, t, onGrid, floor, p0) {
+  if (onGrid && t >= floor) return { value: exV + t, fraction: null, method: 'fft', below: null };
+  const bound = Math.min(floor, p0);
+  if (exV > 0 && exV >= 1e6 * bound) return { value: exV, fraction: null, method: 'fft', below: null };
+  return { value: null, fraction: null, method: 'bound', below: Math.max(exV + bound, MIN_BOUND) };
+}
 
 // exact: { rtp, variance } as Fractions in bets (the closed forms of slot-exact.js).
 export function roundDistribution(model, spins, exact, { onProgress = () => {}, gridLimit = GRID_LIMIT } = {}) {
@@ -619,7 +634,9 @@ export function roundDistribution(model, spins, exact, { onProgress = () => {}, 
   const trigMax = ctx.trig.reduce((a, c) => Math.max(a, c.x), 0);
   let N = nextPowerOfTwo(Math.max(1024, 2 * (trigMax + 1)));
   if (bounded) N = Math.min(N, nextPowerOfTwo(roundMax + 1)) || N;
-  N = Math.max(N, nextPowerOfTwo(trigMax + 1));
+  // At least 2 points: a half spectrum needs N / 2 + 1 to be a whole number (a game
+  // whose every round pays 0 has roundMax = 0).
+  N = Math.max(N, nextPowerOfTwo(trigMax + 1), 2);
   const ok = (n) => {
     if (bounded && n > roundMax) return true; // nothing can wrap
     const b = tailBounds(table, n, 'logT');
@@ -701,7 +718,12 @@ export function roundDistribution(model, spins, exact, { onProgress = () => {}, 
 
   // Probabilities, honest about the floor.
   const exactTail = (xmin) => { let n = 0n; for (const [x, c] of non) if (BigInt(x) >= xmin) n += c; return new Fraction(n, T); };
-  const fftTail = (xmin) => { let s = 0; for (let x = Math.max(0, xmin); x < N; x++) s += pT[x]; return s; };
+  // Tail sums of every transform cell (also those under the floor, which are left out
+  // of the pmf), summed from the top so small cells keep their weight; kept in the
+  // result so that a tail at any point (a max-win cap) is read the same way.
+  const tailSums = new Float64Array(N + 1);
+  for (let x = N - 1; x >= 0; x--) tailSums[x] = tailSums[x + 1] + pT[x];
+  const fftTail = (xmin) => (xmin >= N ? 0 : tailSums[Math.max(0, xmin)]);
   // P(trigger round >= xm) exactly (bounded features only), or null when too big.
   // Highest thresholds first: once one is too big, every lower one is too.
   const exactTrigTails = (xmins) => {
@@ -723,25 +745,17 @@ export function roundDistribution(model, spins, exact, { onProgress = () => {}, 
     const ex = exactTail(BigInt(xmin));
     if (bounded && xmin > roundMax) return { value: 0, fraction: '0', method: 'exact', below: null };
     if (exactTrig) { const f = ex.add(exactTrig); return { value: f.toNumber(), fraction: f.toString(), method: 'exact', below: null }; }
-    const exV = ex.toNumber();
-    if (xmin < N) {
-      const t = fftTail(xmin);
-      if (t >= floor) return { value: exV + t, fraction: null, method: 'fft', below: null };
-    }
-    // Below the floor: the Chernoff bound (rigorous) when it is smaller.
-    const bound = Math.min(floor, tailBounds(table, xmin, 'logT').p0);
-    if (exV >= 1e6 * bound) return { value: exV, fraction: null, method: 'fft', below: null };
-    return { value: null, fraction: null, method: 'bound', below: exV + bound };
+    return floorRule(ex.toNumber(), fftTail(xmin), xmin < N, floor, tailBounds(table, xmin, 'logT').p0);
   };
   const xmins = BIG_WINS.map((t) => Number(ceilFrac(pb.mul(t))));
   // Exact tails where the transform is below its floor (or would be), and for the top.
   const wantExact = xmins.filter((xm) => xm <= roundMax && (xm >= N || fftTail(xm) < floor));
   if (bounded) wantExact.push(roundMax);
   const exTails = wantExact.length ? exactTrigTails(wantExact) : null;
-  const thresholds = BIG_WINS.map((t, i) => ({ x: t, ...probAt(xmins[i], exTails && exTails.get(xmins[i])) }));
+  const thresholds = BIG_WINS.map((t, i) => ({ x: t, units: xmins[i], ...probAt(xmins[i], exTails && exTails.get(xmins[i])) }));
   let maxWin;
   if (bounded) {
-    maxWin = { bounded: true, x: toBets(ctx, roundMax), ...probAt(roundMax, exTails && exTails.get(roundMax)) };
+    maxWin = { bounded: true, x: toBets(ctx, roundMax), units: roundMax, ...probAt(roundMax, exTails && exTails.get(roundMax)) };
   } else {
     let top = 0;
     for (let x = N - 1; x >= 0; x--) if (pT[x] >= floor) { top = x; break; }
@@ -785,6 +799,9 @@ export function roundDistribution(model, spins, exact, { onProgress = () => {}, 
     maxWin, thresholds, quantiles,
     // Chernoff table (theta per lattice step) for bounds beyond the grid.
     mgf: table.map((r) => ({ theta: r.theta, logT: r.logT, logM: r.logM })),
+    // tailSums[x] = P(trigger round >= x lattice steps) from every transform cell
+    // (N + 1 values; for roundTail / capStats, not for reports).
+    tailSums,
     caps: capped ? { maxSpins: fs.maxSpins ?? null, maxRetriggers: fs.maxRetriggers ?? null } : null,
     // maxX: the round's true largest win (null: none, retriggers are uncapped); truncated:
     // cells under the noise floor are left out, so the last entry is not the top prize.
@@ -818,10 +835,29 @@ export function attachRoundDistribution(result, model, spins, opts = {}) {
 
 // ---------- a max-win cap M (x bet) applied to every round ----------
 
+// P(W >= xmin lattice steps) for a round result, by the same rules as its thresholds:
+// a threshold or top win at the same point is reused (it may be exact); past a
+// bounded game's largest win it is exactly 0; otherwise the exact part (rounds
+// without the feature) plus the transform's tail over every cell (tailSums, which
+// includes the cells under the floor that the pmf leaves out), with the floor rule
+// and the Chernoff bound.
+export function roundTail(round, xmin) {
+  const known = [...round.thresholds, round.maxWin].find((t) => t && t.units === xmin && t.method);
+  if (known) return { value: known.value, fraction: known.fraction, method: known.method, below: known.below };
+  if (round.maxWin.bounded && xmin > round.maxWin.units) return { value: 0, fraction: '0', method: 'exact', below: null };
+  const pmf = round.pmf;
+  let n = 0n;
+  for (const e of pmf.entries) if (e.count !== undefined && e.units >= xmin) n += BigInt(e.count);
+  const ex = new Fraction(n, BigInt(pmf.total));
+  if (round.exact) return { value: ex.toNumber(), fraction: ex.toString(), method: 'exact', below: null };
+  const N = round.grid.size;
+  return floorRule(ex.toNumber(), xmin < N ? round.tailSums[Math.max(0, xmin)] : 0, xmin < N, round.floor, tailBounds(round.mgf, xmin, 'logT').p0);
+}
+
 // RTP_capped = E[min(W, M)] / bet and the RTP the cap removes, E[(W - M)+] / bet.
-// Exact (fractions) for an exact pmf; otherwise from the transform with the
-// precision it allows. P(W >= M) (the chance a round reaches the cap) follows the
-// same floor rule as the thresholds.
+// Exact (fractions) for an exact pmf, and for a cap at or above a bounded game's
+// largest win (it removes nothing; aboveMax); otherwise from the transform with the
+// precision it allows. P(W >= M) (the chance a round reaches the cap) is roundTail.
 export function capStats(round, M, rtp) {
   rtp = parseFraction(rtp);
   const pb = parseFraction(round.unit.perBet);
@@ -830,6 +866,7 @@ export function capStats(round, M, rtp) {
   if (!cap || !(cap.cmp(0) > 0)) throw fail('the max-win cap must be a positive number', 'يجب أن يكون سقف الربح عددًا موجبًا');
   const Mx = cap.mul(pb); // lattice steps, maybe fractional
   const pmf = round.pmf;
+  const aboveMax = Boolean(round.maxWin.bounded && Mx.cmp(BigInt(round.maxWin.units)) >= 0);
   if (round.exact) {
     const T = BigInt(pmf.total);
     let num = new Fraction(0n), reach = 0n;
@@ -840,37 +877,55 @@ export function capStats(round, M, rtp) {
     const capped = num.div(T).div(pb);
     const pReach = new Fraction(reach, T);
     return {
-      M: cap.toNumber(), exact: true,
+      M: cap.toNumber(), exact: true, aboveMax,
       rtpCapped: { value: capped.toNumber(), fraction: capped.toString() },
       lost: { value: rtp.sub(capped).toNumber(), fraction: rtp.sub(capped).toString() },
       reach: { value: pReach.toNumber(), fraction: pReach.toString(), method: 'exact', below: null },
+    };
+  }
+  const reach = roundTail(round, Number(ceilFrac(Mx)));
+  if (aboveMax) {
+    return {
+      M: cap.toNumber(), exact: false, aboveMax,
+      rtpCapped: { value: rtp.toNumber(), fraction: rtp.toString(), lower: rtp.toNumber() },
+      lost: { value: 0, fraction: '0', upper: 0 },
+      reach,
     };
   }
   // From the tail only: E[(W - M)+] over the cells at or above M, and RTP_capped =
   // RTP (exact) - that. Cells under the noise floor are not in the pmf; what they
   // can add is at most min(Chernoff bound of E[(W - M)+], their mass * (grid - M)).
   const m = Mx.toNumber(), steps = pb.toNumber();
-  let excess = 0, above = 0;
-  for (const e of pmf.entries) if (e.units >= m) { excess += (e.units - m) * e.p; above += e.p; }
+  let excess = 0;
+  for (const e of pmf.entries) if (e.units >= m) excess += (e.units - m) * e.p;
   const bounds = tailBounds(round.mgf, m, 'logM');
   const span = Math.max(0, (round.grid ? round.grid.size : 0) - m);
   const missing = Math.min(bounds.ex, pmf.droppedMass * span + round.aliasBound * (span + m));
   const lost = Math.max(0, excess) / steps;
-  let reach;
-  if (above >= round.floor) reach = { value: above, fraction: null, method: 'fft', below: null };
-  else reach = { value: null, fraction: null, method: 'bound', below: Math.min(round.floor, bounds.p0) };
   return {
-    M: m / steps, exact: false,
+    M: m / steps, exact: false, aboveMax,
     rtpCapped: { value: rtp.toNumber() - lost, fraction: null, lower: rtp.toNumber() - lost - missing / steps },
     lost: { value: lost, fraction: null, upper: lost + missing / steps },
     reach,
   };
 }
 
-// Top award odds against two published rules (both unverified here): the top award
-// is the cap M when one is set, else the largest win when the game has one.
-// prob: { value, fraction, method, below }. pass: true / false, or null when only a
-// bound is known and it does not decide.
+// The top award the odds rules apply to: the smaller of the cap M and the game's
+// largest win. A cap at or above a bounded game's largest win never binds, so the top
+// award is that win; with a lower cap it is M (P(W >= M)); without a cap it is the
+// largest win, or null when uncapped retriggers leave the game without one.
+// cap: a capStats result or null.
+export function topAward(round, cap) {
+  const mw = round.maxWin;
+  if (cap && !cap.aboveMax) return { x: cap.M, fromCap: true, prob: cap.reach, checks: topAwardChecks(cap.reach) };
+  if (!mw.bounded) return null;
+  const prob = { value: mw.value, fraction: mw.fraction, method: mw.method, below: mw.below };
+  return { x: mw.x, fromCap: false, prob, checks: topAwardChecks(prob) };
+}
+
+// Top award odds against two published rules (both unverified here); the top award
+// comes from topAward. prob: { value, fraction, method, below }. pass: true / false,
+// or null when only a bound is known and it does not decide.
 export function topAwardChecks(prob) {
   if (!prob) return null;
   const decide = (oneIn) => {
