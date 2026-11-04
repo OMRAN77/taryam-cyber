@@ -57,16 +57,187 @@ test('header buttons wired at the end of the script respond', async (t) => {
   await page.goto(server.url + '/', { waitUntil: 'load' });
   await page.click('#btnGuestMode');
 
-  await page.click('#btnSettings');
+  // Phones: the account button opens the sidebar drawer with the account menu.
+  await page.click('#btnAcctMobile');
+  await page.click('#miSettings');
   assert.ok(await page.evaluate(() => document.querySelector('#settingsDialog').open), 'settings did not open');
   await page.click('#btnCancelSettings');
+  await page.evaluate(() => closeDrawers());
 
   await page.click('#btnHeaderMenu');
   await page.click('#btnSecTools');
   assert.ok(await page.evaluate(() => document.querySelector('#secToolsDialog').open), 'security tools did not open');
   await page.click('#btnCloseSecTools');
 
-  await page.click('#btnHeaderMenu');
-  await page.click('#btnToggleHistory');
-  assert.ok(await page.evaluate(() => document.querySelector('#workarea').classList.contains('open')), 'code/preview panel did not open');
+  // The code / preview labels and their menu entry are gone.
+  assert.strictEqual(await page.$('#btnToggleHistory'), null);
+});
+
+test('security operations home: shown on an empty chat, its tiles open the matching tool', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  page.setDefaultTimeout(5000);
+  await page.goto(server.url + '/');
+  await page.click('#btnGuestMode');
+  assert.ok(await page.isVisible('#socHome'), 'SOC home hidden on an empty chat');
+  assert.strictEqual(await page.$eval('#socHome', (e) => getComputedStyle(e).flexDirection), 'column', 'SOC home stacks its sections');
+  assert.ok(!(await page.isVisible('#chatHint')), 'the desktop hint does not overlap the phone SOC home');
+  assert.strictEqual(await page.$$eval('#socHome [data-soc-tool]', (b) => b.length), 8);
+  assert.strictEqual(await page.textContent('#sysChipText'), 'ONLINE');
+  await page.click('#socHome [data-soc-tool="jwt"]');
+  assert.ok(await page.evaluate(() => document.querySelector('#secToolsDialog').open), 'tools dialog did not open');
+  assert.strictEqual(await page.getAttribute('.secToolNavBtn.active', 'data-tool'), 'jwt');
+});
+
+test('account bar: settings, language and log in sit at the bottom of the sidebar', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const page = await browser.newPage({ viewport: { width: 1366, height: 820 } });
+  page.setDefaultTimeout(5000);
+  await page.goto(server.url + '/');
+  await page.click('#btnGuestMode');
+  assert.strictEqual(await page.$('header #btnSettings'), null, 'settings still in the header');
+  const bar = await page.$eval('#acctBar', (b) => { const r = b.getBoundingClientRect(); const s = document.querySelector('#sidebar').getBoundingClientRect(); return { gap: s.bottom - r.bottom }; });
+  assert.ok(bar.gap < 2, 'account bar is not at the bottom of the sidebar');
+  assert.strictEqual(await page.textContent('#acctName'), 'ضيف');
+  await page.click('#btnSettings');
+  assert.ok(await page.evaluate(() => document.querySelector('#settingsDialog').open), 'gear did not open settings');
+  await page.click('#btnCancelSettings');
+  await page.keyboard.press('Control+,');
+  assert.ok(await page.evaluate(() => document.querySelector('#settingsDialog').open), 'Ctrl+, did not open settings');
+  await page.click('#btnCancelSettings');
+  await page.click('#btnAcct');
+  assert.ok(await page.isVisible('#acctMenu'), 'menu did not open');
+  assert.ok(await page.isVisible('#btnAcctLogin') && !(await page.isVisible('#btnLogout')), 'guest sees log in, not log out');
+  await page.click('#miLang');
+  assert.strictEqual(await page.getAttribute('html', 'dir'), 'ltr');
+  assert.strictEqual(await page.textContent('#acctName'), 'Guest');
+  await page.click('#btnAcct');
+  await page.click('#btnAcctLogin');
+  assert.ok(await page.isVisible('#authOverlay'), 'log in did not open the login screen');
+});
+
+test('a formal console: no emoji anywhere on the page, icon-only send, phone account menu under the header', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  page.setDefaultTimeout(5000);
+  await page.goto(server.url + '/');
+  const emojiIn = () => page.evaluate(() => (document.body.innerText.match(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{26FF}\u{2B50}\u{2B55}]/gu) || []));
+  assert.deepStrictEqual(await emojiIn(), [], 'login screen');
+  await page.click('#btnGuestMode');
+  assert.deepStrictEqual(await emojiIn(), [], 'console');
+  assert.strictEqual(await page.$('#btnEmoji'), null);
+  assert.strictEqual(await page.getAttribute('#btnSend', 'aria-label'), 'إرسال');
+  assert.ok(!(await page.isVisible('#btnSend span')), 'send shows an icon, not a label');
+  await page.click('#btnAcctMobile');
+  const pos = await page.evaluate(() => ({ menu: parseFloat(document.querySelector('#acctMenu').style.top), header: document.querySelector('header').getBoundingClientRect().bottom, drawer: document.querySelector('#sidebar').classList.contains('open') }));
+  assert.ok(pos.menu >= pos.header && !pos.drawer, `menu drops below the header without the drawer (${JSON.stringify(pos)})`);
+  await page.click('#miSettings');
+  assert.ok(await page.evaluate(() => document.querySelector('#settingsDialog').open), 'settings did not open');
+  assert.deepStrictEqual(await emojiIn(), [], 'settings');
+});
+
+test('desktop: the side panel stays, without Preview / Code / Download, and holds the operations center', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const page = await browser.newPage({ viewport: { width: 1366, height: 820 } });
+  page.setDefaultTimeout(5000);
+  await page.goto(server.url + '/');
+  await page.click('#btnGuestMode');
+  assert.ok(await page.isVisible('#workarea'), 'the panel is still there');
+  for (const sel of ['#tabs', '#btnDownload', '#previewFrame', '#code']) assert.ok(!(await page.isVisible(sel)), sel + ' is hidden');
+  assert.strictEqual(await page.$$eval('#socPanel [data-soc-tool]', (b) => b.length), 8);
+  assert.ok(!(await page.isVisible('#socHome')), 'the chat copy is for phones only');
+  assert.ok(await page.isVisible('#chatHint'), 'the empty chat shows a hint');
+  assert.strictEqual(await page.textContent('#projCount'), '01');
+  await page.click('#socPanel [data-soc-tool="hashid"]');
+  assert.strictEqual(await page.getAttribute('.secToolNavBtn.active', 'data-tool'), 'hashid');
+});
+
+test('desktop drag bars push either side panel all the way in, and a double-click brings it back', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const page = await browser.newPage({ viewport: { width: 1366, height: 820 } });
+  page.setDefaultTimeout(5000);
+  await page.goto(server.url + '/');
+  await page.click('#btnGuestMode');
+  const width = (sel) => page.$eval(sel, (e) => Math.round(e.getBoundingClientRect().width));
+  const drag = async (sel, dx) => {
+    // Grab the bar near its top: the middle holds the show / hide button.
+    const b = await (await page.$(sel)).boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + 80);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2 + dx, b.y + 80, { steps: 8 });
+    await page.mouse.up();
+  };
+  // Arabic layout: projects on the right, operations panel on the left.
+  assert.ok(await width('#sidebar') > 150);
+  await drag('#resizer1', 400);
+  assert.strictEqual(await width('#sidebar'), 0, 'projects sidebar pushed all the way in');
+  await page.dblclick('#resizer1', { position: { x: 4, y: 80 } });
+  assert.ok(await width('#sidebar') >= 200, 'double-click brings it back');
+
+  const before = await width('#workarea');
+  assert.ok(before > 300);
+  await drag('#resizer2', -1200);
+  assert.strictEqual(await width('#workarea'), 0, 'operations panel pushed all the way in');
+  assert.ok(await width('#chatcol') > 900, 'the chat takes the room');
+  await page.dblclick('#resizer2', { position: { x: 4, y: 80 } });
+  assert.ok(await width('#workarea') >= 300, 'double-click brings the panel back');
+  await drag('#resizer2', 1200);
+  assert.ok(await width('#chatcol') >= 320, 'the chat keeps at least 320px');
+
+  // Widths survive a reload.
+  await drag('#resizer1', 400);
+  await page.reload();
+  await page.click('#btnGuestMode');
+  assert.strictEqual(await width('#sidebar'), 0);
+});
+
+test('panel buttons: on the drag bars on desktop (collapse / restore), in the header on a phone (drawer)', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const width = (page, sel) => page.$eval(sel, (e) => Math.round(e.getBoundingClientRect().width));
+  const desk = await browser.newPage({ viewport: { width: 1366, height: 820 } });
+  desk.setDefaultTimeout(5000);
+  await desk.goto(server.url + '/');
+  await desk.click('#btnGuestMode');
+  assert.ok(!(await desk.isVisible('#btnToggleSide')) && !(await desk.isVisible('#btnTogglePanel')), 'no header copies on desktop');
+  assert.strictEqual(await desk.getAttribute('#rzSide', 'aria-expanded'), 'true');
+  await desk.click('#rzSide');
+  assert.strictEqual(await width(desk, '#sidebar'), 0, 'projects hidden');
+  assert.strictEqual(await desk.getAttribute('#rzSide', 'aria-expanded'), 'false');
+  await desk.click('#rzSide');
+  assert.ok(await width(desk, '#sidebar') >= 200, 'projects back');
+  await desk.click('#rzPanel');
+  assert.strictEqual(await width(desk, '#workarea'), 0, 'operations panel hidden');
+  // The bar sits at the window edge now; its button must still be inside the window.
+  const box = await (await desk.$('#rzPanel')).boundingBox();
+  assert.ok(box.x >= 0 && box.x + box.width <= 1366, 'edge button stays on screen');
+  await desk.click('#rzPanel');
+  assert.ok(await width(desk, '#workarea') >= 300, 'operations panel back');
+  // The conversation and the composer sit in the middle at a readable width.
+  await desk.click('#rzPanel');
+  await desk.click('#rzSide');
+  const dock = await (await desk.$('#inputbar')).boundingBox();
+  assert.ok(dock.width <= 730 && Math.abs(dock.x + dock.width / 2 - 683) < 20, `composer centred and compact (${JSON.stringify(dock)})`);
+
+  const phone = await browser.newPage({ viewport: { width: 553, height: 760 } });
+  phone.setDefaultTimeout(5000);
+  await phone.goto(server.url + '/');
+  await phone.click('#btnGuestMode');
+  await phone.click('#btnToggleSide');
+  await phone.waitForFunction(() => document.querySelector('#sidebar').classList.contains('open'));
+  await phone.evaluate(() => closeDrawers());
+  await phone.click('#btnTogglePanel');
+  await phone.waitForFunction(() => document.querySelector('#workarea').classList.contains('open'));
+  assert.strictEqual(await phone.$$eval('#socPanel [data-soc-tool]', (b) => b.length), 8, 'the operations panel opens as a drawer');
 });

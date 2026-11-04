@@ -1,13 +1,13 @@
 :root {
-  --bg: #08090d;
-  --surface: rgba(255, 255, 255, 0.035);
-  --surface-2: rgba(255, 255, 255, 0.06);
+  --bg: #000000;
+  --surface: rgba(255, 255, 255, 0.03);
+  --surface-2: rgba(255, 255, 255, 0.055);
   --border: rgba(255, 255, 255, 0.09);
-  --text: #e8e9ee;
-  --muted: #9aa0ad;
-  --primary: #8b5cf6;
-  --primary-2: #a78bfa;
-  --cyan: #22d3ee;
+  --text: #ededed;
+  --muted: #a3a3a3;
+  --primary: #00ff9c;
+  --primary-2: #5cffbe;
+  --cyan: #00e5ff;
   --green: #34d399;
   --red: #f87171;
   --amber: #fbbf24;
@@ -21,7 +21,10 @@
 html { background: var(--bg); }
 body {
   margin: 0;
-  background: radial-gradient(ellipse at 50% -10%, rgba(139, 92, 246, 0.16), transparent 55%), var(--bg);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px) 0 0 / 40px 40px,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px) 0 0 / 40px 40px,
+    radial-gradient(ellipse at 50% -10%, rgba(0, 255, 156, 0.04), transparent 55%), var(--bg);
   color: var(--text);
   font: 15px/1.6 var(--font);
   min-height: 100vh;
@@ -33,7 +36,7 @@ a { color: var(--primary-2); }
   display: flex; align-items: center; gap: 16px;
   padding: 18px max(16px, calc((100% - 1120px) / 2));
   border-bottom: 1px solid var(--border);
-  background: rgba(8, 9, 13, 0.7);
+  background: rgba(0, 0, 0, 0.8);
   position: sticky; top: 0; z-index: 5;
   backdrop-filter: blur(16px);
 }
@@ -53,7 +56,7 @@ a { color: var(--primary-2); }
   flex: 0 0 auto; padding: 9px 16px; border-radius: 999px; border: 1px solid var(--border);
   background: var(--surface); color: var(--muted); font: 600 14px var(--font); cursor: pointer;
 }
-.tabs button[aria-selected="true"] { background: linear-gradient(135deg, var(--primary), #6d28d9); color: #fff; border-color: transparent; }
+.tabs button[aria-selected="true"] { background: rgba(0, 255, 156, 0.1); color: var(--primary); border-color: var(--primary); box-shadow: 0 0 14px rgba(0, 255, 156, 0.2); }
 
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
 .panel > * + * { margin-top: 14px; }
@@ -65,7 +68,7 @@ input, select, textarea {
   background: rgba(0, 0, 0, 0.35); color: var(--text); font: 14px var(--font);
 }
 textarea { font-family: var(--mono); font-size: 13px; line-height: 1.5; resize: vertical; }
-input:focus, select:focus, textarea:focus { outline: 2px solid rgba(139, 92, 246, 0.5); outline-offset: 1px; }
+input:focus, select:focus, textarea:focus { outline: 2px solid rgba(0, 255, 156, 0.45); outline-offset: 1px; }
 label.check { display: flex; align-items: center; gap: 8px; color: var(--text); cursor: pointer; }
 label.check input { width: auto; accent-color: var(--primary); }
 label.check span { margin: 0; }
@@ -82,13 +85,13 @@ button {
   padding: 9px 14px; border-radius: 10px; border: 1px solid var(--border);
   background: var(--surface-2); color: var(--text); font: 600 13.5px var(--font); cursor: pointer;
 }
-button:hover { border-color: rgba(167, 139, 250, 0.5); }
+button:hover { border-color: rgba(92, 255, 190, 0.5); }
 button:disabled { opacity: 0.55; cursor: progress; }
-button.primary { background: linear-gradient(135deg, var(--primary), #6d28d9); border-color: transparent; color: #fff; padding: 11px 22px; }
+button.primary { background: linear-gradient(135deg, var(--primary), var(--cyan)); border-color: transparent; color: #00150c; padding: 11px 22px; box-shadow: 0 0 20px rgba(0, 255, 156, 0.25); }
 button.ghost { background: transparent; }
 
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.file-btn { position: relative; display: inline-flex; align-items: center; padding: 9px 14px; border-radius: 10px; border: 1px dashed rgba(167, 139, 250, 0.55); color: var(--primary-2); font-weight: 600; cursor: pointer; }
+.file-btn { position: relative; display: inline-flex; align-items: center; padding: 9px 14px; border-radius: 10px; border: 1px dashed rgba(92, 255, 190, 0.55); color: var(--primary-2); font-weight: 600; cursor: pointer; }
 .file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .file-name { font-size: 13px; overflow-wrap: anywhere; }
 
@@ -119,7 +122,7 @@ h3.sub { font-size: 15px; color: var(--primary-2); margin-top: 22px; }
 .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 th, td { padding: 8px 12px; text-align: start; border-bottom: 1px solid var(--border); white-space: nowrap; }
-th { background: rgba(139, 92, 246, 0.1); color: var(--muted); font-weight: 600; }
+th { background: rgba(0, 255, 156, 0.07); color: var(--muted); font-weight: 600; }
 tr:last-child td { border-bottom: none; }
 td.num, td.mono { direction: ltr; text-align: left; font-variant-numeric: tabular-nums; }
 /* Numbers stay left-to-right but sit on the reading side of the page. */
@@ -166,7 +169,7 @@ td.na { color: var(--muted); }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0; font-size: 12.5px; color: var(--muted); }
 .legend .sw { display: inline-block; width: 18px; height: 10px; border-radius: 3px; vertical-align: middle; margin-inline-end: 6px; }
 .sw-median { background: var(--primary-2); height: 3px !important; }
-.sw-band { background: rgba(167, 139, 250, 0.28); }
+.sw-band { background: rgba(92, 255, 190, 0.28); }
 .sw-sample { background: rgba(232, 233, 238, 0.35); height: 2px !important; }
 .sw-start { border-top: 2px dashed var(--muted); height: 0 !important; border-radius: 0 !important; }
 .chart-wrap { position: relative; }
@@ -174,7 +177,7 @@ td.na { color: var(--muted); }
 .chart .grid line { stroke: rgba(255, 255, 255, 0.07); }
 .chart text { fill: var(--muted); font: 11px var(--font); }
 .chart .axis-title { font-size: 11.5px; }
-.chart .band { fill: rgba(167, 139, 250, 0.2); stroke: none; }
+.chart .band { fill: rgba(92, 255, 190, 0.18); stroke: none; }
 .chart .sample { fill: none; stroke: rgba(232, 233, 238, 0.16); stroke-width: 1; }
 .chart .median { fill: none; stroke: var(--primary-2); stroke-width: 2; stroke-linejoin: round; }
 .chart .start { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; }

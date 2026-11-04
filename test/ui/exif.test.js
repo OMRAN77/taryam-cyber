@@ -4,7 +4,7 @@
 // GPS privacy warning — proving the parser is wired in and runs entirely in the
 // page (nothing about the image leaves the browser).
 //
-// It also pins the verdict line: "✅ no hidden metadata" may only appear when the
+// It also pins the verdict line: "no hidden metadata" (.exif-clean) may only appear when the
 // file was actually parsed and nothing identifying was found. Unsupported formats
 // (HEIC/WebP/GIF/unknown), an unreadable EXIF block, author/owner/serial tags or
 // GPS tags that do not decode must never be reported as clean.
@@ -59,7 +59,7 @@ async function analyse(page, name, mimeType, buffer) {
     const warn = box.querySelector('.exif-warnings');
     return {
       visible: box.innerText,
-      clean: /✅/.test(box.innerText),
+      clean: Boolean(box.querySelector('.exif-clean')),
       unchecked: box.querySelector('.exif-unchecked')?.innerText || null,
       warnings: warn ? warn.innerText : null,
     };
@@ -111,11 +111,11 @@ test('EXIF tool decodes a photo and renders GPS + privacy warning in the page', 
   // GPS section, the privacy warning box itself, and a real map link. The checks
   // read the rendered text only, so the raw-JSON "GPS" key cannot satisfy them.
   const visible = await page.innerText('#exifResult');
-  assert.match(visible, /📍 الموقع الجغرافي/, 'GPS section shown');
+  assert.match(visible, /الموقع الجغرافي \(GPS\)/, 'GPS section shown');
   const warning = await page.$eval('#exifResult .exif-warnings', (el) => el.innerText).catch(() => null);
   assert.ok(warning, 'privacy warning box is rendered');
   assert.match(warning, /reveals where the photo was taken/, 'GPS privacy warning shown in the box');
-  assert.doesNotMatch(visible, /✅/, 'a geotagged photo is not called clean');
+  assert.strictEqual(await page.$('#exifResult .exif-clean'), null, 'a geotagged photo is not called clean');
   const mapHref = await page.getAttribute('#exifResult a[href*="openstreetmap"]', 'href');
   assert.match(mapHref, /mlat=25\.19/, 'OpenStreetMap link carries the coordinates');
 
@@ -210,7 +210,7 @@ test('EXIF tool shows author, owner and serial tags and does not call them clean
 
   assert.ok(!r.clean, 'identifying tags must not get the clean verdict:\n' + r.visible);
   assert.strictEqual(r.unchecked, null, 'the file was parsed');
-  assert.match(r.visible, /🪪/, 'an identifying-data section is shown');
+  assert.match(r.visible, /بيانات تعريفية/, 'an identifying-data section is shown');
   for (const v of ['Home, 12 Example St', 'Jane Doe <jane@example.com>', '(c) 2024 Jane Doe', 'Jane Roe', 'LNS-778899', 'a1b2c3d4e5f60718', 'call me on 555-0100']) {
     assert.ok(r.visible.includes(v), `"${v}" is visible outside the raw JSON`);
   }
@@ -234,7 +234,7 @@ test('EXIF tool flags GPS tags that do not decode into coordinates', async (t) =
   });
   const r = await analyse(page, 'odd-gps.jpg', 'image/jpeg', wrapJpeg(tiff));
   assert.ok(!r.clean, 'GPS tags must not get the clean verdict:\n' + r.visible);
-  assert.match(r.visible, /📍 الموقع الجغرافي/, 'GPS section shown');
+  assert.match(r.visible, /الموقع الجغرافي \(GPS\)/, 'GPS section shown');
   assert.match(r.visible, /تعذّر تحويلها إلى إحداثيات/, 'says the GPS data could not be decoded');
   assert.match(r.visible, /25\.19/, 'raw latitude value is visible');
   assert.deepStrictEqual(errors, [], 'no page errors');
