@@ -455,6 +455,16 @@ function lutValue(unit, v) {
   return num(v, 4);
 }
 
+// A small heading above a table (Arabic right, English left), kept with the table.
+function lutSub(L, key) {
+  const [ar, en] = pair(key);
+  L.ensure(160);
+  L.y += 10;
+  L.draw(ar, W - M, L.y, { size: 24, weight: '700', align: 'right', dir: 'rtl' });
+  L.draw(en, M, L.y, { size: 21, weight: '600', color: C.muted });
+  L.y += 46;
+}
+
 function lutSection(L, lu) {
   const x = lu.result;
   L.section('tabLut');
@@ -477,9 +487,12 @@ function lutSection(L, lu) {
     L.kv('lutCvar', `${num(m.cvar999.absolute.value, 2)}×  (÷ cost: ${num(m.cvar999.relative.value, 2)})`);
     L.kv('lutMea_rtp40', pct(m.tail.rtpFrom40xCost.value, 4) + (m.tail.shareFrom40xCost ? `  (${pair('lutShare')[1]}: ${pct(m.tail.shareFrom40xCost.value, 2)})` : ''));
     L.kv('lutMea_rtp10k', pct(m.tail.rtpFrom10kx.value, 4) + (m.tail.shareFrom10kx ? `  (${pair('lutShare')[1]}: ${pct(m.tail.shareFrom10kx.value, 2)})` : ''));
+    lutSub(L, 'lutBigWins');
     L.table([{ key: 'lutWinAtLeast', w: 0.34 }, { key: 'probability', w: 0.33, mono: true }, { labels: ['1 من N', '1 in N'], w: 0.33, mono: true }],
       m.bigWins.map((b) => [b.threshold.toLocaleString('en-US') + '×', lutPct(b.probability.value), lutOneIn(b.oneIn)]));
-    L.table([{ key: 'range', w: 0.34 }, { key: 'probability', w: 0.33, mono: true }, { key: 'lutContribution', w: 0.33, mono: true }],
+    // Buckets are in multiples of the mode's cost, unlike the base-bet tables above.
+    lutSub(L, 'lutBuckets');
+    L.table([{ key: 'lutRangeCost', w: 0.34 }, { key: 'probability', w: 0.33, mono: true }, { key: 'lutContribution', w: 0.33, mono: true }],
       m.buckets.map((b) => [b.to === 0 ? '0' : b.to === null ? `≥ ${b.from}` : `${b.from} – ${b.to}`, lutPct(b.probability.value), pct(b.rtp.value, 4)]));
   }
   L.note('lutCvarNote');
@@ -490,12 +503,15 @@ function lutSection(L, lu) {
       return [m.name, tp.rows.toLocaleString('en-US'), tp.zeroWeightRows.toLocaleString('en-US'), num(tp.effectiveSize.value, 1), lutPct(tp.maxRowProbability.value), num(tp.klBits, 4)];
     }));
   L.note('lutTransparencyNote');
-  if (x.ignored.length) { L.kv('lutIgnored', x.ignored.join(', ')); L.note('lutBooksNote'); }
+  if (x.ignored.length) L.kv('lutIgnored', x.ignored.join(', '));
+  L.note('lutBooksNote'); // books are never read, whether or not any were selected
 
   const pr = x.profile;
   L.section('lutStake');
   L.note('lutStakeSource');
-  L.badge(pr.submissionIssues ? 'lutSubmissionBadShort' : 'lutSubmissionOk', pr.submissionIssues ? C.fail : C.pass);
+  if (pr.submissionIssues) L.badge('lutSubmissionBadShort', C.fail);
+  else if (pr.inferredIssues) L.badge('lutInferredBadShort', C.warn);
+  else L.badge('lutSubmissionOk', C.pass);
   L.kv('lutRiskPassing', `${pr.riskPassing} / ${pr.riskCategories}`, { color: pr.riskPassing === pr.riskCategories ? C.pass : C.warn });
   L.kv('lutMaxBet', `$${num(pr.maxBaseBet.value, 2)}  (${pair('lutTemplate')[1]} ${pr.maxBaseBet.template})`);
   L.note('lutStakeRiskNote');
@@ -503,8 +519,13 @@ function lutSection(L, lu) {
   const cell = (ok) => statusCell(ok ? 'pass' : 'fail');
   // Arabic and English labels in their own columns: a mixed cell with numbers reorders badly.
   // Submission labels state their own limit ("Cost ≤ 50,000×").
+  lutSub(L, 'lutSubmission');
   L.table([{ key: 'lutCheckAr', w: 0.28 }, { key: 'lutCheckEn', w: 0.24 }, { key: 'lutMode', w: 0.1 }, { key: 'lutValue', w: 0.26, mono: true }, { key: 'result', w: 0.12 }],
     pr.submission.map((c) => [pair('lutChk_' + c.id)[0], pair('lutChk_' + c.id)[1], mode(c.mode), c.id === 'rtp' ? `${pct(c.value, 4)} → ${pct(c.rounded, 2)}` : lutValue(c.unit, c.value), cell(c.ok)]));
+  lutSub(L, 'lutInferred');
+  L.table([{ key: 'lutCheckAr', w: 0.28 }, { key: 'lutCheckEn', w: 0.24 }, { key: 'lutMode', w: 0.1 }, { key: 'lutValue', w: 0.26, mono: true }, { key: 'result', w: 0.12 }],
+    pr.inferred.map((c) => [pair('lutChk_' + c.id)[0], pair('lutChk_' + c.id)[1], c.mode, lutValue(c.unit, c.value), statusCell(c.ok ? 'pass' : 'flag')]));
+  L.note('lutInferredNote');
   // Risk measures grouped under their category (a category fails if any measure in any mode does).
   const riskRows = [];
   for (const cat of [...new Set(pr.risk.map((c) => c.category))]) {
@@ -514,6 +535,7 @@ function lutSection(L, lu) {
       riskRows.push([pair('lutMea_' + c.measure)[0], pair('lutMea_' + c.measure)[1], c.mode, lutValue(c.unit, c.value), lutValue(c.unit, c.limit), cell(c.ok)]);
     }
   }
+  lutSub(L, 'lutRisk');
   L.table([{ key: 'lutCheckAr', w: 0.26 }, { key: 'lutCheckEn', w: 0.22 }, { key: 'lutMode', w: 0.1 }, { key: 'lutValue', w: 0.16, mono: true }, { key: 'lutLimit', w: 0.14, mono: true }, { key: 'result', w: 0.12 }], riskRows);
   L.note('lutStakeNotCert');
   L.note('lutStakeExactNote');
@@ -526,9 +548,11 @@ function lutAscii(lines, x) {
     lines.push(`    ${m.name} (cost ${m.cost.text}x): RTP ${m.rtp.percent}% = ${f}, hit ${(m.hitRate.value * 100).toFixed(4)}%, SD ${m.sd.toFixed(4)} x cost, top win ${m.maxWin.multiplier.value}x (1 in ${Math.round(m.maxWin.oneIn).toLocaleString('en-US')}), effective size ${m.transparency.effectiveSize.value.toFixed(1)} of ${m.transparency.rows} rows`);
   }
   const pr = x.profile;
-  lines.push(`  Stake Engine RGS limits (${pr.profile.source} @${pr.profile.commit.slice(0, 7)}, ${pr.profile.commitDate}): submission issues ${pr.submissionIssues}; risk categories passing ${pr.riskPassing} of ${pr.riskCategories}`
+  lines.push(`  Stake Engine RGS limits (${pr.profile.source} @${pr.profile.commit.slice(0, 7)}, ${pr.profile.commitDate}): submission issues ${pr.submissionIssues}`
+    + (pr.inferredIssues ? ` (plus format notes ${pr.inferredIssues}: the lab's inference, not published checks)` : '')
+    + `; risk categories passing ${pr.riskPassing} of ${pr.riskCategories}`
     + (pr.failedCategories.length ? ` (failing: ${pr.failedCategories.join(', ')}; this lowers bet limits, it does not reject the game)` : '')
-    + `; max base bet $${pr.maxBaseBet.value}. A recomputation, not a certification.`);
+    + `; max base bet $${pr.maxBaseBet.value}. A recomputation, not a certification. Book files are not read, so their match with the tables is not checked.`);
 }
 
 // Pretty JSON, but arrays of plain values stay on one line (reel strips, pay rows).

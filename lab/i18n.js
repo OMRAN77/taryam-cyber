@@ -258,7 +258,7 @@ const S = {
 
   // ---- Outcome tables (LUT, P0-7): Stake Engine lookup-table auditor ----
   tabLut: ['جداول النتائج (LUT)', 'Outcome tables (LUT)'],
-  lutIntro: ['في ألعاب LUT لا تدور بكرات عند الرهان: الخادم يسحب جولة محسوبة مسبقًا من جدول، واحتمال كل صف هو وزنه ÷ مجموع الأوزان. هذا القسم يقرأ ملفات Stake Engine: ملف index.json (الأنماط وتكلفة كل نمط واسم جدوله) وجدول lookUpTable لكل نمط (id، الوزن uint64، الدفع × 100). كل الحسابات بأعداد صحيحة BigInt وكسور دقيقة.', 'In LUT games no reels spin when a bet is placed: the server draws a pre-computed round from a table, and each row\'s probability is its weight ÷ the total weight. This tab reads Stake Engine files: index.json (the modes, the cost of each and its table) and one lookUpTable per mode (id, uint64 weight, payout × 100). Every sum uses BigInt integers and exact fractions.'],
+  lutIntro: ['في ألعاب LUT لا تدور بكرات عند الرهان: الخادم يسحب جولة محسوبة مسبقًا من جدول، واحتمال كل صف هو وزنه ÷ مجموع الأوزان. هذا القسم يقرأ ملفات Stake Engine: ملف index.json (الأنماط وتكلفة كل نمط واسم جدوله) وجدول lookUpTable لكل نمط (id، الوزن uint64، الدفع × 100). المجاميع بأعداد صحيحة BigInt، فيبقى RTP والاحتمالات والتباين وCVaR والحجم الفعّال كسورًا دقيقة؛ أما الانحراف المعياري وKL و«1 من N» فتُحسب بأعداد عشرية (float) للعرض.', 'In LUT games no reels spin when a bet is placed: the server draws a pre-computed round from a table, and each row\'s probability is its weight ÷ the total weight. This tab reads Stake Engine files: index.json (the modes, the cost of each and its table) and one lookUpTable per mode (id, uint64 weight, payout × 100). Sums use BigInt integers, so the RTP, the probabilities, the variance, CVaR and the effective size are exact fractions; the standard deviation, KL and "1 in N" are computed in floating point for display.'],
   lutUpload: ['رفع index.json وجداول CSV', 'Upload index.json and the CSV tables'],
   lutSample: ['مثال مولّد: جدول اصطناعي من نمطين', 'Generated example: a synthetic two-mode table'],
   lutSampleTag: ['مثال اصطناعي، ليس لعبة حقيقية', 'synthetic example, not a real game'],
@@ -308,11 +308,11 @@ const S = {
   lutKl: ['KL(w ‖ منتظم) بالبت', 'KL(w ‖ uniform), bits'],
   lutKlMax: ['الحد الأعلى log2(عدد الصفوف)', 'maximum log2(rows)'],
   lutTotalWeight: ['مجموع الأوزان', 'Total weight'],
-  lutTransparencyNote: ['الحجم الفعّال يساوي عدد الصفوف عندما تتساوى الأوزان، ويقترب من 1 عندما يطغى صف واحد. KL يقيس بُعد الأوزان عن سحب متساوٍ بين كل الصفوف (0 = متساوية). الأوزان يضبطها مُحسِّن لا البكرات، فما يظهر على الشاشة لا يحدد الاحتمالات.', 'The effective size equals the row count when all weights are equal and approaches 1 when one row dominates. KL measures how far the weights are from an equal draw over all rows (0 = equal). The weights are set by an optimizer, not by reels, so what the screen shows does not set the odds.'],
+  lutTransparencyNote: ['الحجم الفعّال يساوي عدد الصفوف عندما تتساوى الأوزان، ويقترب من 1 عندما يطغى صف واحد. KL يقيس بُعد الأوزان عن سحب متساوٍ بين كل الصفوف (0 = متساوية). قد تأتي الأوزان من مُحسِّن (optimizer) لا من المحاكاة كما هي، وفي الحالتين لا تحدد البكرات الظاهرة على الشاشة الاحتمالات: الوزن وحده يحددها.', 'The effective size equals the row count when all weights are equal and approaches 1 when one row dominates. KL measures how far the weights are from an equal draw over all rows (0 = equal). The weights may be set by an optimizer rather than taken from the simulation as they are; either way the reels on screen do not set the odds: the weight alone does.'],
   lutStake: ['ملف تعريف: حدود Stake Engine RGS', 'Profile: Stake Engine RGS limits'],
   lutStakeSource: ['المصدر: StakeEngine/math-sdk، الملف utils/rgs_verification.py (الإيداع 141b4e8 بتاريخ 2026-11-02)، كما في بحث المختبر بتاريخ 2026-11-02. قد تكون الحدود تغيّرت بعد ذلك.', 'Source: StakeEngine/math-sdk, file utils/rgs_verification.py (commit 141b4e8 of 2026-11-02), as in the lab\'s research of 2026-11-02. The limits may have changed since.'],
   lutStakeNotCert: ['هذه إعادة حساب للفحوص المنشورة في أداة Stake مفتوحة المصدر، وليست موافقة من Stake ولا شهادة اعتماد.', 'This recomputes the checks published in Stake\'s open-source tool; it is not Stake\'s approval and not a certification.'],
-  lutStakeRiskNote: ['الرسوب في فحص مخاطرة لا يعني رفض اللعبة: كل فئة راسبة تنقل اللعبة إلى قالب رهان أدنى (أقصى رهان أساسي أقل). فحوص الرفع وحدها تمنع النشر.', 'Failing a risk check does not reject the game: each failing category moves it to a lower bet template (a lower max base bet). Only the submission checks block publication.'],
+  lutStakeRiskNote: ['الرسوب في فحص مخاطرة لا يعني رفض اللعبة: كل فئة راسبة تنقل اللعبة إلى قالب رهان أدنى (أقصى رهان أساسي أقل). أما الرسوب في فحص رفع فيمنع الرفع. وهذه الفحوص ليست كل ما تتحقق منه أداة Stake: فهي تطابق أيضًا قيم payoutMultiplier في ملفات books مع عمود الدفع في الجدول، وهذا لا يفحصه المختبر.', 'Failing a risk check does not reject the game: each failing category moves it to a lower bet template (a lower max base bet). A failing submission check blocks submission. These are not all the checks Stake\'s tool makes: it also matches the payoutMultiplier values in the book files against the table\'s payout column, which the lab does not check.'],
   lutStakeExactNote: ['المختبر يقارن بكسور دقيقة، وأداة Stake بأعداد عشرية (float32 في فحوص المخاطرة)، فقيمة تقع على الحد أو قريبة جدًا منه قد يختلف الحكم عليها.', 'The lab compares exact fractions; Stake\'s tool uses floating point (float32 in the risk checks), so a value on a limit or very close to it may be judged differently.'],
   lutSubmission: ['فحوص الرفع', 'Submission checks'],
   lutSubmissionOk: ['لا توجد مشكلة رفع في هذه الفحوص', 'No submission issue in these checks'],
@@ -332,8 +332,6 @@ const S = {
   lutChk_maxWin: ['أعلى ربح ≤ 1,000,000×', 'Top win ≤ 1,000,000×'],
   lutChk_increment: ['صفوف دفعها ليس من مضاعفات 10', 'Rows off the 0.1× payout step'],
   lutChk_weightSum: ['مجموع الأوزان ≤ أقصى uint64', 'Total weight ≤ uint64 max'],
-  lutChk_noHeader: ['سطر عناوين في الجدول', 'Header line in the table'],
-  lutChk_noBlank: ['أسطر فارغة في الجدول', 'Blank lines in the table'],
   lutChk_baseCost: ['أرخص نمط تكلفته 1× (الأساسي)', 'Cheapest mode costs 1×'],
   lutChk_baseStd: ['انحراف النمط الأساسي ≥ 0.6', 'Base mode SD ≥ 0.6'],
   lutCat_topWin: ['أعلى ربح', 'Top win'],
@@ -356,6 +354,13 @@ const S = {
   lutMea_p25000: ['ربح ≥ 25,000×', 'Win ≥ 25,000×'],
   lutMea_p50000: ['ربح ≥ 50,000×', 'Win ≥ 50,000×'],
   lutMea_p100000: ['ربح ≥ 100,000×', 'Win ≥ 100,000×'],
+  lutChk_noHeader: ['سطر عناوين في الجدول', 'Header line in the table'],
+  lutChk_noBlank: ['أسطر فارغة في الجدول', 'Blank lines in the table'],
+  lutInferred: ['فحوص تنسيق يستنتجها المختبر', 'Format checks (lab inference)'],
+  lutInferredNote: ['هذان الفحصان ليسا في rgs_verification.py: أداة Stake تقسم كل سطر إلى ثلاث قيم، فسطر العناوين أو السطر الفارغ يوقفها بخطأ. لم يتحقق المختبر من تعامل خادم Stake (RGS) مع ملف كهذا، لذلك لا يُحسبان من مشكلات الرفع.', 'These two checks are not in rgs_verification.py: Stake\'s tool splits every line into three values, so a header line or a blank line stops it with an error. The lab has not verified how Stake\'s RGS treats such a file, so they are not counted as submission issues.'],
+  lutInferredBad: ['لا مشكلة في فحوص الرفع المنشورة؛ ملاحظات تنسيق (استنتاج المختبر)', 'No issue in the published submission checks; format notes (lab inference)'],
+  lutInferredBadShort: ['ملاحظات تنسيق (استنتاج)', 'Format notes (inference)'],
+  lutRangeCost: ['الربح (× التكلفة)', 'Win (× cost)'],
 };
 
 export function getLang() {

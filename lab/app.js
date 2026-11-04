@@ -440,32 +440,52 @@ function renderMc() {
 
 // ---------- outcome tables (LUT, P0-7) ----------
 // The selected files: [{ name, bytes, mime }]; book files (.jsonl.zst) keep bytes null,
-// are not read and are not attached to the report.
+// are not read and are not attached to the report. A new selection replaces the array
+// (never mutates it), so a run can tell whether the files it read are still the ones listed.
 let lutSelection = [];
 let lutInputIds = [];
-async function setLutFiles(files, tag = '') {
+let lutTagKey = null; // i18n key of the tag in front of the file names, e.g. the sample's
+let lutGen = 0;
+async function setLutFiles(files, tagKey = null) {
+  const gen = ++lutGen;
+  const read = files.filter((f) => f.bytes);
+  const hashes = await Promise.all(read.map((f) => sha256Hex(f.bytes)));
+  if (gen !== lutGen) return; // newer files were chosen while these were hashed
+  // From here on everything is synchronous: the inputs, the selection and the cleared
+  // result change together, so the report never pairs a result with other files.
   for (const id of lutInputIds) session.inputs.delete(id);
-  lutInputIds = [];
-  let total = 0;
-  for (const f of files) {
-    if (!f.bytes) continue;
+  lutInputIds = read.map((f, i) => {
     const id = 'lut:' + f.name;
-    await registerInput(id, f.name, lutFileKind(f.name) === 'index' ? 'json' : 'csv', f.bytes, f.mime);
-    lutInputIds.push(id);
-    total += f.bytes.length;
-  }
+    session.inputs.set(id, { id, name: f.name, kind: lutFileKind(f.name) === 'index' ? 'json' : 'csv', size: f.bytes.length, sha256: hashes[i], bytes: f.bytes, mime: f.mime });
+    return id;
+  });
   lutSelection = files;
+  lutTagKey = tagKey;
   delete session.results.lut; // results always match the files listed
-  fileNames.lut = (tag ? tag + ': ' : '') + files.map((f) => f.name + (f.bytes ? '' : ' (' + tr('lutIgnored') + ')')).join(' · ') + ' · ' + total.toLocaleString('en-US') + ' ' + tr('bytes');
-  $('#name-lut').textContent = fileNames.lut;
   renderLut();
+}
+// Built in the current language each time (applyLang re-renders it).
+function showLutName() {
+  if (!lutSelection.length) { $('#name-lut').textContent = tr('noFile'); return; }
+  const total = lutSelection.reduce((s, f) => s + (f.bytes ? f.bytes.length : 0), 0);
+  $('#name-lut').textContent = (lutTagKey ? tr(lutTagKey) + ': ' : '') + lutSelection.map((f) => f.name + (f.bytes ? '' : ' (' + tr('lutIgnored') + ')')).join(' · ')
+    + ' · ' + total.toLocaleString('en-US') + ' ' + tr('bytes');
 }
 
 async function runLut() {
   await withTask('lut', async (progress) => {
     if (!lutSelection.length) throw { ar: t('noFile', 'ar'), en: t('noFile', 'en') };
-    const result = await runTask('lut', { files: lutSelection.map((f) => ({ name: f.name, bytes: f.bytes })) }, progress);
-    session.results.lut = { inputIds: lutInputIds.slice(), result };
+    // The files and their input ids as they are now: other files may be chosen while this runs.
+    const selection = lutSelection, inputIds = lutInputIds.slice();
+    let result;
+    try {
+      result = await runTask('lut', { files: selection.map((f) => ({ name: f.name, bytes: f.bytes })) }, progress);
+    } catch (e) {
+      if (selection !== lutSelection) return; // an error about files no longer listed
+      throw e;
+    }
+    if (selection !== lutSelection) return; // the files changed: this result is not theirs
+    session.results.lut = { inputIds, result };
     renderLut();
   });
 }
@@ -483,6 +503,7 @@ function lutValue(unit, v) {
 }
 
 function renderLut() {
+  showLutName();
   const box = $('#res-lut');
   box.replaceChildren();
   const lu = session.results.lut;
@@ -531,8 +552,8 @@ function renderLut() {
 
   const pr = x.profile;
   box.append(el('h3', { class: 'lut-mode' }, tr('lutStake')), el('p', { class: 'muted small' }, tr('lutStakeSource')));
-  box.append(el('div', { class: 'verdict ' + (pr.submissionIssues ? 'fail' : 'pass'), id: 'lut-submission' },
-    pr.submissionIssues ? tr('lutSubmissionBad') + ': ' + pr.submissionIssues : tr('lutSubmissionOk')));
+  box.append(el('div', { class: 'verdict ' + (pr.submissionIssues ? 'fail' : pr.inferredIssues ? 'warn' : 'pass'), id: 'lut-submission' },
+    pr.submissionIssues ? tr('lutSubmissionBad') + ': ' + pr.submissionIssues : pr.inferredIssues ? tr('lutInferredBad') + ': ' + pr.inferredIssues : tr('lutSubmissionOk')));
   box.append(cards([
     { k: 'lutRiskPassing', v: `${pr.riskPassing} / ${pr.riskCategories}`, cls: pr.riskPassing === pr.riskCategories ? 'good' : 'bad' },
     { k: 'lutMaxBet', v: '$' + fmt(pr.maxBaseBet.value, 2), s: tr('lutTemplate') + ': ' + pr.maxBaseBet.template },
@@ -545,6 +566,9 @@ function renderLut() {
     { v: Array.isArray(c.limit) ? c.limit.map((v) => pct(v, 1)).join(' – ') : lutValue(c.unit, c.limit), cls: 'num' },
     statusCell(c.ok ? 'pass' : 'fail'),
   ])));
+  box.append(sub('lutInferred'), table(['lutCheck', 'lutMode', 'lutValue', 'result'], pr.inferred.map((c) => [
+    tr('lutChk_' + c.id), c.mode, { v: lutValue(c.unit, c.value), cls: 'num' }, statusCell(c.ok ? 'pass' : 'flag'),
+  ])), el('p', { class: 'muted small' }, tr('lutInferredNote')));
   box.append(sub('lutRisk'), table(['lutCheck', 'lutMode', 'lutValue', 'lutLimit', 'result'], pr.risk.map((c) => [
     tr('lutCat_' + c.category) + ': ' + tr('lutMea_' + c.measure), c.mode,
     { v: lutValue(c.unit, c.value), cls: 'num' }, { v: lutValue(c.unit, c.limit), cls: 'num' }, statusCell(c.ok ? 'pass' : 'fail'),
@@ -674,7 +698,7 @@ function init() {
   });
   $('#sample-lut').addEventListener('click', () => withTask('lut', async () => {
     const files = await runTask('sampleLut', {});
-    await setLutFiles(files.map((f) => ({ ...f, mime: f.name.endsWith('.json') ? 'application/json' : 'text/csv' })), tr('lutSampleTag'));
+    await setLutFiles(files.map((f) => ({ ...f, mime: f.name.endsWith('.json') ? 'application/json' : 'text/csv' })), 'lutSampleTag');
   }));
   $('#run-lut').addEventListener('click', runLut);
 

@@ -113,3 +113,79 @@ test('LUT tab: exact RTP per mode, bilingual errors, generated example and repor
   const outside = requests.filter((r) => !r.url.startsWith('blob:') && !(r.method === 'GET' && /\/(lab|icons)\//.test(new URL(r.url).pathname)));
   assert.deepStrictEqual(outside, [], 'requests other than the lab\'s own static files');
 });
+
+test('LUT tab: a run whose files were replaced meanwhile is dropped; the file label follows the language; format notes are not refusals', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const ctx = await browser.newContext({ acceptDownloads: true, viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(120000);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(server.url + '/lab/index.html');
+  await page.click('#tab-lut');
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-lut-race-'));
+  const write = (name, text) => { const p = path.join(dir, name); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, text); return p; };
+  const index = (weights) => JSON.stringify({ modes: [{ name: 'base', cost: 1.0, events: 'books_base.jsonl.zst', weights }] });
+  // Big table: 2,500,000 rows that each pay 1x (payout 100), so its RTP is exactly 100%;
+  // large enough that its run is still going when other files are chosen.
+  const big = [];
+  for (let i = 1; i <= 2500000; i++) big.push(`${i},${1000 + (i % 977)},100`);
+  const bigFiles = [write('big/index.json', index('big.csv')), write('big/big.csv', big.join('\n') + '\n')];
+  // Small table: one row of weight 1 paying 0.5x: RTP 50 / (100 * 1 * 1) = 50%.
+  const smallFiles = [write('small/index.json', index('small.csv')), write('small/small.csv', '1,1,50\n')];
+
+  await page.setInputFiles('#lutFiles', bigFiles);
+  await page.waitForFunction(() => document.querySelector('#name-lut').textContent.includes('big.csv'));
+  await page.click('#run-lut');
+  await page.setInputFiles('#lutFiles', smallFiles);
+  await page.waitForFunction(() => document.querySelector('#name-lut').textContent.includes('small.csv'));
+  // The run on the big table has not finished yet: this is the window of the race.
+  assert.ok(await page.isDisabled('#run-lut'), 'the first run is still going when the new files are listed');
+  await page.waitForSelector('#run-lut:not([disabled])');
+  // Regression: its result (RTP 100%) was attached to the small files. Now it is dropped.
+  assert.strictEqual(await page.$eval('#res-lut', (n) => n.children.length), 0, 'no result for files that are no longer listed');
+  assert.ok(await page.isHidden('#err-lut'));
+  assert.match(await page.textContent('#name-lut'), /small\.csv/);
+
+  await page.click('#run-lut');
+  await page.waitForSelector('#lut-submission');
+  const rows = await page.$$eval('#res-lut .table-wrap:first-of-type tbody tr', (r) => r.map((x) => x.innerText));
+  assert.ok(rows[0].includes('50.000000%'), rows[0]);
+  // The report pairs these numbers with the files they came from.
+  await page.click('#tab-report');
+  await page.click('#run-report');
+  await page.waitForSelector('#report-download');
+  const [download] = await Promise.all([page.waitForEvent('download'), page.click('#report-download')]);
+  const pdf = fs.readFileSync(await download.path()).toString('latin1');
+  assert.ok(pdf.includes('(small.csv)'), 'small.csv attached');
+  assert.ok(!pdf.includes('big.csv'), 'nothing from the big table');
+  assert.match(pdf, /"totalWeight":"1"[,}]/, 'report.json holds the small table (total weight 1)');
+  assert.match(pdf, /"inputs":\["lut:index\.json","lut:small\.csv"\]/);
+  await page.click('#tab-lut');
+
+  // The tag in front of the file names is built in the current language.
+  await page.click('#sample-lut');
+  await page.waitForFunction(() => document.querySelector('#name-lut').textContent.includes('lookUpTable_bonus_0.csv'));
+  assert.match(await page.textContent('#name-lut'), /مثال اصطناعي، ليس لعبة حقيقية/);
+  await page.click('#langToggle');
+  const en = await page.textContent('#name-lut');
+  assert.match(en, /^synthetic example, not a real game: index\.json/);
+  assert.ok(!/[؀-ۿ]/.test(en), 'no Arabic left in the English label: ' + en);
+  await page.click('#langToggle');
+
+  // A header line and blank lines: not in Stake's published checks, so a format note
+  // (warning), not "Stake would refuse the upload". RTP by hand: 960 / (100 * 10) = 96%,
+  // inside the band; every published submission check passes (see test/lab/lut.test.mjs).
+  await page.setInputFiles('#lutFiles', [write('fmt/index.json', index('fmt.csv')), write('fmt/fmt.csv', 'id,weight,payout\n1,9,0\n\n2,1,960\n\n')]);
+  await page.waitForFunction(() => document.querySelector('#name-lut').textContent.includes('fmt.csv'));
+  await page.click('#run-lut');
+  await page.waitForSelector('#lut-submission');
+  assert.ok(await page.$('#lut-submission.warn'), 'a warning, not a refusal');
+  assert.match(await page.textContent('#lut-submission'), /ملاحظات تنسيق \(استنتاج المختبر\): 2/);
+  assert.match(await page.textContent('#res-lut'), /ليسا في rgs_verification\.py/);
+
+  assert.deepStrictEqual(errors, []);
+});
