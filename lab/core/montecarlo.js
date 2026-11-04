@@ -20,11 +20,12 @@ function upperBound(cum, u) {
 }
 
 // Exact, unbiased draw of an index with probability weight / total (BigInt weights):
-// u is uniform on [0, total), and the index is the entry whose cumulative range
-// holds u. Up to 2^32, u = rng.nextBelow(total) (one 32-bit draw with rejection);
-// above, u comes from ceil(bits(total - 1) / 32) draws, most significant first,
-// rejected when they land in the incomplete last block (two draws up to 2^64).
-// With every weight 1 this picks the same index as rng.nextBelow(count).
+// u is uniform on [0, total), and the index is the first entry whose cumulative weight
+// exceeds u. x joins k 32-bit draws (most significant first; k = 1 up to 2^32, two up
+// to 2^64); x >= limit = 2^(32k) - (2^(32k) mod total) is drawn again (limit itself
+// too), and u = x mod total. Up to 2^32 this is exactly rng.nextBelow(total), so with
+// every weight 1 it picks the same index as rng.nextBelow(count). The rule is spelled
+// out in PRNG_DESCRIPTION_WEIGHTED (prng.js), which weighted runs record.
 export function weightedPicker(weights) {
   let total = 0n;
   const cum = weights.map((w) => (total += BigInt(w)));

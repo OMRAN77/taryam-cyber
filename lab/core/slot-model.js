@@ -16,9 +16,13 @@
 // Weighted stops and reel sets (optional):
 //   "weights": [[3, 1, ...], ...]             one positive integer per stop, parallel to
 //                                             "reels" (null for a reel = every stop weighs 1).
-//                                             The window starting at a stop shows with
-//                                             probability weight / reel total. Weights above
-//                                             2^53 - 1 are written as strings ("123...").
+//                                             The window whose top row (row 1) is a stop
+//                                             shows with probability weight / reel total;
+//                                             the stops after it fill rows 2, 3, ... Weights
+//                                             above 2^53 - 1 are written as strings ("123...").
+//                                             A sheet that weights the stop on another row j
+//                                             (e.g. the middle row 2 of 3) converts by
+//                                             weights[p] = sheet[(p + j - 1) mod length].
 //   "reelSets": [{ "weight": 3, "reels": [...], "weights": [...] }, ...]
 //                                             instead of "reels": each spin first picks a
 //                                             set with probability weight / sum of weights,
@@ -85,14 +89,18 @@ function payArray(value, maxCount, what) {
   });
 }
 
+// `what` names the reels in error messages: one text, or [arabic, english].
+const names = (what) => (Array.isArray(what) ? what : [what, what]);
+
 function strips(raw, what) {
-  if (!Array.isArray(raw) || raw.length === 0) throw err(`${what}: لا توجد بكرات`, `${what}: no reels`);
-  if (raw.length > MAX_REELS) throw err(`${what}: الحد الأقصى ${MAX_REELS} بكرات`, `${what}: at most ${MAX_REELS} reels`);
+  const [wa, we] = names(what);
+  if (!Array.isArray(raw) || raw.length === 0) throw err(`${wa}: لا توجد بكرات`, `${we}: no reels`);
+  if (raw.length > MAX_REELS) throw err(`${wa}: الحد الأقصى ${MAX_REELS} بكرات`, `${we}: at most ${MAX_REELS} reels`);
   return raw.map((reel, i) => {
-    if (!Array.isArray(reel)) throw err(`${what}: البكرة ${i + 1} ليست قائمة`, `${what}: reel ${i + 1} is not a list`);
+    if (!Array.isArray(reel)) throw err(`${wa}: البكرة ${i + 1} ليست قائمة`, `${we}: reel ${i + 1} is not a list`);
     const s = reel.map((x) => String(x).trim()).filter((x) => x !== '');
-    if (s.length === 0) throw err(`${what}: البكرة ${i + 1} فارغة`, `${what}: reel ${i + 1} is empty`);
-    if (s.length > MAX_STOPS) throw err(`${what}: البكرة ${i + 1} أطول من ${MAX_STOPS}`, `${what}: reel ${i + 1} has more than ${MAX_STOPS} stops`);
+    if (s.length === 0) throw err(`${wa}: البكرة ${i + 1} فارغة`, `${we}: reel ${i + 1} is empty`);
+    if (s.length > MAX_STOPS) throw err(`${wa}: البكرة ${i + 1} أطول من ${MAX_STOPS}`, `${we}: reel ${i + 1} has more than ${MAX_STOPS} stops`);
     return s;
   });
 }
@@ -103,12 +111,15 @@ const MAX_WEIGHT = (1n << 64n) - 1n; // uint64, the widest weight real engines u
 
 // A stop or reel-set weight: a whole number from 1 to 2^64 - 1, as a JS number (up to
 // 2^53 - 1, beyond which JSON numbers lose digits), a string of digits or a BigInt.
+// A JSON number of 2^53 or more has already been rounded when it gets here (both
+// 9007199254740992 and 9007199254740993 read as 2^53), so the message does not
+// quote it back as if the user had typed it.
 export function parseWeight(v, ar, en) {
   let w = null;
   if (typeof v === 'bigint') w = v;
   else if (typeof v === 'number' && Number.isInteger(v)) {
-    if (!Number.isSafeInteger(v)) throw err(`${ar}: الوزن ${v} أكبر من 2^53؛ اكتبه نصًا بين علامتي تنصيص ليحتفظ بكل أرقامه`, `${en}: weight ${v} is above 2^53; write it as a string in quotes so every digit is kept`);
-    w = BigInt(v);
+    if (v >= 2 ** 53) throw err(`${ar}: الوزن رقم JSON يساوي 2^53 أو أكبر، وأرقام JSON بهذا الحجم تفقد بعض خاناتها؛ اكتبه نصًا بين علامتي تنصيص ليحتفظ بكل أرقامه`, `${en}: the weight is a JSON number of 2^53 or more, and JSON numbers this large lose digits; write it as a string in quotes so every digit is kept`);
+    w = v < 0 ? -1n : BigInt(v); // any negative number fails the check below
   } else if (typeof v === 'string' && /^\s*\d+\s*$/.test(v)) w = BigInt(v.trim());
   if (w === null) throw err(`${ar}: الوزن "${v}" ليس عددًا صحيحًا`, `${en}: weight "${v}" is not a whole number`);
   if (w < 1n) throw err(`${ar}: الوزن يجب أن يكون 1 على الأقل (ما لا يظهر أبدًا يُحذف بدل إعطائه الوزن 0)`, `${en}: a weight must be at least 1 (remove what should never show instead of giving it weight 0)`);
@@ -121,19 +132,20 @@ export function parseWeight(v, ar, en) {
 function weightedStrips(rawReels, rawWeights, what) {
   if (rawWeights === undefined || rawWeights === null) return { strips: strips(rawReels, what), weights: null };
   const s = strips(rawReels, what);
+  const [wa, we] = names(what);
   if (!Array.isArray(rawWeights) || rawWeights.length !== rawReels.length) {
-    throw err(`${what}: الأوزان يجب أن تكون قائمة لكل بكرة (${rawReels.length})`, `${what}: weights must hold one list per reel (${rawReels.length})`);
+    throw err(`${wa}: الأوزان يجب أن تكون قائمة لكل بكرة (${rawReels.length})`, `${we}: weights must hold one list per reel (${rawReels.length})`);
   }
   const weights = rawWeights.map((wr, i) => {
     if (wr === null || wr === undefined) return null;
     const reel = rawReels[i];
     if (!Array.isArray(wr) || wr.length !== reel.length) {
-      throw err(`${what}: البكرة ${i + 1}: عدد المواقع ${reel.length} وعدد الأوزان ${Array.isArray(wr) ? wr.length : 0}، ويجب أن يتساويا`, `${what}: reel ${i + 1} has ${reel.length} stops but ${Array.isArray(wr) ? wr.length : 0} weights`);
+      throw err(`${wa}: البكرة ${i + 1}: عدد المواقع ${reel.length} وعدد الأوزان ${Array.isArray(wr) ? wr.length : 0}، ويجب أن يتساويا`, `${we}: reel ${i + 1} has ${reel.length} stops but ${Array.isArray(wr) ? wr.length : 0} weights`);
     }
     const out = [];
     reel.forEach((x, p) => {
       if (String(x).trim() === '') return;
-      out.push(parseWeight(wr[p], `${what}: البكرة ${i + 1}، الموقع ${p + 1}`, `${what}: reel ${i + 1}, stop ${p + 1}`));
+      out.push(parseWeight(wr[p], `${wa}: البكرة ${i + 1}، الموقع ${p + 1}`, `${we}: reel ${i + 1}, stop ${p + 1}`));
     });
     return out;
   });
@@ -158,18 +170,23 @@ function reelSource(raw, what, setsWhat) {
   if (!Array.isArray(sets) || sets.length === 0) throw err(`${setsWhat}: القائمة فارغة`, `${setsWhat} is empty`);
   if (sets.length > MAX_REEL_SETS) throw err(`${setsWhat}: الحد الأقصى لعدد مجموعات البكرات ${MAX_REEL_SETS}`, `${setsWhat}: at most ${MAX_REEL_SETS} reel sets`);
   const out = sets.map((set, j) => {
-    const name = `${setsWhat}[${j + 1}]`;
-    if (!set || typeof set !== 'object' || Array.isArray(set)) throw err(`${name}: يجب أن تكون كائنًا { weight, reels }`, `${name}: must be an object { weight, reels }`);
-    if (set.weight === undefined || set.weight === null) throw err(`${name}: لا يوجد وزن للمجموعة`, `${name}: the set has no weight`);
-    const weight = parseWeight(set.weight, `${name}: وزن المجموعة`, `${name}: set weight`);
-    if (set.reels === undefined || set.reels === null) throw err(`${name}: لا توجد بكرات`, `${name}: no reels`);
-    return { weight, ...weightedStrips(set.reels, set.weights, name) };
+    // "reelSets, set 1" rather than "reelSets[1]": no zero- vs one-based doubt, and no
+    // brackets for the bidi algorithm to move around in right-to-left Arabic text.
+    const [na, ne] = [`${setsWhat}، المجموعة ${j + 1}`, `${setsWhat}, set ${j + 1}`];
+    if (!set || typeof set !== 'object' || Array.isArray(set)) throw err(`${na}: يجب أن تكون كائنًا { weight, reels }`, `${ne}: must be an object { weight, reels }`);
+    if (set.weight === undefined || set.weight === null) throw err(`${na}: لا يوجد وزن للمجموعة`, `${ne}: the set has no weight`);
+    const weight = parseWeight(set.weight, `${na}: وزن المجموعة`, `${ne}: set weight`);
+    if (set.reels === undefined || set.reels === null) throw err(`${na}: لا توجد بكرات`, `${ne}: no reels`);
+    return { weight, ...weightedStrips(set.reels, set.weights, [na, ne]) };
   });
   if (out.some((s) => s.strips.length !== out[0].strips.length)) throw err(`${setsWhat}: كل مجموعات البكرات يجب أن تكون بنفس عدد البكرات`, `${setsWhat}: every reel set must have the same number of reels`);
   return out;
 }
 
-// True when a raw model uses stop weights or reel sets anywhere (the form cannot show them).
+// True when a raw model has a "weights" or "reelSets" key anywhere, which the form
+// cannot show, so the page edits it as JSON. This is about the keys, not the odds:
+// normalizeModel(raw).weighted is false when they change nothing (one reel set, or
+// only null weight lists), and such a model is analysed and simulated as unweighted.
 export function isWeightedModel(raw) {
   if (!raw || typeof raw !== 'object') return false;
   const has = (o) => Boolean(o && typeof o === 'object' && ((o.weights !== undefined && o.weights !== null) || (o.reelSets !== undefined && o.reelSets !== null)));
@@ -218,7 +235,8 @@ export function normalizeModel(raw) {
     if (!Number.isInteger(spins) || spins < 1 || spins > 1000) throw err('عدد الفري سبين يجب أن يكون بين 1 و1000', 'freeSpins.spins must be between 1 and 1000');
     const mult = Fraction.of(f.multiplier ?? 1);
     if (mult.cmp(0) <= 0 || mult.cmp(10000) > 0) throw err('مضاعف الفري سبين يجب أن يكون بين 0 و10000', 'freeSpins.multiplier must be in (0, 10000]');
-    // An empty reels list means "the base reels", as in the form.
+    // No free-spin reels (key missing, null, or another falsy value such as "") means
+    // "the base reels", as before reel sets existed; an empty list [] is an error.
     fsSets = reelSource({ ...f, reels: f.reels || undefined }, 'freeSpins.reels', 'freeSpins.reelSets');
     if (fsSets) {
       if (fsSets[0].strips.length !== nReels) throw err('بكرات الفري سبين يجب أن تكون بنفس عدد البكرات', 'freeSpins.reels must have the same number of reels');
@@ -303,7 +321,8 @@ export function parseModelJson(text) {
 
 // Builds or updates a raw model from CSV files, recognized by their header:
 //   reels:    reel1,reel2,...            (one stop per row; shorter reels leave cells empty;
-//             reel1,weight1,reel2,...     a weight column right after a reel holds its stop weights)
+//             reel1,weight1,reel2,...     weightN right after reelN holds its stop weights, each
+//                                         the weight of the window with that stop in row 1)
 //   paytable: symbol,type,1,2,3,...      (type: normal | wild | scatter; type is optional)
 //   lines:    line,reel1,reel2,...       (1-based rows)
 export function applyCsv(raw, text, fileName = '') {
@@ -339,12 +358,22 @@ export function applyCsv(raw, text, fileName = '') {
   const isReel = (h) => /^(reel|بكرة)\s*\d*$/.test(h);
   const isWeight = (h) => /^(weight|وزن)\s*\d*$/.test(h);
   if (isReel(header[0]) && header.every((h) => isReel(h) || isWeight(h))) {
-    // A weight column holds the weights of the reel column just before it.
+    // A weight column holds the weights of the reel column just before it. A numbered
+    // weight column must match that reel: weightN follows reelN (or, for a reel column
+    // without a number, the Nth reel column), so a misplaced column is an error rather
+    // than weights silently given to another reel.
+    const numberOf = (h) => { const m = /\d+$/.exec(h); return m ? parseInt(m[0], 10) : null; };
     const cols = [];
     header.forEach((h, i) => {
-      if (isReel(h)) cols.push({ col: i, weightCol: -1 });
-      else if (cols[cols.length - 1].weightCol === -1 && isReel(header[i - 1])) cols[cols.length - 1].weightCol = i;
-      else throw err(`${fileName}: عمود الوزن "${rows[0][i]}" يجب أن يأتي مباشرة بعد عمود بكرته`, `${fileName}: weight column "${rows[0][i]}" must come right after its reel column`);
+      if (isReel(h)) { cols.push({ col: i, weightCol: -1 }); return; }
+      if (!(cols[cols.length - 1].weightCol === -1 && isReel(header[i - 1]))) {
+        throw err(`${fileName}: عمود الوزن "${rows[0][i]}" يجب أن يأتي مباشرة بعد عمود بكرته`, `${fileName}: weight column "${rows[0][i]}" must come right after its reel column`);
+      }
+      const n = numberOf(h), reelNo = numberOf(header[i - 1]) ?? cols.length;
+      if (n !== null && n !== reelNo) {
+        throw err(`${fileName}: عمود الوزن "${rows[0][i]}" يأتي بعد عمود البكرة "${rows[0][i - 1]}"؛ ضع عمود وزن كل بكرة مباشرة بعدها وبرقمها نفسه`, `${fileName}: weight column "${rows[0][i]}" comes after reel column "${rows[0][i - 1]}"; put each reel's weight column right after it, with the same number`);
+      }
+      cols[cols.length - 1].weightCol = i;
     });
     const reels = cols.map(() => []);
     const weights = cols.map((c) => (c.weightCol >= 0 ? [] : null));

@@ -17,6 +17,7 @@ import { simulate, weightedPicker, generatorDescription } from '../../lab/core/m
 import { prngFromSeed, PRNG_DESCRIPTION, PRNG_DESCRIPTION_WEIGHTED } from '../../lab/core/prng.js';
 import { slotSampler } from '../../lab/core/casino.js';
 import { sha256Hex } from '../../lab/core/fair.js';
+import { pair } from '../../lab/i18n.js';
 
 const SAMPLES = new URL('../../lab/samples/', import.meta.url);
 const read = (f) => fs.readFileSync(new URL(f, SAMPLES), 'utf8');
@@ -506,7 +507,10 @@ test('casino slot sampler draws weighted models without bias', async () => {
 // symbols (one per reel) with probability prod(weight of the symbol at that row / reel
 // total), instead of stop combinations; scatters by convolving per-reel window counts;
 // free spins as a branching process (expected spins F / (1 - p F)).
-function rtpBySymbolTuples(raw) {
+// anchorRow j (1-based) reads each stop weight as the weight of the window that shows
+// that stop in row j, applied directly here (not by converting the weights), so it can
+// check the conversion formula the README gives for weights of another row.
+function rtpBySymbolTuples(raw, anchorRow = 1) {
   const N = raw.reels.length, R = raw.rows, L = raw.lines.length;
   const wild = raw.wild.symbol, sc = raw.scatter, f = sc.freeSpins;
   const pays = (sym, n) => Fraction.of((sym === wild ? raw.wild.pays : raw.paytable[sym] || [])[n - 1] || 0);
@@ -532,7 +536,8 @@ function rtpBySymbolTuples(raw) {
     for (const line of raw.lines) {
       const freq = set.reels.map((reel, k) => {
         const m = new Map();
-        reel.forEach((_, p) => { const s = reel[(p + line[k] - 1) % reel.length]; m.set(s, (m.get(s) || 0n) + wOf(k, p)); });
+        // Window with stop p in row anchorRow: row line[k] shows stop p + line[k] - anchorRow.
+        reel.forEach((_, p) => { const s = reel[(((p + line[k] - anchorRow) % reel.length) + reel.length) % reel.length]; m.set(s, (m.get(s) || 0n) + wOf(k, p)); });
         return [...m];
       });
       const walk = (k, syms, weight) => {
@@ -546,7 +551,7 @@ function rtpBySymbolTuples(raw) {
     let dist = [1n];
     set.reels.forEach((reel, k) => {
       const local = new Array(R + 1).fill(0n);
-      reel.forEach((_, p) => { let c = 0; for (let r = 0; r < R; r++) if (reel[(p + r) % reel.length] === sc.symbol) c++; local[c] += wOf(k, p); });
+      reel.forEach((_, p) => { let c = 0; for (let r = 0; r < R; r++) if (reel[(((p + r + 1 - anchorRow) % reel.length) + reel.length) % reel.length] === sc.symbol) c++; local[c] += wOf(k, p); });
       const next = new Array(dist.length + R).fill(0n);
       dist.forEach((a, i) => local.forEach((b, j) => { next[i + j] += a * b; }));
       dist = next;
@@ -583,4 +588,159 @@ test('weighted Desert Gold sample: exact RTP equals the symbol-tuple enumeration
 test('lab/samples.js carries the weighted sample (regenerate with scripts/make-lab-samples.mjs)', async () => {
   const samples = await import('../../lab/samples.js');
   assert.deepStrictEqual(samples.desertGoldWeighted, JSON.parse(read('desert-gold-weighted.json')));
+});
+
+// ---- Review fixes ----
+test('a stop weight belongs to the window whose top row (row 1) shows that stop: exact engine and simulator', async () => {
+  // One reel A, B, C with weights 5, 1, 1 (total 7) and three rows. By hand: the window
+  // starting at A (weight 5) shows A in row 1; A is in row 2 only in the window starting
+  // at C (weight 1) and in row 3 only in the one starting at B (weight 1). A pays 1.
+  const raw = (row) => ({ rows: 3, reels: [['A', 'B', 'C']], weights: [[5, 1, 1]], lines: [[row]], paytable: { A: [1] } });
+  assert.deepStrictEqual([1, 2, 3].map((row) => rtpOf(raw(row)).rtp.fraction), ['5/7', '1/7', '1/7']);
+  // The simulator uses the same convention. nextBelow(7) on words 0 and 5 gives u = 0
+  // (cumulative bounds 5, 6, 7: stop A on top, a win) and u = 5 (stop B on top, no win).
+  const model = normalizeModel(raw(1));
+  const sim = simulate(model, words([0, 5]), 2);
+  assert.strictEqual(sim.totalWinUnits, model.totalBetUnits);
+  assert.strictEqual(sim.rtp, 0.5);
+});
+
+test('the README conversion for weights of another row: weights[p] = sheet[(p + j - 1) mod n]', () => {
+  // The second algorithm above applies weights read as middle-row (j = 2) weights directly;
+  // the engine gets the converted weights. Both must agree, and both differ from row 1.
+  const raw = JSON.parse(read('desert-gold-weighted.json'));
+  const conv = (w) => w && w.map((_, p) => w[(p + 1) % w.length]);
+  const mid = clone(raw);
+  mid.weights = raw.weights.map(conv);
+  for (const set of mid.scatter.freeSpins.reelSets) if (set.weights) set.weights = set.weights.map(conv);
+  const direct = rtpBySymbolTuples(raw, 2);
+  assert.strictEqual(rtpOf(mid).rtp.fraction, direct.toString());
+  // The figure README.md quotes for the middle-row reading, from the second algorithm.
+  assert.strictEqual(direct.toPercent(6), '94.093636');
+  assert.notStrictEqual(direct.toString(), rtpOf(raw).rtp.fraction);
+});
+
+test('the recorded weighted-generator text pins the draw: a re-implementation from it matches the picker', async () => {
+  // Written from PRNG_DESCRIPTION_WEIGHTED alone: k = max(1, ceil(bits(T-1)/32)) words joined
+  // most significant first, drawn again while x >= 2^(32k) - (2^(32k) mod T), u = x mod T,
+  // the pick is the first entry whose cumulative weight exceeds u.
+  assert.ok(PRNG_DESCRIPTION_WEIGHTED.includes('u = x mod T'));
+  assert.ok(PRNG_DESCRIPTION_WEIGHTED.includes('while x >= 2^(32k) - (2^(32k) mod T)'));
+  assert.ok(PRNG_DESCRIPTION_WEIGHTED.includes('k = max(1, ceil(bits(T-1)/32))'));
+  assert.ok(PRNG_DESCRIPTION_WEIGHTED.includes('row 1 (the top row)'));
+  const documented = (ws) => {
+    const T = ws.reduce((a, b) => a + b, 0n);
+    const bits = T - 1n === 0n ? 0 : (T - 1n).toString(2).length;
+    const k = Math.max(1, Math.ceil(bits / 32));
+    const span = 1n << BigInt(32 * k);
+    return (src) => {
+      let x;
+      do { x = 0n; for (let i = 0; i < k; i++) x = x * 4294967296n + BigInt(src.nextU32()); } while (x >= span - (span % T));
+      const u = x % T;
+      let c = 0n;
+      for (let i = 0; i < ws.length; i++) { c += ws[i]; if (c > u) return i; }
+      throw new Error('unreachable');
+    };
+  };
+  // A generator that also counts the words used, so both sides must consume the same words.
+  const counted = (list) => { const g = words(list); let n = 0; const f = g.nextU32; g.nextU32 = () => { n++; return f(); }; g.used = () => n; return g; };
+  const M64 = (1n << 64n) - 1n;
+  const cases = [
+    [3n, 5n, 7n], [1n], [1n << 32n], [1n << 32n, 1n], [1n << 32n, 1n << 33n], [M64, 1n], [M64, M64], [M64, M64, M64, 5n],
+  ];
+  const rng = await prngFromSeed('documented-draw');
+  for (const ws of cases) {
+    // Random words, then words at the rejection boundary of 2- and 3-word totals.
+    const streams = Array.from({ length: 200 }, () => Array.from({ length: 12 }, () => rng.nextU32()));
+    streams.push([0xffffffff, 0, 1, 2, 3, 4], [0xffffffff, 0xffffffff, 0xffffffff, 0, 0, 0], [0xfffffffe, 0xffffffff, 7, 7, 7, 7]);
+    for (const list of streams) {
+      const a = counted([...list]), b = counted([...list]);
+      let ia, ib;
+      try { ia = weightedPicker(ws)(a); } catch (e) { ia = 'out of words'; }
+      try { ib = documented(ws)(b); } catch (e) { ib = 'out of words'; }
+      assert.strictEqual(ia, ib, `${ws} on ${list.slice(0, 4)}`);
+      if (ia !== 'out of words') assert.strictEqual(a.used(), b.used(), `words used, ${ws}`);
+    }
+  }
+  // x equal to the limit is rejected (it is not "below" it): T = 3 * 2^32, x = 2^64 - 2^32.
+  const edge = counted([0xffffffff, 0, 0, 9]);
+  assert.strictEqual(documented([1n << 32n, 1n << 33n])(edge), 0);
+  assert.strictEqual(edge.used(), 4);
+});
+
+test('the weights / reelSets keys open the JSON editor even when they change no odds; such models run as unweighted', async () => {
+  // isWeightedModel is about the keys (the form cannot show them); weighted is about the
+  // odds. One reel set (any set weight) or only null weight lists change nothing, so the
+  // analysis, the generator text and the simulation equal those of the plain model.
+  const plain = { rows: 1, reels: [['A', 'B', 'C'], ['A', 'C', 'B', 'B']], paytable: { A: [0, 5], B: [0, 1] } };
+  const oneSet = { rows: 1, reelSets: [{ weight: 5, reels: plain.reels }], paytable: plain.paytable };
+  const nullWeights = { ...plain, weights: [null, null] };
+  const ref = normalizeModel(plain);
+  for (const raw of [oneSet, nullWeights]) {
+    assert.strictEqual(isWeightedModel(raw), true);
+    const m = normalizeModel(raw);
+    assert.strictEqual(m.weighted, false);
+    assert.deepStrictEqual(exactSummary(analyzeExact(m)), exactSummary(analyzeExact(ref)));
+    assert.strictEqual(generatorDescription(m), PRNG_DESCRIPTION);
+    assert.deepStrictEqual(simulate(m, await prngFromSeed('keys'), 5000), simulate(ref, await prngFromSeed('keys'), 5000));
+  }
+  // So the JSON editor's note names the keys instead of claiming weights or several sets.
+  const [ar, en] = pair('jsonModeNote');
+  assert.ok(en.includes('weights or reelSets keys') && !/more than one reel set/.test(en), en);
+  assert.ok(ar.includes('weights') && ar.includes('reelSets') && !ar.includes('أكثر من مجموعة'), ar);
+});
+
+test('free spins: no reels key (or null) means the base reels; an empty list is an error', () => {
+  // As before reel sets existed (commit 5863f5b: `if (f.reels)`, and [] is truthy in JS).
+  const raw = (reels) => ({ rows: 1, reels: [['A', 'S'], ['A', 'S']], paytable: { A: [0, 2] }, scatter: { symbol: 'S', freeSpins: { trigger: 2, spins: 1, ...(reels === undefined ? {} : { reels }) } } });
+  for (const reels of [undefined, null, '']) assert.strictEqual(normalizeModel(raw(reels)).freeSpins.sameReels, true, String(reels));
+  assert.throws(() => normalizeModel(raw([])), (e) => e instanceof ModelError && /freeSpins\.reels: no reels/.test(e.en) && Boolean(e.ar));
+});
+
+test('CSV: weightN must follow reelN (or the Nth unnumbered reel column)', () => {
+  const ok = [
+    ['reel1,weight1,reel2,weight2\nA,9,A,1\nB,1,B,3\n', [[9, 1], [1, 3]]],
+    ['reel1,reel2,weight2\nA,A,4\nB,B,1\n', [null, [4, 1]]],
+    ['reel,weight,reel\nA,2,A\nB,1,B\n', [[2, 1], null]], // unnumbered weight: the reel before it
+    ['reel,reel,weight2\nA,A,6\nB,B,1\n', [null, [6, 1]]], // reel columns without numbers count 1, 2, ...
+    ['بكرة1,وزن1,بكرة2\nA,3,A\nB,1,B\n', [[3, 1], null]],
+  ];
+  for (const [text, weights] of ok) assert.deepStrictEqual(applyCsv({ rows: 1 }, text, 'r.csv').weights, weights, text);
+  const bad = [
+    'reel1,reel2,weight1\nA,A,9\nB,B,1\n', // reel 1's weights placed after reel 2
+    'reel1,weight2,reel2,weight1\nA,9,A,1\nB,1,B,1\n', // swapped
+    'reel,reel,weight1\nA,A,9\nB,B,1\n', // the second reel column is reel 2
+    'بكرة1,بكرة2,وزن1\nA,A,9\nB,B,1\n',
+  ];
+  for (const text of bad) {
+    assert.throws(() => applyCsv({ rows: 1 }, text, 'r.csv'), (e) => e instanceof ModelError && /same number/.test(e.en) && /برقمها نفسه/.test(e.ar), text);
+  }
+});
+
+test('a JSON number weight of 2^53 or more: the message does not quote a rounded value or call 2^53 "above"', () => {
+  const at = (literal) => { try { normalizeModel(JSON.parse(`{"rows":1,"reels":[["A","B"]],"weights":[[${literal},1]],"paytable":{"A":[1]}}`)); return null; } catch (e) { return e; } };
+  // 2^53 + 1 is read by JSON.parse as 2^53, and 2^53 itself cannot be told apart from it.
+  for (const literal of ['9007199254740993', '9007199254740992', '1e300']) {
+    const e = at(literal);
+    assert.ok(e instanceof ModelError, literal);
+    assert.ok(/2\^53 or more/.test(e.en) && /2\^53 أو أكبر/.test(e.ar), e.en);
+    assert.ok(!e.en.includes('9007199254740992') && !e.ar.includes('9007199254740992'), e.en);
+  }
+  assert.strictEqual(at('9007199254740991'), null); // 2^53 - 1 is exact and accepted
+  // A large negative number is refused for being below 1, not for its size.
+  const neg = at('-1e20');
+  assert.ok(/at least 1/.test(neg.en) && !/2\^53/.test(neg.en), neg.en);
+});
+
+test('reel-set errors read "reelSets, set N" (1-based, no brackets) in both languages', () => {
+  const msg = (raw) => { try { normalizeModel(raw); } catch (e) { return [e.ar, e.en]; } return null; };
+  let [ar, en] = msg({ rows: 1, reelSets: [{ reels: [['A']] }], paytable: {} });
+  assert.strictEqual(en, 'reelSets, set 1: the set has no weight');
+  assert.strictEqual(ar, 'reelSets، المجموعة 1: لا يوجد وزن للمجموعة');
+  [ar, en] = msg({ rows: 1, reelSets: [{ weight: 1, reels: [['A', 'B']] }, { weight: 1, reels: [['A', 'B']], weights: [[1, 0]] }], paytable: {} });
+  assert.match(en, /^reelSets, set 2: reel 1, stop 2: a weight must be at least 1/);
+  assert.match(ar, /^reelSets، المجموعة 2: البكرة 1، الموقع 2: الوزن يجب/);
+  [ar, en] = msg({ rows: 1, reels: [['A', 'S']], paytable: { A: [1] }, scatter: { symbol: 'S', freeSpins: { trigger: 1, spins: 1, reelSets: [{ weight: 1, reels: [[]] }] } } });
+  assert.strictEqual(en, 'freeSpins.reelSets, set 1: reel 1 is empty');
+  for (const text of [ar, en]) assert.ok(!/[[\]]/.test(text), text);
 });
