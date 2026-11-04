@@ -623,6 +623,7 @@ export function roundDistribution(model, spins, exact, { onProgress = () => {}, 
   const ok = (n) => {
     if (bounded && n > roundMax) return true; // nothing can wrap
     const b = tailBounds(table, n, 'logT');
+    if (!(EW > 0)) return b.p0 <= ALIAS_TARGET; // nothing ever pays: no moment to protect
     return b.p0 <= ALIAS_TARGET && b.e1 + n * b.p0 <= MOMENT_TARGET * EW && b.e2 + n * n * b.p0 <= MOMENT_TARGET * EW2;
   };
   while (!ok(N) && N <= gridLimit) N *= 2;
