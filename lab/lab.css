@@ -192,3 +192,5 @@ td.na { color: var(--muted); }
 #panel-theory.json-mode > :not(.toolbar):not(#modelJsonBox):not(.actions):not(.error):not(.results) { display: none !important; }
 #modelJsonBox > * + * { margin-top: 10px; }
 #f-json { min-height: 320px; }
+/* The cycle's total weight is one long run of digits and commas: let it wrap on phones. */
+.weight-total { overflow-wrap: anywhere; }

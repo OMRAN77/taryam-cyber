@@ -323,9 +323,17 @@ function theorySection(L, th) {
 
 // ---- Weighted stops and reel sets (P0-5) ----
 const bigNum = (s) => BigInt(s).toLocaleString('en-US');
+// One row per reel of each set, so no cell holds more than one number: L.table cuts a
+// cell that does not fit with '…'. The widest values still fit their columns at 19px
+// mono: a set weight up to 2^64 - 1 (26 characters with commas) and a reel total up to
+// 10,000 stops x (2^64 - 1) (31 characters).
 function reelSetsTable(L, sets) {
-  L.table([{ labels: ['#', '#'], w: 0.08 }, { key: 'setWeight', w: 0.18, mono: true }, { key: 'probability', w: 0.16, mono: true }, { key: 'stops', w: 0.24, mono: true }, { key: 'reelTotals', w: 0.34, mono: true }],
-    sets.map((st, i) => [i + 1, bigNum(st.weight), st.probability.percent + '%', st.stops.join(' / '), st.reelTotals.map(bigNum).join(' / ')]));
+  const rows = [];
+  sets.forEach((st, i) => st.reelTotals.forEach((total, k) => rows.push(k === 0
+    ? [i + 1, bigNum(st.weight), st.probability.percent + '%', k + 1, st.stops[k], bigNum(total)]
+    : ['', '', '', k + 1, st.stops[k], bigNum(total)])));
+  L.table([{ key: 'reelSet', w: 0.1 }, { key: 'setWeight', w: 0.25, mono: true }, { key: 'probability', w: 0.15, mono: true },
+    { key: 'reelNo', w: 0.08 }, { key: 'reelStops', w: 0.12, mono: true }, { key: 'reelTotal', w: 0.3, mono: true }], rows);
 }
 function weightsSection(L, m) {
   L.section('weightedModel');

@@ -146,3 +146,86 @@ test('RTP lab: weighted stops and reel sets end to end', async (t) => {
   const outside = requests.filter((r) => !r.url.startsWith('blob:') && !(r.method === 'GET' && /\/(lab|icons)\//.test(new URL(r.url).pathname)));
   assert.deepStrictEqual(outside, [], 'requests other than the lab\'s own static files');
 });
+
+test('RTP lab: weights near 2^64 on a phone, exact large numbers, the PDF reel table, notes and errors', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(120000);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(server.url + '/lab/index.html');
+  const runTheory = async () => {
+    await page.evaluate(() => document.querySelector('#res-theory').replaceChildren());
+    await page.click('#run-theory');
+    await page.waitForFunction(() => !document.querySelector('#run-theory').disabled && (document.querySelector('#res-theory .card') || !document.querySelector('#err-theory').hidden));
+  };
+  const noSideScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+
+  // The weighted example with every base stop weight times 2^62 - 1 (each still below
+  // 2^64 - 1) and the first free-spin set weighted 2^64 - 1, all written as strings.
+  const K = (1n << 62n) - 1n;
+  const big = JSON.parse(JSON.stringify(sample));
+  big.weights = sample.weights.map((r) => r.map((w) => String(BigInt(w) * K)));
+  big.scatter.freeSpins.reelSets[0].weight = '18446744073709551615';
+  // Expected totals by direct BigInt sums and products here: one base set, so the cycle
+  // is the product of the reel totals.
+  const reelTotals = big.weights.map((r) => r.reduce((a, w) => a + BigInt(w), 0n));
+  const cycle = reelTotals.reduce((a, b) => a * b, 1n);
+  await page.click('[data-sample="desertGoldWeighted"]');
+  await page.fill('#f-json', JSON.stringify(big));
+  await runTheory();
+  assert.ok(await page.isHidden('#err-theory'), await page.textContent('#err-theory'));
+  // The cycle total (105 digits) wraps instead of pushing the page sideways at 390px.
+  assert.strictEqual(await page.textContent('#res-theory .weight-total'), 'مجموع أوزان الدورة الكاملة: ' + cycle.toLocaleString('en-US'));
+  assert.ok(await noSideScroll(), 'no horizontal page scroll at 390px');
+  // The note says which row a stop weight belongs to, here and in the JSON editor.
+  assert.ok((await page.textContent('#res-theory')).includes('الصف الأول (العلوي)'));
+  assert.ok((await page.textContent('#modelJsonBox')).includes('الصف الأول (العلوي)'));
+
+  // PDF: every reel total and the 2^64 - 1 set weight are drawn whole (L.table cuts a
+  // cell that does not fit with '…'); recorded from the canvas text calls.
+  await page.evaluate(() => {
+    window.drawn = [];
+    const fill = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) { window.drawn.push(String(text)); return fill.call(this, text, ...rest); };
+  });
+  await page.click('#tab-report');
+  await page.click('#run-report');
+  await page.waitForSelector('#report-download');
+  const drawn = await page.evaluate(() => window.drawn);
+  for (const v of [...reelTotals, (1n << 64n) - 1n]) assert.ok(drawn.includes(v.toLocaleString('en-US')), 'drawn whole: ' + v.toLocaleString('en-US'));
+  assert.deepStrictEqual(drawn.filter((s) => /^[\d,]+…$/.test(s)), [], 'no number cut short');
+  assert.ok(await noSideScroll(), 'no horizontal page scroll on the report tab');
+
+  // A weight per line that is a fraction above 2^53 keeps every digit. One reel A, B, C
+  // with weights 2^60 + 1, 1, 2 and lines on rows 1 and 2: A shows in row 1 from the
+  // first stop (2^60 + 1) and in row 2 from the third (2); the per-line average is
+  // (2^60 + 3) / 2 = 576460752303423489.5 (2^60 = 1152921504606846976).
+  await page.click('#tab-theory');
+  await page.fill('#f-json', JSON.stringify({ rows: 3, reels: [['A', 'B', 'C']], weights: [[String((1n << 60n) + 1n), 1, 2]], lines: [[1], [2]], paytable: { A: [1] } }));
+  await runTheory();
+  assert.ok((await page.textContent('#res-theory')).includes('576,460,752,303,423,489.50'), 'exact weight per line');
+
+  // A model with one reel set has the reelSets key, so it opens in the JSON editor, but it
+  // is not weighted: the note names the keys and no weights card is shown.
+  const oneSet = { name: 'one set', rows: 1, reelSets: [{ weight: 5, reels: [['A', 'B'], ['A', 'B']] }], paytable: { A: [0, 5] } };
+  await page.setInputFiles('#modelFile', { name: 'one-set.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(oneSet)) });
+  await page.waitForSelector('#modelJsonBox:not([hidden])');
+  const note = await page.textContent('#modelJsonBox');
+  assert.ok(note.includes('weights') && note.includes('reelSets') && !note.includes('أكثر من مجموعة'), note);
+  await runTheory();
+  // By hand: one middle-row line, A A pays 5 and lands with probability 1/2 x 1/2: 125%.
+  assert.strictEqual(await page.textContent('#res-theory .card.accent .v'), '125.000000%');
+  assert.ok(!(await page.textContent('#res-theory')).includes('موزونة'));
+
+  // Reel-set errors name the set without brackets, so right-to-left text keeps its order.
+  await page.fill('#f-json', '{"rows":1,"reelSets":[{"reels":[["A"]]}],"paytable":{}}');
+  await page.click('#run-theory');
+  await page.waitForSelector('#err-theory:not([hidden])');
+  assert.strictEqual(await page.textContent('#err-theory'), 'reelSets، المجموعة 1: لا يوجد وزن للمجموعة');
+  assert.ok(await noSideScroll());
+  assert.deepStrictEqual(errors, []);
+});

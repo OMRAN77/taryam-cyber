@@ -165,8 +165,13 @@ function setModel(raw) {
   }
 }
 const currentRaw = () => (jsonMode ? parseModelJson($('#f-json').value) : modelFromForm(readForm()));
-// A weight count can pass 2^53 or be a fraction (an average over lines).
-const fmtWeight = (s) => (s.includes('/') ? fmt(new Fraction(...s.split('/').map(BigInt)).toNumber(), 2) : BigInt(s).toLocaleString('en-US'));
+// A weight count can pass 2^53 or be a fraction (an average over lines). Both are
+// written exactly in BigInt: every integer digit kept, a fraction rounded to 2 places.
+const fmtWeight = (s) => {
+  if (!s.includes('/')) return BigInt(s).toLocaleString('en-US');
+  const [int, dec] = new Fraction(...s.split('/').map(BigInt)).toDecimal(2).split('.');
+  return BigInt(int).toLocaleString('en-US') + '.' + dec;
+};
 function reelSetsTable(sets) {
   return table([['#', '#'], 'setWeight', 'probability', 'stops', 'reelTotals'], sets.map((st, i) => [
     { v: i + 1, cls: 'num' }, { v: fmtWeight(st.weight), cls: 'num' }, { v: st.probability.percent + '%', cls: 'num' },
@@ -177,7 +182,7 @@ function renderWeights(box, m) {
   if (!m.weighted) return;
   box.append(sub('reelSetsTable'), reelSetsTable(m.reelSets));
   if (m.freeSpinReelSets) box.append(sub('fsReelSetsCount'), reelSetsTable(m.freeSpinReelSets));
-  box.append(el('p', { class: 'muted small' }, tr('totalWeight') + ': ' + fmtWeight(m.totalWeight)), el('p', { class: 'muted small' }, tr('weightsNote')));
+  box.append(el('p', { class: 'muted small weight-total' }, tr('totalWeight') + ': ' + fmtWeight(m.totalWeight)), el('p', { class: 'muted small' }, tr('weightsNote')));
 }
 
 async function runTheory() {
@@ -208,7 +213,7 @@ function renderTheory() {
     d && { k: 'maxWinBase', v: fmt(d.maxWin.base, 2) + '×' },
     d && d.maxWin.perFreeSpin !== undefined && { k: 'maxWinFs', v: fmt(d.maxWin.perFreeSpin, 2) + '×' },
     d && d.maxWin.perFreeSpin !== undefined && { k: 'maxWinTotal', v: d.maxWin.unbounded ? '∞' : fmt(d.maxWin.withFeature, 2) + '×', s: d.maxWin.unbounded ? tr('unbounded') : null },
-    { k: 'combinations', v: Number(x.model.combinations).toLocaleString('en-US'), s: x.model.reels + '×' + x.model.rows + ' · ' + x.model.lines + ' ' + tr('lines') },
+    { k: 'combinations', v: BigInt(x.model.combinations).toLocaleString('en-US'), s: x.model.reels + '×' + x.model.rows + ' · ' + x.model.lines + ' ' + tr('lines') },
     x.model.weighted && { k: 'weightedModel', v: tr('weightedYes'), s: tr('reelSetsCount') + ': ' + x.model.reelSets.length + (x.model.freeSpinReelSets ? ' · ' + tr('fsReelSetsCount') + ': ' + x.model.freeSpinReelSets.length : '') },
   ]));
   if (x.distributionError) box.append(el('div', { class: 'verdict warn' }, pick([x.distributionError.ar, x.distributionError.en])));
