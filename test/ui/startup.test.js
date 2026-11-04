@@ -69,9 +69,9 @@ test('header buttons wired at the end of the script respond', async (t) => {
   assert.ok(await page.evaluate(() => document.querySelector('#secToolsDialog').open), 'security tools did not open');
   await page.click('#btnCloseSecTools');
 
-  await page.click('#btnHeaderMenu');
-  await page.click('#btnToggleHistory');
-  assert.ok(await page.evaluate(() => document.querySelector('#workarea').classList.contains('open')), 'code/preview panel did not open');
+  // The code / preview pane is retired: no menu entry, and the pane stays hidden.
+  assert.strictEqual(await page.$('#btnToggleHistory'), null);
+  assert.strictEqual(await page.evaluate(() => getComputedStyle(document.querySelector('#workarea')).display), 'none');
 });
 
 test('security operations home: shown on an empty chat, its tiles open the matching tool', async (t) => {
@@ -117,4 +117,26 @@ test('account bar: settings, language and log in sit at the bottom of the sideba
   await page.click('#btnAcct');
   await page.click('#btnAcctLogin');
   assert.ok(await page.isVisible('#authOverlay'), 'log in did not open the login screen');
+});
+
+test('a formal console: no emoji anywhere on the page, icon-only send, phone account menu under the header', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  page.setDefaultTimeout(5000);
+  await page.goto(server.url + '/');
+  const emojiIn = () => page.evaluate(() => (document.body.innerText.match(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{26FF}\u{2B50}\u{2B55}]/gu) || []));
+  assert.deepStrictEqual(await emojiIn(), [], 'login screen');
+  await page.click('#btnGuestMode');
+  assert.deepStrictEqual(await emojiIn(), [], 'console');
+  assert.strictEqual(await page.$('#btnEmoji'), null);
+  assert.strictEqual(await page.getAttribute('#btnSend', 'aria-label'), 'إرسال');
+  assert.ok(!(await page.isVisible('#btnSend span')), 'send shows an icon, not a label');
+  await page.click('#btnAcctMobile');
+  const pos = await page.evaluate(() => ({ menu: parseFloat(document.querySelector('#acctMenu').style.top), header: document.querySelector('header').getBoundingClientRect().bottom, drawer: document.querySelector('#sidebar').classList.contains('open') }));
+  assert.ok(pos.menu >= pos.header && !pos.drawer, `menu drops below the header without the drawer (${JSON.stringify(pos)})`);
+  await page.click('#miSettings');
+  assert.ok(await page.evaluate(() => document.querySelector('#settingsDialog').open), 'settings did not open');
+  assert.deepStrictEqual(await emojiIn(), [], 'settings');
 });

@@ -383,7 +383,7 @@ details.md-sources summary:hover{color:var(--text-2)}
   font:500 11.5px/1.5 var(--font-mono);
   background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text-2);
 }
-.msg-file .ic{flex-shrink:0;font-size:11px}
+.msg-file .ic{flex-shrink:0;font:700 9px/1 var(--font-mono);letter-spacing:.06em;color:var(--primary);opacity:.85}
 .msg-file .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* On the purple→cyan user bubble: dark glass and white text so names stay readable */
 .msg.user .msg-file{background:rgba(8,10,18,.28);border-color:rgba(255,255,255,.3);color:#fff}
@@ -394,26 +394,6 @@ details.md-sources summary:hover{color:var(--text-2)}
 .msg-files.expanded .msg-file.extra{display:inline-flex}
 .msg-files.expanded .msg-img.extra{display:block}
 
-/* Emoji picker */
-#emojiPicker{
-  position:absolute;bottom:100%;margin-bottom:8px;
-  width:290px;max-height:280px;overflow-y:auto;
-  background:rgba(15,18,25,.92);
-  backdrop-filter:blur(24px);
-  -webkit-backdrop-filter:blur(24px);
-  border:1px solid var(--border-2);border-radius:16px;padding:10px;
-  box-shadow:var(--shadow-3);
-  display:none;grid-template-columns:repeat(8,1fr);gap:2px;
-  z-index:100;
-}
-html[dir="rtl"] #emojiPicker{right:0}
-html[dir="ltr"] #emojiPicker{left:0}
-#emojiPicker.open{display:grid;animation:msgIn .2s ease}
-#emojiPicker .em{
-  cursor:pointer;font-size:18px;text-align:center;padding:6px 0;border-radius:8px;
-  transition:all var(--transition);
-}
-#emojiPicker .em:hover{background:var(--surface-2);transform:scale(1.15)}
 
 /* ═══════════════ WORKAREA ═══════════════ */
 #workarea{flex:1;display:flex;flex-direction:column;min-width:0}
@@ -884,6 +864,8 @@ html.mobile-ui .resizer{display:none}
 /* Primary color variable propagation */
 .msg.user{background:linear-gradient(135deg,var(--primary) 0%,var(--cyan) 100%)}
 /* ═══════════════ CYBER CONSOLE THEME ═══════════════ */
+.msg.assistant.failed{border-color:rgba(248,113,113,.45);box-shadow:inset 3px 0 0 var(--red)}
+html[dir="rtl"] .msg.assistant.failed{box-shadow:inset -3px 0 0 var(--red)}
 /* Terminal face for chrome and labels, neon on near-black, HUD corner brackets. */
 header h1 .subtitle{font-family:var(--font-mono);color:var(--primary);opacity:.75;letter-spacing:.08em}
 header{background:rgba(3,8,7,.78);border-bottom-color:var(--border-2);box-shadow:0 1px 0 rgba(0,255,156,.06),0 8px 30px rgba(0,0,0,.35)}
@@ -985,6 +967,48 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
   .sys-chip{padding:2px 7px;font-size:9px}
   #messages:empty ~ #socHome{padding:16px 14px 8px}
 }
+/* Full-width console: the preview / code pane is retired, answers live in the chat */
+#workarea{display:none!important}
+#chatcol{flex:1;width:auto;min-width:0}
+#messages{padding-inline:max(18px,calc((100% - 920px) / 2))}
+#messages:empty ~ #socHome{padding-inline:max(18px,calc((100% - 980px) / 2))}
+.soc-grid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+
+/* Composer: a command line, one control row, icon send */
+#inputbar{inset-inline:max(14px,calc((100% - 920px) / 2));bottom:34px;gap:0;padding:0;border-radius:12px;overflow:hidden}
+#inputbar:focus-within{border-color:var(--primary);box-shadow:0 0 0 1px rgba(0,255,156,.35),0 0 32px rgba(0,255,156,.12),0 10px 40px rgba(0,0,0,.5)}
+.cmd-line{display:flex;align-items:flex-start;gap:10px;padding:14px 16px 6px}
+.cmd-sigil{font:700 13px/24px var(--font-mono);color:var(--primary);flex-shrink:0;direction:ltr;user-select:none;text-shadow:0 0 10px rgba(0,255,156,.5)}
+#inputbar #prompt{flex:1;min-height:24px;line-height:24px;padding:0;font-size:14.5px}
+#attachStrip{padding:10px 14px 0}
+#inputbar .dock-row{padding:6px 10px 10px;gap:10px}
+#inputbar .dock-icons{align-items:center;gap:2px;min-width:0}
+.dock-sep{width:1px;height:18px;background:var(--border-2);margin:0 6px}
+.dock-btn{border-radius:8px}
+.dock-send{display:flex;align-items:center;gap:6px;flex-shrink:0}
+#chat-toggles{padding:0;gap:4px}
+.toggle-chip{border-radius:6px;padding:5px 9px;font-size:11.5px;gap:7px;background:transparent;border-color:transparent}
+.toggle-chip:hover{background:var(--surface-2);border-color:var(--border)}
+.toggle-chip .sw{position:relative;width:22px;height:12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid var(--border-2);flex-shrink:0;transition:all var(--transition)}
+.toggle-chip .sw::after{content:'';position:absolute;top:1px;inset-inline-start:1px;width:8px;height:8px;border-radius:50%;background:var(--text-3);transition:all var(--transition)}
+.toggle-chip.on{background:transparent;border-color:transparent;color:var(--text)}
+.toggle-chip.on .sw{background:rgba(0,255,156,.25);border-color:var(--primary)}
+.toggle-chip.on .sw::after{inset-inline-start:11px;background:var(--primary);box-shadow:0 0 6px var(--primary)}
+#btnSend{width:40px;height:40px;padding:0;justify-content:center;border-radius:10px}
+#btnSend span:not(.spinner){display:none}
+#btnSend svg{width:17px;height:17px}
+#btnStop{color:var(--text-3)}
+.cmd-hint{position:absolute;bottom:12px;inset-inline:max(14px,calc((100% - 920px) / 2));font:11px var(--font-mono);color:var(--text-4);text-align:center;direction:ltr;pointer-events:none}
+.cmd-hint b{font-family:var(--font-ar);font-weight:400;color:var(--text-3)}
+
+/* Phones: the account menu drops from the header, no drawer */
+#acctMenu.from-header{position:fixed;top:56px;bottom:auto;inset-inline:10px auto;width:min(300px,calc(100vw - 20px));z-index:70}
+@media (max-width:860px){
+  #inputbar{inset-inline:10px;bottom:12px}
+  .cmd-hint{display:none}
+  .soc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .toggle-chip span{font-size:11px}
+}
 </style>
 </head>
 <body>
@@ -1028,7 +1052,7 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
 <div id="toastHost"></div>
 
 <!-- Offline Banner -->
-<div id="offlineBanner"><span data-i18n="offlineBanner">⚠️ أنت غير متصل بالإنترنت</span></div>
+<div id="offlineBanner"><span data-i18n="offlineBanner">أنت غير متصل بالإنترنت</span></div>
 
 <!-- Auth Overlay -->
 <div id="authOverlay">
@@ -1038,8 +1062,8 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
     <h2 data-i18n="authTitle">مرحبًا بك</h2>
     <p class="sub" data-i18n="authSubtitle">سجّل الدخول أو أنشئ حسابًا جديدًا</p>
     <div style="display:flex;gap:8px;justify-content:center;margin:12px 0">
-      <button type="button" class="btn" id="btnAuthLangAr" style="padding:6px 12px">🇦🇪 عربي</button>
-      <button type="button" class="btn" id="btnAuthLangEn" style="padding:6px 12px">🇬🇧 English</button>
+      <button type="button" class="btn" id="btnAuthLangAr" style="padding:6px 12px">عربي</button>
+      <button type="button" class="btn" id="btnAuthLangEn" style="padding:6px 12px">English</button>
     </div>
     <div style="display:flex;gap:8px;margin:18px 0">
       <button type="button" class="btn primary" id="authTabLogin" style="flex:1;justify-content:center" data-i18n="authTabLogin">دخول</button>
@@ -1055,7 +1079,7 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
       <label><span id="authPasswordLabelText" data-i18n="authPasswordLabel">كلمة المرور</span>
         <div style="position:relative">
           <input type="password" id="authPassword" autocomplete="current-password" style="height:42px;padding-inline-end:44px">
-          <button type="button" id="authTogglePassBtn" style="position:absolute;inset-inline-end:4px;top:4px;height:34px;width:34px;border:none;background:transparent;cursor:pointer;color:var(--text-3);display:flex;align-items:center;justify-content:center;border-radius:8px">👁</button>
+          <button type="button" id="authTogglePassBtn" style="position:absolute;inset-inline-end:4px;top:4px;height:34px;width:34px;border:none;background:transparent;cursor:pointer;color:var(--text-3);display:flex;align-items:center;justify-content:center;border-radius:8px"></button>
         </div>
       </label>
       <label style="display:flex;align-items:center;gap:8px;margin:12px 0;font-size:12.5px;cursor:pointer">
@@ -1111,7 +1135,6 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
       <button class="hdr-btn icon" id="btnHeaderMenu" style="padding:8px"><svg><use href="#i-more-v"/></svg></button>
       <div id="headerMenuDropdown">
         <button class="btn" id="btnToggleProjects"><svg><use href="#i-folder"/></svg> <span data-i18n="projectsListTitle">المشاريع</span></button>
-        <button class="btn" id="btnToggleHistory"><svg><use href="#i-code"/></svg> <span data-i18n="code">الكود</span></button>
         <button class="btn" id="btnSecTools"><svg><use href="#i-tools"/></svg> <span data-i18n="secToolsTitle">أدوات الأمن</span></button>
         <a class="btn" id="linkCasino" href="lab/casino.html" style="text-decoration:none"><svg><use href="#i-shield"/></svg> <span data-i18n="casinoTitle">كيف يكسب الكازينو</span></a>
         <a class="btn" id="linkRtpLab" href="lab/index.html" style="text-decoration:none"><svg><use href="#i-preview"/></svg> <span data-i18n="rtpLabTitle">مختبر RTP</span></a>
@@ -1164,36 +1187,39 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
          laid out underneath the dock and ended up hidden or cut off. -->
     <div id="inputbar">
       <input type="file" id="attachInput" accept="image/*,.txt,.py,.js,.json,.md,.html,.log,.css,.csv" multiple style="display:none">
-      <div id="emojiPicker"></div>
-      <div id="chat-toggles">
-        <label class="toggle-chip" id="chip-askall">
-          <input type="checkbox" id="chkAskAll">
-          <span data-i18n="askAllLabel">🎯 اسأل كل المزوّدين</span>
-        </label>
-        <label class="toggle-chip on" id="chip-merge">
-          <input type="checkbox" id="chkMerge" checked>
-          <span data-i18n="mergeLabel">🧠 دمج ذكي</span>
-        </label>
-      </div>
       <div id="attachStrip"></div>
-      <textarea id="prompt" rows="1" data-i18n-placeholder="promptPlaceholder" placeholder="صف ما تريد... مثال: اشرح ثغرة XSS"></textarea>
+      <div class="cmd-line">
+        <span class="cmd-sigil" aria-hidden="true">&gt;_</span>
+        <textarea id="prompt" rows="1" data-i18n-placeholder="promptPlaceholder" placeholder="صف ما تريد... مثال: اشرح ثغرة XSS"></textarea>
+      </div>
       <div class="dock-row">
         <div class="dock-icons">
           <button class="dock-btn" id="btnAttach" type="button" title="إرفاق"><svg><use href="#i-attach"/></svg></button>
-          <button class="dock-btn" id="btnEmoji" type="button" title="إيموجي"><svg><use href="#i-smile"/></svg></button>
           <button class="dock-btn" id="btnMic" type="button" title="تحدث"><svg><use href="#i-mic"/></svg></button>
           <button class="dock-btn" id="btnVoiceChat" type="button" title="محادثة صوتية"><svg><use href="#i-headphones"/></svg></button>
-          <button class="dock-btn" id="btnStop" type="button" title="إيقاف"><svg><use href="#i-stop"/></svg></button>
+          <span class="dock-sep" aria-hidden="true"></span>
+          <div id="chat-toggles">
+            <label class="toggle-chip" id="chip-askall">
+              <input type="checkbox" id="chkAskAll">
+              <i class="sw" aria-hidden="true"></i><span data-i18n="askAllLabel">اسأل كل المزوّدين</span>
+            </label>
+            <label class="toggle-chip on" id="chip-merge">
+              <input type="checkbox" id="chkMerge" checked>
+              <i class="sw" aria-hidden="true"></i><span data-i18n="mergeLabel">دمج ذكي</span>
+            </label>
+          </div>
         </div>
-        <button id="btnSend" type="button">
-          <span data-i18n="send">إرسال</span>
-          <svg><use href="#i-send"/></svg>
-        </button>
+        <div class="dock-send">
+          <button class="dock-btn" id="btnStop" type="button" title="إيقاف"><svg><use href="#i-stop"/></svg></button>
+          <button id="btnSend" type="button" aria-label="إرسال">
+            <span data-i18n="send">إرسال</span>
+            <svg><use href="#i-send"/></svg>
+          </button>
+        </div>
       </div>
     </div>
+    <div class="cmd-hint" aria-hidden="true"><span>Enter</span> <b data-i18n="hintSend">للإرسال</b> · <span>Shift+Enter</span> <b data-i18n="hintNewline">سطر جديد</b></div>
   </div>
-
-  <div class="resizer" id="resizer2"></div>
 
   <div id="workarea">
     <div id="tabs">
@@ -1236,19 +1262,19 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
 
   <div class="settings-section" id="langSection">
     <div class="head" onclick="toggleSection('langSection')">
-      <h3 data-i18n="langSectionTitle">🌐 اللغة</h3><span class="arrow" id="langSectionArrow">▶</span>
+      <h3 data-i18n="langSectionTitle">اللغة</h3><span class="arrow" id="langSectionArrow">▶</span>
     </div>
     <div class="content" id="langSectionContent">
       <div style="display:flex;gap:8px">
-        <button type="button" class="btn" id="btnLangAr" style="flex:1;justify-content:center">🇦🇪 العربية</button>
-        <button type="button" class="btn" id="btnLangEn" style="flex:1;justify-content:center">🇬🇧 English</button>
+        <button type="button" class="btn" id="btnLangAr" style="flex:1;justify-content:center">العربية</button>
+        <button type="button" class="btn" id="btnLangEn" style="flex:1;justify-content:center">English</button>
       </div>
     </div>
   </div>
 
   <div class="settings-section" id="accountSection">
     <div class="head" onclick="toggleSection('accountSection')">
-      <h3 data-i18n="acctSectionTitle">👤 حسابي</h3><span class="arrow" id="accountSectionArrow">▶</span>
+      <h3 data-i18n="acctSectionTitle">حسابي</h3><span class="arrow" id="accountSectionArrow">▶</span>
     </div>
     <div class="content" id="accountSectionContent">
       <label data-i18n="acctUsernameLabel">اسم المستخدم</label>
@@ -1263,10 +1289,10 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
 
   <div class="settings-section" id="apiKeysSection">
     <div class="head" onclick="toggleSection('apiKeysSection')">
-      <h3 data-i18n="apiKeysSectionTitle">🔑 مفاتيح API</h3><span class="arrow" id="apiKeysSectionArrow">▶</span>
+      <h3 data-i18n="apiKeysSectionTitle">مفاتيح API</h3><span class="arrow" id="apiKeysSectionArrow">▶</span>
     </div>
     <div class="content" id="apiKeysSectionContent">
-      <small class="hint" style="margin-bottom:12px">🔒 مفاتيحك تبقى في متصفحك فقط. اتركها فارغة لاستخدام proxy الخادم.<br>💡 اضغط زر التحديث لجلب الموديلات المتاحة من كل مزوّد.</small>
+      <small class="hint" style="margin-bottom:12px">مفاتيحك تبقى في متصفحك فقط. اتركها فارغة لاستخدام proxy الخادم.<br>اضغط زر التحديث لجلب الموديلات المتاحة من كل مزوّد.</small>
       <label data-i18n="provider">المزوّد الافتراضي</label>
       <select id="provider"></select>
       <div id="providersContainer" style="margin-top:14px"></div>
@@ -1275,7 +1301,7 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
 
   <div class="settings-section" id="themeSection">
     <div class="head" onclick="toggleSection('themeSection')">
-      <h3 data-i18n="themeSectionLabel">🎨 المظهر</h3><span class="arrow" id="themeSectionArrow">▶</span>
+      <h3 data-i18n="themeSectionLabel">المظهر</h3><span class="arrow" id="themeSectionArrow">▶</span>
     </div>
     <div class="content" id="themeSectionContent">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
@@ -1284,10 +1310,10 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
         <label style="font-size:12px;margin:0"><span data-i18n="themeBgLabel">الخلفية</span><input type="text" id="themeBg" maxlength="7" style="font-family:var(--font-mono)"></label>
       </div>
       <div style="margin-top:14px">
-        <label style="font-weight:600;display:block;margin-bottom:10px">🖥️ خلفية متحركة</label>
+        <label style="font-weight:600;display:block;margin-bottom:10px">خلفية متحركة</label>
         <label class="toggle-chip" id="chip-bgrotate" style="margin-bottom:12px">
           <input type="checkbox" id="chkBgAutoRotate">
-          <span>🔁 تدوير تلقائي كل 20 ثانية</span>
+          <span>تدوير تلقائي كل 20 ثانية</span>
         </label>
         <div id="bgPickerGrid" class="bg-picker-grid"></div>
       </div>
@@ -1299,7 +1325,7 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
 
   <div class="settings-section" id="voiceSection">
     <div class="head" onclick="toggleSection('voiceSection')">
-      <h3 data-i18n="voiceSectionLabel">🔊 الصوت</h3><span class="arrow" id="voiceSectionArrow">▶</span>
+      <h3 data-i18n="voiceSectionLabel">الصوت</h3><span class="arrow" id="voiceSectionArrow">▶</span>
     </div>
     <div class="content" id="voiceSectionContent">
       <label>نوع الصوت المفضل</label>
@@ -1310,26 +1336,26 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
       </select>
       <label class="toggle-chip" style="margin-top:14px;display:inline-flex">
         <input type="checkbox" id="chkCloudVoice">
-        <span>🌟 OpenAI TTS عالي الجودة</span>
+        <span>OpenAI TTS عالي الجودة</span>
       </label>
       <select id="cloudVoicePick" style="margin-top:8px">
-        <option value="onyx">🧔 رجل — Onyx</option>
-        <option value="nova">👩 امرأة — Nova</option>
-        <option value="fable">🙂 محايد — Fable</option>
-        <option value="shimmer">👩 امرأة — Shimmer</option>
+        <option value="onyx">رجل — Onyx</option>
+        <option value="nova">امرأة — Nova</option>
+        <option value="fable">محايد — Fable</option>
+        <option value="shimmer">امرأة — Shimmer</option>
       </select>
-      <button type="button" class="btn" id="btnTestVoice" style="margin-top:12px">🔊 تجربة الصوت</button>
+      <button type="button" class="btn" id="btnTestVoice" style="margin-top:12px">تجربة الصوت</button>
     </div>
   </div>
 
   <div class="settings-section" id="aboutSection">
     <div class="head" onclick="toggleSection('aboutSection')">
-      <h3 data-i18n="aboutSectionTitle">ℹ️ عن البرنامج</h3><span class="arrow" id="aboutSectionArrow">▶</span>
+      <h3 data-i18n="aboutSectionTitle">ℹ عن البرنامج</h3><span class="arrow" id="aboutSectionArrow">▶</span>
     </div>
     <div class="content" id="aboutSectionContent">
       <div style="font-size:12.5px;line-height:1.85;background:rgba(0,0,0,.25);border:1px solid var(--border);border-radius:12px;padding:14px;color:var(--text-2)">
         <b style="color:var(--text)">TARYAM Cyber</b> — منصة عربية شاملة لأدوات الأمن السيبراني بمساعدة الذكاء الاصطناعي. دعم 9 مزوّدين، محرك توحيد إجابات ذكي 3 مراحل، و18 أداة أمنية متقدمة.<br><br>
-        ⚠️ جميع الأدوات للاستخدام على الأنظمة التي تملكها أو لديك إذن صريح بفحصها فقط.
+        جميع الأدوات للاستخدام على الأنظمة التي تملكها أو لديك إذن صريح بفحصها فقط.
       </div>
     </div>
   </div>
@@ -1342,9 +1368,9 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
 
 <!-- ═══ SECURITY TOOLS DIALOG ═══ -->
 <dialog id="secToolsDialog" style="width:min(960px,95vw);max-width:95vw">
-  <h3 data-i18n="secToolsTitle">🛠️ أدوات الأمن السيبراني</h3>
+  <h3 data-i18n="secToolsTitle">أدوات الأمن السيبراني</h3>
   <div style="font-size:11.5px;color:var(--text-3);margin-bottom:14px;padding:8px 12px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:10px">
-    ⚠️ للاستخدام على أنظمة تملكها أو لديك إذن صريح بفحصها فقط.
+    للاستخدام على أنظمة تملكها أو لديك إذن صريح بفحصها فقط.
   </div>
   <div id="secToolsNav"></div>
   <div id="secToolPanels"></div>
@@ -1353,7 +1379,7 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
 
 <!-- ═══ CLOCK DIALOG ═══ -->
 <dialog id="clockDialog">
-  <h3 data-i18n="clockDialogTitle">🕐 التقويم والوقت</h3>
+  <h3 data-i18n="clockDialogTitle">التقويم والوقت</h3>
   <div class="clock-box">
     <div id="clockGregorianTime">--:--:--</div>
     <div id="clockGregorianDate">--</div>
@@ -1422,8 +1448,8 @@ const PROVIDER_ORDER = ['deepseek','claude','openai','gemini','groq','openrouter
 
 /* ═══ i18n ═══ */
 const I18N = {
-  ar:{dir:'rtl',pageTitle:'TARYAM Cyber — أدوات الأمن السيبراني',appTitle:'تريم سايبر',offlineBanner:'⚠️ أنت غير متصل بالإنترنت',backOnlineBanner:'✅ عاد الاتصال',authTitle:'مرحبًا بك',authSubtitle:'سجّل الدخول أو أنشئ حسابًا جديدًا',authTabLogin:'دخول',authTabSignup:'حساب جديد',authUsernameLabel:'اسم المستخدم',authPasswordLabel:'كلمة المرور',authNewPasswordLabel:'كلمة مرور جديدة',authRecoveryLabel:'رمز الاسترجاع',authForgotLink:'نسيت كلمة المرور؟',authRememberMe:'تذكرني',authBackToLogin:'رجوع',authSubmitReset:'إعادة تعيين',authRecoveryModalTitle:'🔑 احتفظ برمز الاسترجاع',authRecoveryModalDesc:'هذا الرمز الوحيد لاستعادة حسابك إذا نسيت كلمة المرور.',authSubmitLogin:'دخول',authSubmitSignup:'إنشاء الحساب',guestMode:'الدخول كضيف (20 رسالة يوميًا)',guestLimitMsg:'🎉 استخدمت رسائلك المجانية! سجّل الدخول للمتابعة.',logout:'خروج',settings:'الإعدادات',download:'تنزيل',newProject:'مشروع جديد',send:'إرسال',preview:'المعاينة',code:'الكود',promptPlaceholder:'صف ما تريد... مثال: اشرح ثغرة XSS',emptyTitle:'مساحة العمل جاهزة',emptyDesc:'اكتب طلبك في المحادثة أو افتح أداة أمنية؛ الأكواد والتقارير تظهر هنا.',socTitle:'مركز العمليات الأمنية',socSub:'اختر أداة، أو اكتب طلبك تحت: فحص، تحليل، تشفير، تحقيق.',socLink:'اتصال مشفّر',socLinkPlain:'اتصال غير مشفّر',socTools:'أدوات جاهزة',socAll:'كل الأدوات',acctGuest:'ضيف',acctGuestPlan:'20 رسالة يوميًا',acctPlan:'حساب مسجّل',acctLogin:'تسجيل الدخول',acctLang:'اللغة',settingsTitle:'إعدادات الاتصال',langSectionTitle:'🌐 اللغة',apiKeysSectionTitle:'🔑 مفاتيح API',themeSectionLabel:'🎨 المظهر',voiceSectionLabel:'🔊 الصوت',aboutSectionTitle:'ℹ️ عن البرنامج',provider:'المزوّد الافتراضي',apiKeyLabel:'مفتاح API',modelLabel:'اسم النموذج',cancel:'إلغاء',save:'حفظ',close:'إغلاق',askAllLabel:'🎯 اسأل كل المزوّدين',mergeLabel:'🧠 دمج ذكي',building:'جارٍ العمل...',scoring:'📊 تقييم جودة الإجابات...',synthesizing:'🎨 توليف الجواب الموحّد...',verifying:'✅ التحقق النهائي...',merging:'🧠 دمج ذكي 3 مراحل...',mergedLabel:'🧠 الجواب الموحّد',mergeContributors:'دُمِجت إجابات: ',mergeFailedNote:'⚠️ لم يستجب: ',mergeSourcesLabel:'عرض الإجابات الفردية',buildSuccess:'تم ✅',defaultProjectTitle:'مشروع جديد',confirmDeleteProject:'حذف "{name}"؟',install:'تثبيت التطبيق',speakBtn:'استماع',stopSpeakBtn:'إيقاف',providerError:'خطأ من المزوّد: ',quotaError:'⏳ الحصة المجانية انتهت مؤقتًا',authError:'🔑 مفتاح API غير صحيح',apiKeyMissing:'أدخل مفتاح API أولاً',acctSectionTitle:'👤 حسابي',acctUsernameLabel:'اسم المستخدم',themeAccentLabel:'اللون الأساسي',themeTextLabel:'لون النص',themeBgLabel:'لون الخلفية',projectsListTitle:'المشاريع',secToolsTitle:'أدوات الأمن',rtpLabTitle:'مختبر RTP',casinoTitle:'كيف يكسب الكازينو',clockDialogTitle:'🕐 التقويم والوقت'},
-  en:{dir:'ltr',pageTitle:'TARYAM Cyber — Cybersecurity Tools',appTitle:'TARYAM Cyber',offlineBanner:"⚠️ You're offline",backOnlineBanner:'✅ Back online',authTitle:'Welcome',authSubtitle:'Log in or create an account',authTabLogin:'Log In',authTabSignup:'Sign Up',authUsernameLabel:'Username',authPasswordLabel:'Password',authNewPasswordLabel:'New password',authRecoveryLabel:'Recovery code',authForgotLink:'Forgot password?',authRememberMe:'Remember me',authBackToLogin:'Back',authSubmitReset:'Reset',authRecoveryModalTitle:'🔑 Save this recovery code',authRecoveryModalDesc:'The only code to recover your account if you forget your password.',authSubmitLogin:'Log In',authSubmitSignup:'Create Account',guestMode:'Continue as guest (20 messages/day)',guestLimitMsg:'🎉 Free messages used! Log in to continue.',logout:'Log out',settings:'Settings',download:'Download',newProject:'New Project',send:'Send',preview:'Preview',code:'Code',promptPlaceholder:'Describe what you want... e.g. explain XSS',emptyTitle:'Workspace ready',emptyDesc:'Ask in the chat or open a security tool; code and reports show up here.',socTitle:'Security Operations Center',socSub:'Pick a tool, or type your request below: scan, analyze, encrypt, investigate.',socLink:'Encrypted connection',socLinkPlain:'Unencrypted connection',socTools:'tools ready',socAll:'All tools',acctGuest:'Guest',acctGuestPlan:'20 messages a day',acctPlan:'Signed-in account',acctLogin:'Log in',acctLang:'Language',settingsTitle:'Connection Settings',langSectionTitle:'🌐 Language',apiKeysSectionTitle:'🔑 API Keys',themeSectionLabel:'🎨 Appearance',voiceSectionLabel:'🔊 Voice',aboutSectionTitle:'ℹ️ About',provider:'Default provider',apiKeyLabel:'API Key',modelLabel:'Model name',cancel:'Cancel',save:'Save',close:'Close',askAllLabel:'🎯 Ask all providers',mergeLabel:'🧠 Smart merge',building:'Working...',scoring:'📊 Scoring answer quality...',synthesizing:'🎨 Synthesizing unified answer...',verifying:'✅ Final verification...',merging:'🧠 3-stage smart merge...',mergedLabel:'🧠 Unified Answer',mergeContributors:'Merged from: ',mergeFailedNote:'⚠️ Did not respond: ',mergeSourcesLabel:'Show individual answers',buildSuccess:'Done ✅',defaultProjectTitle:'New Project',confirmDeleteProject:'Delete "{name}"?',install:'Install App',speakBtn:'Listen',stopSpeakBtn:'Stop',providerError:'Provider error: ',quotaError:'⏳ Free quota temporarily exhausted',authError:'🔑 Invalid API key',apiKeyMissing:'Enter your API key first',acctSectionTitle:'👤 My account',acctUsernameLabel:'Username',themeAccentLabel:'Accent color',themeTextLabel:'Text color',themeBgLabel:'Background color',projectsListTitle:'Projects',secToolsTitle:'Security Tools',rtpLabTitle:'RTP Lab',casinoTitle:'How the casino wins',clockDialogTitle:'🕐 Calendar & Time'}
+  ar:{dir:'rtl',pageTitle:'TARYAM Cyber — أدوات الأمن السيبراني',appTitle:'تريم سايبر',offlineBanner:'أنت غير متصل بالإنترنت',backOnlineBanner:'عاد الاتصال',authTitle:'مرحبًا بك',authSubtitle:'سجّل الدخول أو أنشئ حسابًا جديدًا',authTabLogin:'دخول',authTabSignup:'حساب جديد',authUsernameLabel:'اسم المستخدم',authPasswordLabel:'كلمة المرور',authNewPasswordLabel:'كلمة مرور جديدة',authRecoveryLabel:'رمز الاسترجاع',authForgotLink:'نسيت كلمة المرور؟',authRememberMe:'تذكرني',authBackToLogin:'رجوع',authSubmitReset:'إعادة تعيين',authRecoveryModalTitle:'احتفظ برمز الاسترجاع',authRecoveryModalDesc:'هذا الرمز الوحيد لاستعادة حسابك إذا نسيت كلمة المرور.',authSubmitLogin:'دخول',authSubmitSignup:'إنشاء الحساب',guestMode:'الدخول كضيف (20 رسالة يوميًا)',guestLimitMsg:'استخدمت رسائلك المجانية! سجّل الدخول للمتابعة.',logout:'خروج',settings:'الإعدادات',download:'تنزيل',newProject:'مشروع جديد',send:'إرسال',preview:'المعاينة',code:'الكود',promptPlaceholder:'صف ما تريد... مثال: اشرح ثغرة XSS',emptyTitle:'مساحة العمل جاهزة',emptyDesc:'اكتب طلبك في المحادثة أو افتح أداة أمنية؛ الأكواد والتقارير تظهر هنا.',socTitle:'مركز العمليات الأمنية',socSub:'اختر أداة، أو اكتب طلبك تحت: فحص، تحليل، تشفير، تحقيق.',socLink:'اتصال مشفّر',socLinkPlain:'اتصال غير مشفّر',socTools:'أدوات جاهزة',socAll:'كل الأدوات',hintSend:'للإرسال',hintNewline:'سطر جديد',acctGuest:'ضيف',acctGuestPlan:'20 رسالة يوميًا',acctPlan:'حساب مسجّل',acctLogin:'تسجيل الدخول',acctLang:'اللغة',settingsTitle:'إعدادات الاتصال',langSectionTitle:'اللغة',apiKeysSectionTitle:'مفاتيح API',themeSectionLabel:'المظهر',voiceSectionLabel:'الصوت',aboutSectionTitle:'ℹ عن البرنامج',provider:'المزوّد الافتراضي',apiKeyLabel:'مفتاح API',modelLabel:'اسم النموذج',cancel:'إلغاء',save:'حفظ',close:'إغلاق',askAllLabel:'اسأل كل المزوّدين',mergeLabel:'دمج ذكي',building:'جارٍ العمل...',scoring:'تقييم جودة الإجابات...',synthesizing:'توليف الجواب الموحّد...',verifying:'التحقق النهائي...',merging:'دمج ذكي 3 مراحل...',mergedLabel:'الجواب الموحّد',mergeContributors:'دُمِجت إجابات: ',mergeFailedNote:'لم يستجب: ',mergeSourcesLabel:'عرض الإجابات الفردية',buildSuccess:'تم ',defaultProjectTitle:'مشروع جديد',confirmDeleteProject:'حذف "{name}"؟',install:'تثبيت التطبيق',speakBtn:'استماع',stopSpeakBtn:'إيقاف',providerError:'خطأ من المزوّد: ',quotaError:'الحصة المجانية انتهت مؤقتًا',authError:'مفتاح API غير صحيح',apiKeyMissing:'أدخل مفتاح API أولاً',acctSectionTitle:'حسابي',acctUsernameLabel:'اسم المستخدم',themeAccentLabel:'اللون الأساسي',themeTextLabel:'لون النص',themeBgLabel:'لون الخلفية',projectsListTitle:'المشاريع',secToolsTitle:'أدوات الأمن',rtpLabTitle:'مختبر RTP',casinoTitle:'كيف يكسب الكازينو',clockDialogTitle:'التقويم والوقت'},
+  en:{dir:'ltr',pageTitle:'TARYAM Cyber — Cybersecurity Tools',appTitle:'TARYAM Cyber',offlineBanner:"You're offline",backOnlineBanner:'Back online',authTitle:'Welcome',authSubtitle:'Log in or create an account',authTabLogin:'Log In',authTabSignup:'Sign Up',authUsernameLabel:'Username',authPasswordLabel:'Password',authNewPasswordLabel:'New password',authRecoveryLabel:'Recovery code',authForgotLink:'Forgot password?',authRememberMe:'Remember me',authBackToLogin:'Back',authSubmitReset:'Reset',authRecoveryModalTitle:'Save this recovery code',authRecoveryModalDesc:'The only code to recover your account if you forget your password.',authSubmitLogin:'Log In',authSubmitSignup:'Create Account',guestMode:'Continue as guest (20 messages/day)',guestLimitMsg:'Free messages used! Log in to continue.',logout:'Log out',settings:'Settings',download:'Download',newProject:'New Project',send:'Send',preview:'Preview',code:'Code',promptPlaceholder:'Describe what you want... e.g. explain XSS',emptyTitle:'Workspace ready',emptyDesc:'Ask in the chat or open a security tool; code and reports show up here.',socTitle:'Security Operations Center',socSub:'Pick a tool, or type your request below: scan, analyze, encrypt, investigate.',socLink:'Encrypted connection',socLinkPlain:'Unencrypted connection',socTools:'tools ready',socAll:'All tools',hintSend:'to send',hintNewline:'new line',acctGuest:'Guest',acctGuestPlan:'20 messages a day',acctPlan:'Signed-in account',acctLogin:'Log in',acctLang:'Language',settingsTitle:'Connection Settings',langSectionTitle:'Language',apiKeysSectionTitle:'API Keys',themeSectionLabel:'Appearance',voiceSectionLabel:'Voice',aboutSectionTitle:'ℹ About',provider:'Default provider',apiKeyLabel:'API Key',modelLabel:'Model name',cancel:'Cancel',save:'Save',close:'Close',askAllLabel:'Ask all providers',mergeLabel:'Smart merge',building:'Working...',scoring:'Scoring answer quality...',synthesizing:'Synthesizing unified answer...',verifying:'Final verification...',merging:'3-stage smart merge...',mergedLabel:'Unified Answer',mergeContributors:'Merged from: ',mergeFailedNote:'Did not respond: ',mergeSourcesLabel:'Show individual answers',buildSuccess:'Done ',defaultProjectTitle:'New Project',confirmDeleteProject:'Delete "{name}"?',install:'Install App',speakBtn:'Listen',stopSpeakBtn:'Stop',providerError:'Provider error: ',quotaError:'Free quota temporarily exhausted',authError:'Invalid API key',apiKeyMissing:'Enter your API key first',acctSectionTitle:'My account',acctUsernameLabel:'Username',themeAccentLabel:'Accent color',themeTextLabel:'Text color',themeBgLabel:'Background color',projectsListTitle:'Projects',secToolsTitle:'Security Tools',rtpLabTitle:'RTP Lab',casinoTitle:'How the casino wins',clockDialogTitle:'Calendar & Time'}
 };
 let lang = localStorage.getItem('aiapp_lang') || 'ar';
 const t = k => I18N[lang][k] || k;
@@ -1488,16 +1514,23 @@ function renderAcct(){
   $('#btnAcctLogin').style.display = signedIn ? 'none' : '';
 }
 window.renderAcct = renderAcct;
-function closeAcctMenu(){ $('#acctMenu').classList.remove('show'); $('#btnAcct').setAttribute('aria-expanded', 'false'); }
-function toggleAcctMenu(){ const open = $('#acctMenu').classList.toggle('show'); $('#btnAcct').setAttribute('aria-expanded', String(open)); }
+function closeAcctMenu(){ const menu = $('#acctMenu'); menu.classList.remove('show'); $('#btnAcct').setAttribute('aria-expanded', 'false'); if(menu.classList.contains('from-header')){ menu.classList.remove('from-header'); menu.style.top = ''; $('#acctBar').prepend(menu); } }
+function toggleAcctMenu(){ const menu = $('#acctMenu'); if(menu.classList.contains('from-header')) closeAcctMenu(); const open = menu.classList.toggle('show'); $('#btnAcct').setAttribute('aria-expanded', String(open)); }
 $('#btnAcct').onclick = e => { e.stopPropagation(); toggleAcctMenu(); };
-document.addEventListener('click', e => { if($('#acctMenu').classList.contains('show') && !e.target.closest('#acctBar')) closeAcctMenu(); });
+document.addEventListener('click', e => { if($('#acctMenu').classList.contains('show') && !e.target.closest('#acctBar') && !e.target.closest('#acctMenu')) closeAcctMenu(); });
 $('#miSettings').onclick = () => { closeAcctMenu(); $('#btnSettings').click(); };
 $('#miLang').onclick = () => { closeAcctMenu(); setLang(lang === 'ar' ? 'en' : 'ar'); };
 $('#miInstall').onclick = () => { closeAcctMenu(); $('#btnInstall').click(); };
 $('#btnAcctLogin').onclick = () => { closeAcctMenu(); setAuthMode('login'); showAuth(); };
-// Phones: the sidebar is a drawer, so the header button opens it with the menu showing.
-$('#btnAcctMobile').onclick = e => { e.stopPropagation(); if(!$('#sidebar').classList.contains('open')) openDrawer($('#sidebar')); $('#acctMenu').classList.add('show'); $('#btnAcct').setAttribute('aria-expanded', 'true'); };
+// Phones: the menu drops from the header button. It moves to <body> for that, because
+// the closed sidebar drawer is transformed off-screen and would carry it along.
+$('#btnAcctMobile').onclick = e => {
+  e.stopPropagation();
+  const menu = $('#acctMenu');
+  if(menu.classList.contains('show') && menu.classList.contains('from-header')){ closeAcctMenu(); return; }
+  document.body.appendChild(menu); menu.classList.add('from-header', 'show');
+  menu.style.top = Math.round(document.querySelector('header').getBoundingClientRect().bottom + 6) + 'px';
+};
 
 async function authSubmit(){
   const username = $('#authUsername').value.trim();
@@ -1572,20 +1605,20 @@ function errorText(text){
 }
 function throwProviderError(status, text){
   const said = errorText(text);
-  if(status === 402 && said) throw new Error('⏳ ' + said); // daily allowance (only when QUOTA=on)
+  if(status === 402 && said) throw new Error('' + said); // daily allowance (only when QUOTA=on)
   if(status === 429) throw new Error(t('quotaError') + (said ? ' — ' + said : ''));
   const missing = said.match(/Server is missing (\w+)/);
-  if(missing) throw new Error(isAr() ? '🔑 المفتاح ' + missing[1] + ' غير مضبوط في إعدادات Vercel (Environment Variables)' : '🔑 ' + missing[1] + ' is not set in Vercel → Environment Variables');
-  if(status === 504) throw new Error(isAr() ? '⌛ انتهت مهلة الخادم (الطلب كبير أو المزوّد بطيء)' : '⌛ The server timed out (large request or slow provider)');
-  if(status === 401 || status === 403){ let m=null; try { const p = JSON.parse(text); if(p?.error && /session|الجلسة/i.test(p.error)) m = p.error; } catch(e){} throw new Error(m ? '🔒 '+m : t('authError') + (said ? ' — ' + said : '')); }
+  if(missing) throw new Error(isAr() ? 'المفتاح ' + missing[1] + ' غير مضبوط في إعدادات Vercel (Environment Variables)' : '' + missing[1] + ' is not set in Vercel → Environment Variables');
+  if(status === 504) throw new Error(isAr() ? 'انتهت مهلة الخادم (الطلب كبير أو المزوّد بطيء)' : 'The server timed out (large request or slow provider)');
+  if(status === 401 || status === 403){ let m=null; try { const p = JSON.parse(text); if(p?.error && /session|الجلسة/i.test(p.error)) m = p.error; } catch(e){} throw new Error(m ? ''+m : t('authError') + (said ? ' — ' + said : '')); }
   if(status === 404){
     try {
       const p = JSON.parse(text);
       if(p?.error?.code === 'model_not_found' || /model.*not.*exist/i.test(p?.error?.message || '')){
         const mm = (p.error.message || '').match(/`([^`]+)`/);
-        throw new Error(`⚠️ الموديل "${mm ? mm[1] : '?'}" لم يعد متاحاً. افتح الإعدادات → مفاتيح API → اضغط 🔄 لتحديث الموديلات.`);
+        throw Object.assign(new Error(`الموديل "${mm ? mm[1] : '?'}" لم يعد متاحاً. افتح الإعدادات → مفاتيح API → اضغط زر التحديث لتحديث الموديلات.`), { modelGone: true });
       }
-    } catch(e){ if(e.message.startsWith('⚠️')) throw e; }
+    } catch(e){ if(e.modelGone) throw e; }
   }
   throw new Error(t('providerError') + status + ' — ' + (said || (text||'').slice(0,150)));
 }
@@ -1627,7 +1660,7 @@ async function callProvider(key, messages, opts = {}){
   const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs);
   try { return await callProviderOnce(key, messages, {...opts, signal: ctrl.signal}); }
   catch(e){
-    if(ctrl.signal.aborted) throw new Error((isAr() ? '⌛ انتهت المهلة (' : '⌛ Timed out (') + Math.round(opts.timeoutMs/1000) + (isAr() ? ' ث)' : ' s)'));
+    if(ctrl.signal.aborted) throw new Error((isAr() ? 'انتهت المهلة (' : 'Timed out (') + Math.round(opts.timeoutMs/1000) + (isAr() ? ' ث)' : ' s)'));
     throw e;
   }
   finally { clearTimeout(timer); }
@@ -1809,7 +1842,7 @@ ${answers}
 8. Same language as question.`;
 }
 async function consensusMerge(question, good, failed, apiMsgs){
-  if(!good.length) return {content: isAr()?'⚠️ لم يستجب أي مزوّد.':'⚠️ No provider responded.',sources:[],contributors:[],failed};
+  if(!good.length) return {content: isAr()?'لم يستجب أي مزوّد.':'No provider responded.',sources:[],contributors:[],failed};
   const scored = good.map(r => ({...r, score: scoreReply(r.text, good)})).sort((a,b) => b.score-a.score);
   if(scored.length === 1) return {content:scored[0].text, sources:scored, contributors:[scored[0].label], failed, synthModel:scored[0].label};
 
@@ -1892,7 +1925,7 @@ function renderMessages(keep){
     const wrap = isAskAllReply ? document.createElement('div') : null;
     if(wrap) wrap.style.cssText = 'display:flex;gap:6px;max-width:100%';
     const div = document.createElement('div');
-    div.className = 'msg ' + (m.role === 'user' ? 'user' : 'assistant') + (isMerged ? ' merged' : '');
+    div.className = 'msg ' + (m.role === 'user' ? 'user' : 'assistant') + (isMerged ? ' merged' : '') + (m.failed ? ' failed' : '');
     if(isAskAllReply) div.style.flex = '1 1 auto';
     if(m.providerLabel){
       const lbl = document.createElement('div');
@@ -1914,7 +1947,7 @@ function renderMessages(keep){
       const det = document.createElement('details');
       det.className = 'md-sources';
       const sum = document.createElement('summary');
-      sum.textContent = '📚 ' + t('mergeSourcesLabel') + ' (' + m.sources.length + ')';
+      sum.textContent = '' + t('mergeSourcesLabel') + ' (' + m.sources.length + ')';
       det.appendChild(sum);
       [...m.sources].sort((a,b) => (b.score||0)-(a.score||0)).forEach(src => {
         const box = document.createElement('div');
@@ -1922,7 +1955,7 @@ function renderMessages(keep){
         const lbl = document.createElement('div');
         lbl.className = 'md-source-label';
         lbl.style.color = PROVIDERS[src.key]?.color || 'var(--primary-2)';
-        lbl.innerHTML = `<span>${src.label}</span>` + (src.score != null ? `<span class="md-source-score">⭐ ${src.score}/100</span>` : '');
+        lbl.innerHTML = `<span>${src.label}</span>` + (src.score != null ? `<span class="md-source-score">${src.score}/100</span>` : '');
         box.appendChild(lbl);
         const body = document.createElement('div');
         if(mdLooks(src.text)){ body.className = 'md'; body.innerHTML = mdToHtml(src.text.slice(0, 3000)); }
@@ -1942,7 +1975,7 @@ function renderMessages(keep){
         if(a.isImage && !a.purged){ el = document.createElement('img'); el.className = 'msg-img'; el.src = a.dataUrl; el.alt = a.name || ''; }
         else {
           el = document.createElement('span'); el.className = 'msg-file'; el.title = a.name;
-          const ic = document.createElement('span'); ic.className = 'ic'; ic.textContent = a.isImage ? '🖼️' : '📄';
+          const ic = document.createElement('span'); ic.className = 'ic'; ic.textContent = (/\.([a-z0-9]{1,4})$/i.exec(a.name)?.[1] || (a.isImage ? 'img' : 'file')).toUpperCase();
           const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = a.name;
           el.append(ic, nm);
         }
@@ -2137,17 +2170,6 @@ $('#attachInput').addEventListener('change', async e => {
 });
 
 /* ═══ Emoji ═══ */
-const EMOJIS = ['😀','😂','😊','😍','🥰','😎','🤔','😴','😢','😡','🤖','💀','🔥','⭐','❤️','💯','👍','👎','👏','🙏','🎉','🎁','☕','🍕','🍔','⚽','🎮','💻','📱','✅','❌','⚠️','🚀','🛡️','🔒','🔑','🔐','🕵️','🎯','⚡','🌟','💡','📚','📝','🗑️','↗️','⏹️','✨','💎','🌈','🌙','☀️'];
-const emojiPicker = $('#emojiPicker');
-emojiPicker.innerHTML = EMOJIS.map(e => `<span class="em">${e}</span>`).join('');
-emojiPicker.addEventListener('click', e => {
-  const target = e.target.closest('.em'); if(!target) return;
-  const p = $('#prompt'); const s = p.selectionStart ?? p.value.length;
-  p.value = p.value.slice(0, s) + target.textContent + p.value.slice(p.selectionEnd ?? s);
-  p.focus(); p.setSelectionRange(s + target.textContent.length, s + target.textContent.length);
-});
-$('#btnEmoji').onclick = e => { e.stopPropagation(); emojiPicker.classList.toggle('open'); };
-document.addEventListener('click', e => { if(emojiPicker.classList.contains('open') && !emojiPicker.contains(e.target) && e.target.id !== 'btnEmoji') emojiPicker.classList.remove('open'); });
 
 /* ═══ Send Prompt ═══ */
 const sendBtn = $('#btnSend');
@@ -2157,14 +2179,14 @@ let sending = false; // one request at a time (Enter and voice chat bypass the d
 function pushReply(cur, key, reply, cut){
   const name = PROVIDERS[key].name;
   if(!reply?.trim()){
-    cur.messages.push({role:'assistant', content:'⚠️ '+(isAr() ? 'وصل ردّ فارغ من '+name+'. أعد المحاولة أو جرّب مزوّدًا آخر.' : name+' sent an empty reply. Try again or use another provider.'), providerKey:key, providerLabel:name, notice:true});
+    cur.messages.push({role:'assistant', content:''+(isAr() ? 'وصل ردّ فارغ من '+name+'. أعد المحاولة أو جرّب مزوّدًا آخر.' : name+' sent an empty reply. Try again or use another provider.'), providerKey:key, providerLabel:name, notice:true});
     return;
   }
   const {code, explanation} = extractReply(reply);
   if(code && !cut) cur.code = code; // a cut-off reply's code may be incomplete: offer it, don't apply it
   const answer = explanation||(code && !cut ? t('buildSuccess') : '');
   const msg = {role:'assistant', content:answer, code, providerKey:key, providerLabel:name};
-  if(cut){ msg.apiText = answer; msg.content = [answer, '⚠️ '+(isAr() ? 'انقطع الرد قبل اكتماله: ' : 'The reply was cut off: ')+cut.message].filter(Boolean).join('\n\n'); }
+  if(cut){ msg.apiText = answer; msg.content = [answer, ''+(isAr() ? 'انقطع الرد قبل اكتماله: ' : 'The reply was cut off: ')+cut.message].filter(Boolean).join('\n\n'); }
   cur.messages.push(msg);
 }
 async function sendPrompt(){
@@ -2180,14 +2202,14 @@ async function sendPrompt(){
   const images = attachments.filter(a => a.isImage);
   const files = attachments.filter(a => !a.isImage);
   let apiText = text;
-  files.forEach(f => { apiText += (apiText ? '\n\n' : '') + '📄 ' + f.name + ':\n```\n' + f.text + '\n```'; });
+  files.forEach(f => { apiText += (apiText ? '\n\n' : '') + '' + f.name + ':\n```\n' + f.text + '\n```'; });
   cur.messages.push({role:'user', content:text||'📎', attachments: attachments.length ? attachments : undefined, apiText, apiImages: images.length ? images : undefined});
   promptEl.value = ''; pendingAttachments = []; renderAttachStrip(); renderAll(); saveState();
 
   sending = true; sendBtn.disabled = true; sendBtn.innerHTML = '<span class="spinner"></span>';
   const thinking = document.createElement('div');
   thinking.className = 'msg assistant';
-  thinking.innerHTML = '<span class="provider-tag" style="color:var(--primary-2)">⚡ جارٍ العمل...</span><div>'+t('building')+'</div>';
+  thinking.innerHTML = '<span class="provider-tag" style="color:var(--primary-2)">جارٍ العمل...</span><div>'+t('building')+'</div>';
   messagesEl.appendChild(thinking); messagesEl.scrollTop = messagesEl.scrollHeight;
 
   const customProvider = cur.continueProvider;
@@ -2209,7 +2231,7 @@ async function sendPrompt(){
       // Only providers that can actually be called (a site proxy, or the user's own key).
       const enabled = PROVIDER_ORDER.filter(k => localStorage.getItem('aiapp_include_'+k) !== 'false' && canCallProvider(k));
       if(!enabled.length) throw new Error('لم يُفعّل أي مزوّد.');
-      thinking.querySelector('div').textContent = mergeMode ? t('scoring') : '⚡ '+enabled.length+' مزوّد...';
+      thinking.querySelector('div').textContent = mergeMode ? t('scoring') : ''+enabled.length+' مزوّد...';
       const results = await Promise.allSettled(enabled.map(k => callProvider(k, apiMsgs, {timeoutMs: askAllTimeoutMs()}).then(text => ({key:k, text}))));
       const good = [], failed = [];
       results.forEach((r, i) => {
@@ -2241,8 +2263,8 @@ async function sendPrompt(){
         // Same reason everywhere (e.g. a missing quota or network) → one message, not eight.
         const reasons = [...new Set(failed.map(f => f.reason))];
         if(failed.length > 1 && reasons.length === 1){
-          cur.messages.push({role:'assistant', content:'⚠️ '+reasons[0]+'\n('+failed.map(f => f.name).join('، ')+')', providerLabel: isAr() ? 'المزوّدون' : 'Providers', notice:true});
-        } else failed.forEach(f => cur.messages.push({role:'assistant', content:'⚠️ '+f.reason, providerKey:f.key, providerLabel:f.name, askAllReply:true, failed:true}));
+          cur.messages.push({role:'assistant', content:''+reasons[0]+'\n('+failed.map(f => f.name).join('، ')+')', providerLabel: isAr() ? 'المزوّدون' : 'Providers', notice:true});
+        } else failed.forEach(f => cur.messages.push({role:'assistant', content:''+f.reason, providerKey:f.key, providerLabel:f.name, askAllReply:true, failed:true}));
       }
     } else {
       const defKey = localStorage.getItem('aiapp_provider') || 'deepseek';
@@ -2255,12 +2277,11 @@ async function sendPrompt(){
       contentDiv.classList.remove('streaming-cursor');
       pushReply(cur, defKey, reply, cut);
     }
-  } catch(err){ cur.messages.push({role:'assistant', content:'⚠️ '+err.message, notice:true}); } // shown, never sent back
+  } catch(err){ cur.messages.push({role:'assistant', content:''+err.message, notice:true}); } // shown, never sent back
   finally {
     sending = false; sendBtn.disabled = false; sendBtn.innerHTML = '<span>'+t('send')+'</span> <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
     saveState(); renderAll();
     if($('#btnVoiceChat').classList.contains('active')){ const last = cur.messages[cur.messages.length-1]; if(last?.role === 'assistant' && last.content) speakSmart(mdStrip(last.content)); }
-    if(window.innerWidth <= 860 && cur.code){ document.querySelector('.tab[data-tab="preview"]')?.click(); setTimeout(() => openDrawer($('#workarea')), 300); }
   }
 }
 $('#btnSend').onclick = sendPrompt;
@@ -2291,7 +2312,6 @@ function openDrawer(el){ const o = el.classList.contains('open'); closeDrawers()
 $('#btnHeaderMenu').onclick = e => { e.stopPropagation(); $('#headerMenuDropdown').classList.toggle('show'); };
 document.addEventListener('click', e => { const d = $('#headerMenuDropdown'); if(d.classList.contains('show') && !e.target.closest('#headerMenuDropdown') && e.target !== $('#btnHeaderMenu')) d.classList.remove('show'); });
 $('#btnToggleProjects').onclick = () => { openDrawer($('#sidebar')); $('#headerMenuDropdown').classList.remove('show'); };
-$('#btnToggleHistory').onclick = () => { document.querySelector('.tab[data-tab="code"]')?.click(); openDrawer($('#workarea')); };
 $('#drawerBackdrop').onclick = closeDrawers;
 window.addEventListener('resize', () => { if(window.innerWidth > 860) closeDrawers(); });
 
@@ -2359,7 +2379,7 @@ function buildProviderCards(){
     card.className = 'provider-card';
     card.style.setProperty('--provider-color', p.color);
     card.innerHTML = `<h4>
-      <span class="pname">${p.name}${k==='deepseek'?' ⭐':''}</span>
+      <span class="pname">${p.name}${k==='deepseek'?' ':''}</span>
       <span style="font-size:11px;color:var(--text-3)"><input type="checkbox" id="inc_${k}" style="width:auto;accent-color:var(--primary)"> في "اسأل الكل"</span>
     </h4>
     <label style="margin-top:0">${t('apiKeyLabel')}</label>
@@ -2405,7 +2425,7 @@ function buildProviderCards(){
 
 $('#btnSettings').onclick = () => {
   ['langSection','accountSection','apiKeysSection','themeSection','voiceSection','aboutSection'].forEach(s => { const c = document.getElementById(s+'Content'); if(c) c.classList.remove('open'); });
-  $('#provider').innerHTML = PROVIDER_ORDER.map(k => `<option value="${k}">${PROVIDERS[k].name}${k==='deepseek'?' ⭐':''}</option>`).join('');
+  $('#provider').innerHTML = PROVIDER_ORDER.map(k => `<option value="${k}">${PROVIDERS[k].name}${k==='deepseek'?' ':''}</option>`).join('');
   $('#provider').value = localStorage.getItem('aiapp_provider') || 'deepseek';
   buildProviderCards();
   const th = getTheme();
@@ -2816,21 +2836,21 @@ function secToolForm(id){
   switch(id){
     case 'exif': return `<input type="file" id="exifFileInput" accept="image/*"><div id="exifResult" class="secToolAiResult"></div>`;
     case 'crypto': return `<select id="cryptoAlgo"><option value="caesar">Caesar</option><option value="xor">XOR</option><option value="base64">Base64</option><option value="rot13">ROT13</option></select><input type="text" id="cryptoKey" placeholder="المفتاح / الإزاحة" style="${inputStyle}"><textarea id="cryptoInput" placeholder="النص المدخل..." style="min-height:70px"></textarea><div style="display:flex;gap:8px;margin:8px 0"><button class="btn primary" id="btnCryptoEncode">تشفير</button><button class="btn" id="btnCryptoDecode">فك</button></div><textarea id="cryptoOutput" readonly style="min-height:70px"></textarea>`;
-    case 'motion': return `<button class="btn primary" id="btnMotionStart">▶️ تشغيل الكاميرا</button><button class="btn" id="btnMotionStop">⏹️ إيقاف</button><div style="margin-top:10px;max-width:420px"><video id="motionVideo" autoplay playsinline muted style="width:100%;border-radius:10px;display:none"></video><canvas id="motionCanvas" style="display:none"></canvas></div><div id="motionStatus" style="margin-top:8px;font-weight:600"></div>`;
+    case 'motion': return `<button class="btn primary" id="btnMotionStart">▶ تشغيل الكاميرا</button><button class="btn" id="btnMotionStop">إيقاف</button><div style="margin-top:10px;max-width:420px"><video id="motionVideo" autoplay playsinline muted style="width:100%;border-radius:10px;display:none"></video><canvas id="motionCanvas" style="display:none"></canvas></div><div id="motionStatus" style="margin-top:8px;font-weight:600"></div>`;
     case 'portscan': return `<input type="text" id="portscanHost" placeholder="example.com" style="${inputStyle}"><label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px"><input type="checkbox" id="portscanConfirmOwn" style="width:auto"> <span>أؤكد أنني أملك هذا النظام أو مصرّح لي بفحصه</span></label><button class="btn primary" id="btnPortscanRun">ابدأ الفحص</button><div id="portscanResult" class="secToolAiResult"></div>`;
     case 'kali': return `<textarea id="kaliInput" placeholder="مثال: أريد فحص منافذ سيرفري الخاص..." style="min-height:80px"></textarea><button class="btn primary" id="btnKaliAsk" style="margin-top:8px">اسأل DeepSeek</button><div id="kaliResult" class="secToolAiResult"></div>`;
     case 'phishing': return `<textarea id="phishingInput" placeholder="الصق الرابط أو نص الإيميل هنا..." style="min-height:100px"></textarea><button class="btn primary" id="btnPhishingAnalyze" style="margin-top:8px">تحليل بـ DeepSeek</button><div id="phishingResult" class="secToolAiResult"></div>`;
     case 'log': return `<textarea id="logInput" placeholder="الصق محتوى ملف log هنا..." style="min-height:120px"></textarea><button class="btn primary" id="btnLogAnalyze" style="margin-top:8px">تحليل</button><div id="logResult" class="secToolAiResult"></div>`;
     case 'breach': return `<input type="email" id="breachEmail" placeholder="you@example.com" style="${inputStyle}"><button class="btn primary" id="btnBreachCheck">فحص</button><div id="breachResult" class="secToolAiResult"></div>`;
-    case 'darkgpt': return `<div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;line-height:1.6;color:var(--text-2)">⚠️ هذه الأداة للاستخدام القانوني المصرّح به فقط. كل عملية بحث تُسجَّل باسم حسابك.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><select id="darkgptField" style="flex:1"><option value="email">إيميل</option><option value="username">اسم</option><option value="password">كلمة مرور</option><option value="ip_address">IP</option><option value="phone">هاتف</option></select><input type="text" id="darkgptValue" placeholder="القيمة..." style="flex:2"></div><button class="btn primary" id="btnDarkgptSearch">بحث</button><div id="darkgptResult" class="secToolAiResult"></div>`;
-    case 'vt': return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><select id="vtMode" style="flex:1"><option value="file">ملف</option><option value="hash">Hash</option><option value="url">رابط</option></select><input type="text" id="vtValue" placeholder="Hash أو رابط" style="flex:2;display:none"><input type="file" id="vtFile" style="flex:2"></div><p class="hint" id="vtFileNote">🔒 يُحسب SHA-256 محليًا، لا يُرفع الملف.</p><button class="btn primary" id="btnVtRun">فحص</button><div id="vtResult" class="secToolAiResult"></div>`;
+    case 'darkgpt': return `<div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;line-height:1.6;color:var(--text-2)">هذه الأداة للاستخدام القانوني المصرّح به فقط. كل عملية بحث تُسجَّل باسم حسابك.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><select id="darkgptField" style="flex:1"><option value="email">إيميل</option><option value="username">اسم</option><option value="password">كلمة مرور</option><option value="ip_address">IP</option><option value="phone">هاتف</option></select><input type="text" id="darkgptValue" placeholder="القيمة..." style="flex:2"></div><button class="btn primary" id="btnDarkgptSearch">بحث</button><div id="darkgptResult" class="secToolAiResult"></div>`;
+    case 'vt': return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><select id="vtMode" style="flex:1"><option value="file">ملف</option><option value="hash">Hash</option><option value="url">رابط</option></select><input type="text" id="vtValue" placeholder="Hash أو رابط" style="flex:2;display:none"><input type="file" id="vtFile" style="flex:2"></div><p class="hint" id="vtFileNote">يُحسب SHA-256 محليًا، لا يُرفع الملف.</p><button class="btn primary" id="btnVtRun">فحص</button><div id="vtResult" class="secToolAiResult"></div>`;
     case 'recon': return `<input type="text" id="reconDomain" placeholder="example.com" style="${inputStyle}"><button class="btn primary" id="btnReconRun">استطلاع</button><div id="reconResult" class="secToolAiResult"></div>`;
     case 'webscan': return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><select id="webscanMode" style="flex:1"><option value="headers">فحص Headers</option><option value="ssl">فحص SSL</option></select><input type="text" id="webscanValue" placeholder="example.com" style="flex:2"></div><button class="btn primary" id="btnWebscanRun">فحص</button><div id="webscanResult" class="secToolAiResult"></div>`;
     case 'jwt': return `<textarea id="jwtInput" placeholder="eyJhbGci..." style="min-height:70px;font-family:var(--font-mono);font-size:12px"></textarea><input type="text" id="jwtSecret" placeholder="سر اختياري للتحقق" style="margin-top:8px"><button class="btn primary" id="btnJwtRun" style="margin-top:8px">تحليل</button><div id="jwtResult" class="secToolAiResult"></div>`;
     case 'hashid': return `<input type="text" id="hashidInput" placeholder="الصق Hash هنا..." style="font-family:var(--font-mono);${inputStyle}"><button class="btn primary" id="btnHashidRun">تحليل</button><div id="hashidResult" class="secToolAiResult"></div>`;
     case 'iprep': return `<input type="text" id="iprepIp" placeholder="8.8.8.8" style="${inputStyle}"><button class="btn primary" id="btnIprepCheck">فحص</button><div id="iprepResult" class="secToolAiResult"></div>`;
-    case 'probmath': return `<details style="margin-bottom:12px;border:1px solid var(--border);border-radius:12px;padding:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px">🎲 الفرق بين PRNG وCSPRNG</summary><p style="margin-top:8px;line-height:1.8;font-size:12.5px;color:var(--text-2)">مولّد الأرقام العادي (PRNG) يعتمد على معادلة وبذرة، أما CSPRNG فيجمع عشوائية فيزيائية حقيقية.</p></details><details style="margin-bottom:12px;border:1px solid var(--border);border-radius:12px;padding:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px">🔐 Provably Fair</summary><p style="margin-top:8px;line-height:1.8;font-size:12.5px;color:var(--text-2)">hash مسبق يكشفه السيرفر بعد الجولة، وتحقق SHA256(seed) يطابقه.</p></details><details style="margin-bottom:16px;border:1px solid var(--border);border-radius:12px;padding:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px">📊 House Edge & Kelly Criterion</summary><p style="margin-top:8px;line-height:1.8;font-size:12.5px;color:var(--text-2)">كل لعبة مصممة رياضياً لصالح البيت. Kelly يحدد أقصى نسبة رهان آمنة.</p></details><h4 style="margin:0 0 8px;font-size:13px">🧮 حاسبة House Edge</h4><div class="rtp-inputs"><input type="number" id="pmBet" placeholder="الرهان"><input type="number" id="pmWinProb" placeholder="احتمال %"><input type="number" id="pmPayout" placeholder="مضاعف الربح"></div><button class="btn primary" id="btnPmHouseCalc">احسب</button><div id="pmHouseResult" class="secToolAiResult"></div><h4 style="margin:20px 0 8px;font-size:13px">📈 حاسبة Kelly</h4><div class="rtp-inputs"><input type="number" id="pmBankroll" placeholder="رأس المال"><input type="number" id="pmKellyProb" placeholder="احتمال %"><input type="number" id="pmKellyOdds" placeholder="مضاعف"></div><button class="btn primary" id="btnPmKellyCalc">احسب</button><div id="pmKellyResult" class="secToolAiResult"></div><h4 style="margin:20px 0 8px;font-size:13px">🔐 فاحص Provably Fair</h4><input type="text" id="pmSeedInput" placeholder="Server Seed" style="font-family:var(--font-mono);margin-bottom:8px"><input type="text" id="pmHashInput" placeholder="Hash المعلن" style="font-family:var(--font-mono);margin-bottom:8px"><button class="btn primary" id="btnPmFairCheck">تحقّق</button><div id="pmFairResult" class="secToolAiResult"></div>`;
-    case 'rtpcalc': return `<input type="text" id="rtpSearchInput" placeholder="ابحث عن لعبة..." style="${inputStyle}"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><select id="rtpProviderFilter" style="flex:1"><option value="">كل المزودين</option></select><select id="rtpBuyBonusFilter" style="flex:1"><option value="">كل الألعاب</option><option value="yes">💰 فيها Buy Bonus</option><option value="no">🚫 بدون Buy Bonus</option></select></div><div id="rtpGameList" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;background:rgba(0,0,0,.2)"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">🧮 حاسبة الخسارة المتوقعة</h4><div class="rtp-inputs"><input type="number" id="rtpSelectedRtp" placeholder="RTP %"><input type="number" id="rtpBetSize" placeholder="حجم الرهان"><input type="number" id="rtpNumSpins" placeholder="عدد الجولات"><input type="number" id="rtpBankroll" placeholder="رصيدك (اختياري)"></div><button class="btn primary" id="btnRtpCalc">احسب</button><div id="rtpCalcResult" class="secToolAiResult"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">🎯 اقتراح أفضل لعبة</h4><div class="rtp-inputs"><input type="number" id="rtpSuggestBankroll" placeholder="رصيدك"><select id="rtpSuggestGoal" style="flex:1"><option value="safe">🛡️ متحفظ</option><option value="balanced">⚖️ متوازن</option><option value="bold">🎲 جريء</option></select><input type="number" id="rtpSuggestSpins" placeholder="عدد الجولات"></div><button class="btn primary" id="btnRtpSuggest">اقترح</button><div id="rtpSuggestResult" class="secToolAiResult"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">🧪 محاكاة مونت كارلو (10,000 جلسة)</h4><div class="rtp-inputs"><input type="number" id="mcRtp" placeholder="RTP %"><input type="number" id="mcVolatility" placeholder="تباين 1-5"><input type="number" id="mcBankroll" placeholder="رصيد"><input type="number" id="mcBet" placeholder="رهان"><input type="number" id="mcSpins" placeholder="جولات"></div><button class="btn primary" id="btnMcRun">🚀 شغّل المحاكاة</button><div id="mcResult" class="secToolAiResult"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">🧭 محاكي القرارات (Stop-Loss vs Take-Profit)</h4><div class="rtp-inputs"><input type="number" id="dsRtp" placeholder="RTP %"><input type="number" id="dsVolatility" placeholder="تباين 1-5"><input type="number" id="dsBankroll" placeholder="رصيد الجلسة"><input type="number" id="dsBet" placeholder="رهان"><input type="number" id="dsStopLoss" placeholder="سقف الخسارة"><input type="number" id="dsTakeProfit" placeholder="هدف الربح"><input type="number" id="dsMaxSpins" placeholder="أقصى عدد جولات"></div><button class="btn primary" id="btnDsRun">🧭 شغّل المحاكي</button><div id="dsResult" class="secToolAiResult"></div>`;
+    case 'probmath': return `<details style="margin-bottom:12px;border:1px solid var(--border);border-radius:12px;padding:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px">الفرق بين PRNG وCSPRNG</summary><p style="margin-top:8px;line-height:1.8;font-size:12.5px;color:var(--text-2)">مولّد الأرقام العادي (PRNG) يعتمد على معادلة وبذرة، أما CSPRNG فيجمع عشوائية فيزيائية حقيقية.</p></details><details style="margin-bottom:12px;border:1px solid var(--border);border-radius:12px;padding:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px">Provably Fair</summary><p style="margin-top:8px;line-height:1.8;font-size:12.5px;color:var(--text-2)">hash مسبق يكشفه السيرفر بعد الجولة، وتحقق SHA256(seed) يطابقه.</p></details><details style="margin-bottom:16px;border:1px solid var(--border);border-radius:12px;padding:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px">House Edge & Kelly Criterion</summary><p style="margin-top:8px;line-height:1.8;font-size:12.5px;color:var(--text-2)">كل لعبة مصممة رياضياً لصالح البيت. Kelly يحدد أقصى نسبة رهان آمنة.</p></details><h4 style="margin:0 0 8px;font-size:13px">حاسبة House Edge</h4><div class="rtp-inputs"><input type="number" id="pmBet" placeholder="الرهان"><input type="number" id="pmWinProb" placeholder="احتمال %"><input type="number" id="pmPayout" placeholder="مضاعف الربح"></div><button class="btn primary" id="btnPmHouseCalc">احسب</button><div id="pmHouseResult" class="secToolAiResult"></div><h4 style="margin:20px 0 8px;font-size:13px">حاسبة Kelly</h4><div class="rtp-inputs"><input type="number" id="pmBankroll" placeholder="رأس المال"><input type="number" id="pmKellyProb" placeholder="احتمال %"><input type="number" id="pmKellyOdds" placeholder="مضاعف"></div><button class="btn primary" id="btnPmKellyCalc">احسب</button><div id="pmKellyResult" class="secToolAiResult"></div><h4 style="margin:20px 0 8px;font-size:13px">فاحص Provably Fair</h4><input type="text" id="pmSeedInput" placeholder="Server Seed" style="font-family:var(--font-mono);margin-bottom:8px"><input type="text" id="pmHashInput" placeholder="Hash المعلن" style="font-family:var(--font-mono);margin-bottom:8px"><button class="btn primary" id="btnPmFairCheck">تحقّق</button><div id="pmFairResult" class="secToolAiResult"></div>`;
+    case 'rtpcalc': return `<input type="text" id="rtpSearchInput" placeholder="ابحث عن لعبة..." style="${inputStyle}"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><select id="rtpProviderFilter" style="flex:1"><option value="">كل المزودين</option></select><select id="rtpBuyBonusFilter" style="flex:1"><option value="">كل الألعاب</option><option value="yes">فيها Buy Bonus</option><option value="no">بدون Buy Bonus</option></select></div><div id="rtpGameList" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;background:rgba(0,0,0,.2)"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">حاسبة الخسارة المتوقعة</h4><div class="rtp-inputs"><input type="number" id="rtpSelectedRtp" placeholder="RTP %"><input type="number" id="rtpBetSize" placeholder="حجم الرهان"><input type="number" id="rtpNumSpins" placeholder="عدد الجولات"><input type="number" id="rtpBankroll" placeholder="رصيدك (اختياري)"></div><button class="btn primary" id="btnRtpCalc">احسب</button><div id="rtpCalcResult" class="secToolAiResult"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">اقتراح أفضل لعبة</h4><div class="rtp-inputs"><input type="number" id="rtpSuggestBankroll" placeholder="رصيدك"><select id="rtpSuggestGoal" style="flex:1"><option value="safe">متحفظ</option><option value="balanced">متوازن</option><option value="bold">جريء</option></select><input type="number" id="rtpSuggestSpins" placeholder="عدد الجولات"></div><button class="btn primary" id="btnRtpSuggest">اقترح</button><div id="rtpSuggestResult" class="secToolAiResult"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">محاكاة مونت كارلو (10,000 جلسة)</h4><div class="rtp-inputs"><input type="number" id="mcRtp" placeholder="RTP %"><input type="number" id="mcVolatility" placeholder="تباين 1-5"><input type="number" id="mcBankroll" placeholder="رصيد"><input type="number" id="mcBet" placeholder="رهان"><input type="number" id="mcSpins" placeholder="جولات"></div><button class="btn primary" id="btnMcRun">شغّل المحاكاة</button><div id="mcResult" class="secToolAiResult"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">محاكي القرارات (Stop-Loss vs Take-Profit)</h4><div class="rtp-inputs"><input type="number" id="dsRtp" placeholder="RTP %"><input type="number" id="dsVolatility" placeholder="تباين 1-5"><input type="number" id="dsBankroll" placeholder="رصيد الجلسة"><input type="number" id="dsBet" placeholder="رهان"><input type="number" id="dsStopLoss" placeholder="سقف الخسارة"><input type="number" id="dsTakeProfit" placeholder="هدف الربح"><input type="number" id="dsMaxSpins" placeholder="أقصى عدد جولات"></div><button class="btn primary" id="btnDsRun">شغّل المحاكي</button><div id="dsResult" class="secToolAiResult"></div>`;
     case 'ctf': return `<div id="ctfList"></div>`;
     default: return '';
   }
@@ -2841,8 +2861,8 @@ function wireSecTools(){
   $('#exifFileInput')?.addEventListener('change', async e => {
     const f = e.target.files[0]; const box = $('#exifResult');
     if(!f){ box.textContent = ''; return; }
-    if(typeof window.ExifParser === 'undefined'){ box.textContent = '⚠️ محرّك EXIF لم يُحمَّل.'; return; }
-    box.textContent = '⏳ تحليل محلي (الصورة لا تُرفع لأي خادم)...';
+    if(typeof window.ExifParser === 'undefined'){ box.textContent = 'محرّك EXIF لم يُحمَّل.'; return; }
+    box.textContent = 'تحليل محلي (الصورة لا تُرفع لأي خادم)...';
     try {
       const buf = await f.arrayBuffer();
       const r = window.ExifParser.parse(buf);
@@ -2863,22 +2883,22 @@ function wireSecTools(){
       };
 
       let html = '<div style="white-space:normal">';
-      html += sec('📄 الملف');
+      html += sec('الملف');
       html += row('الاسم', f.name) + row('الحجم', kb) + row('النوع', r.mime + (r.format!=='unknown'?' ('+r.format+')':''));
       if(r.dimensions && r.dimensions.width) html += row('الأبعاد', r.dimensions.width+' × '+r.dimensions.height+' px');
       if(r.colorType) html += row('نوع الألوان', r.colorType + (r.bitDepth?(' / '+r.bitDepth+'-bit'):''));
       if(r.byteOrder) html += row('ترتيب البايتات', r.byteOrder);
 
-      if(r.camera && Object.keys(r.camera).length){ html += sec('📷 الكاميرا'); html += rows(r.camera); }
-      if(r.datetime && Object.keys(r.datetime).length){ html += sec('🕐 التواريخ'); html += rows(r.datetime); }
-      if(r.exposure && Object.keys(r.exposure).length){ html += sec('⚙️ إعدادات التصوير'); html += rows(r.exposure); }
+      if(r.camera && Object.keys(r.camera).length){ html += sec('الكاميرا'); html += rows(r.camera); }
+      if(r.datetime && Object.keys(r.datetime).length){ html += sec('التواريخ'); html += rows(r.datetime); }
+      if(r.exposure && Object.keys(r.exposure).length){ html += sec('إعدادات التصوير'); html += rows(r.exposure); }
 
       if(r.gps){
-        html += sec('📍 الموقع الجغرافي (GPS)');
+        html += sec('الموقع الجغرافي (GPS)');
         html += row('خط العرض', r.gps.latitude) + row('خط الطول', r.gps.longitude);
         if(r.gps.altitude!=null) html += row('الارتفاع', r.gps.altitude+' م');
         if(r.gps.timeStamp) html += row('وقت GPS', (r.gps.dateStamp?r.gps.dateStamp+' ':'')+r.gps.timeStamp);
-        html += `<div style="margin:6px 0"><a href="${esc(r.gps.openStreetMapUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">🗺️ افتح على OpenStreetMap</a> · <a href="${esc(r.gps.googleMapsUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">Google Maps</a></div>`;
+        html += `<div style="margin:6px 0"><a href="${esc(r.gps.openStreetMapUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">افتح على OpenStreetMap</a> · <a href="${esc(r.gps.googleMapsUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">Google Maps</a></div>`;
       }
 
       // Raw tags the summaries above leave out but that still identify a place, a person or a device.
@@ -2891,8 +2911,8 @@ function wireSecTools(){
 
       const gpsKeys = Object.keys(gpsTags).filter(k => k !== 'GPSVersionID' && tagText(gpsTags[k]));
       if(!r.gps && gpsKeys.length){
-        html += sec('📍 الموقع الجغرافي (GPS)');
-        html += `<div style="color:#fbbf24;font-size:12px;margin:2px 0 4px">⚠️ توجد حقول GPS لكن تعذّر تحويلها إلى إحداثيات — قد تكشف مكان التصوير.</div>`;
+        html += sec('الموقع الجغرافي (GPS)');
+        html += `<div style="color:#fbbf24;font-size:12px;margin:2px 0 4px">توجد حقول GPS لكن تعذّر تحويلها إلى إحداثيات — قد تكشف مكان التصوير.</div>`;
         gpsKeys.forEach(k => { const v = gpsTags[k]; html += row(k, Array.isArray(v) ? v.map(fmt).join(', ') : fmt(v)); });
       }
 
@@ -2903,12 +2923,12 @@ function wireSecTools(){
         ['اسم المالك (CameraOwnerName)', exifIfd.CameraOwnerName], ['الرقم التسلسلي للعدسة (LensSerialNumber)', exifIfd.LensSerialNumber],
         ['معرّف الصورة الفريد (ImageUniqueID)', exifIfd.ImageUniqueID], ['تعليق المستخدم (UserComment)', userComment(exifIfd.UserComment)],
       ].map(([k, v]) => [k, tagText(v)]).filter(([, v]) => v);
-      if(identity.length){ html += sec('🪪 بيانات تعريفية (المؤلف/المالك/الأرقام التسلسلية)'); identity.forEach(([k, v]) => html += row(k, v)); }
+      if(identity.length){ html += sec('بيانات تعريفية (المؤلف/المالك/الأرقام التسلسلية)'); identity.forEach(([k, v]) => html += row(k, v)); }
 
       const txtKeys = Object.keys(r.text||{});
-      if(txtKeys.length){ html += sec('🏷️ حقول نصية'); txtKeys.forEach(k => html += row(k, r.text[k])); }
-      if(r.comments && r.comments.length){ html += sec('💬 تعليقات'); r.comments.forEach((c,i)=> html += row('#'+(i+1), c)); }
-      if(r.xmp){ html += sec('📝 XMP'); html += `<pre style="white-space:pre-wrap;word-break:break-word;margin:0;font-size:11px;color:var(--text-2)">${esc(r.xmp.slice(0,800))}</pre>`; }
+      if(txtKeys.length){ html += sec('حقول نصية'); txtKeys.forEach(k => html += row(k, r.text[k])); }
+      if(r.comments && r.comments.length){ html += sec('تعليقات'); r.comments.forEach((c,i)=> html += row('#'+(i+1), c)); }
+      if(r.xmp){ html += sec('XMP'); html += `<pre style="white-space:pre-wrap;word-break:break-word;margin:0;font-size:11px;color:var(--text-2)">${esc(r.xmp.slice(0,800))}</pre>`; }
 
       const warnings = r.warnings || [];
       if(warnings.length){
@@ -2926,18 +2946,18 @@ function wireSecTools(){
           : r.format === 'unknown' ? 'صيغة الملف غير معروفة، فلم تُفحص بياناته الوصفية.'
           : undecoded ? 'في الملف بيانات وصفية مضغوطة أو مقطوعة لم يستطع الفحص فكّها.'
           : 'كتلة البيانات الوصفية (EXIF) موجودة لكن تعذّرت قراءتها.';
-        html += `<div class="exif-unchecked" style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.35);border-radius:10px;padding:10px 12px;margin:12px 0 2px;font-size:12px;line-height:1.7;color:#fbbf24">⚠️ ${why} لا يمكن الجزم بخلوّ الملف من البيانات المخفية — قد يكشف الجهاز أو الموقع.${unsupported ? ' حوّله إلى JPEG أو PNG ثم أعد الفحص.' : ''}</div>`;
+        html += `<div class="exif-unchecked" style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.35);border-radius:10px;padding:10px 12px;margin:12px 0 2px;font-size:12px;line-height:1.7;color:#fbbf24">${why} لا يمكن الجزم بخلوّ الملف من البيانات المخفية — قد يكشف الجهاز أو الموقع.${unsupported ? ' حوّله إلى JPEG أو PNG ثم أعد الفحص.' : ''}</div>`;
       } else if(!hasAnyData){
-        html += `<div style="color:var(--text-2);margin-top:10px">✅ لم يُعثر على بيانات وصفية مخفية (EXIF/XMP) تكشف الجهاز أو الموقع أو صاحب الصورة. (حقول IPTC لا تُفحص.)</div>`;
+        html += `<div class="exif-clean" style="color:var(--text-2);margin-top:10px">لم يُعثر على بيانات وصفية مخفية (EXIF/XMP) تكشف الجهاز أو الموقع أو صاحب الصورة. (حقول IPTC لا تُفحص.)</div>`;
       }
       const notes = (r.notes||[]).filter(n => !/not supported yet/.test(n)); // shown above in Arabic
       if(notes.length) html += `<div style="color:var(--text-2);font-size:11px;margin-top:8px">${notes.map(esc).join(' · ')}</div>`;
 
       const rawJson = JSON.stringify(r.tags && Object.keys(r.tags).length ? r.tags : {text:r.text, comments:r.comments}, null, 2);
-      html += `<details style="margin-top:12px"><summary style="cursor:pointer;color:var(--text-2);font-size:12px">🔍 عرض كل الحقول الخام (JSON)</summary><pre style="white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font-size:11px;color:var(--text-2)">${esc(rawJson)}</pre></details>`;
+      html += `<details style="margin-top:12px"><summary style="cursor:pointer;color:var(--text-2);font-size:12px">عرض كل الحقول الخام (JSON)</summary><pre style="white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font-size:11px;color:var(--text-2)">${esc(rawJson)}</pre></details>`;
       html += '</div>';
       box.innerHTML = html;
-    } catch(err){ box.textContent = '⚠️ '+err.message; }
+    } catch(err){ box.textContent = ''+err.message; }
   });
   // Crypto
   function caesar(str, shift, dec){ const s = dec ? (26-(((shift%26)+26)%26))%26 : ((shift%26)+26)%26; return str.replace(/[a-zA-Z]/g, c => { const b = c <= 'Z' ? 65 : 97; return String.fromCharCode(((c.charCodeAt(0)-b+s)%26)+b); }); }
@@ -2952,7 +2972,7 @@ function wireSecTools(){
       else if(algo === 'rot13') out = caesar(input, 13, false);
       else if(algo === 'xor'){ if(mode === 'encode') out = bytesToB64(xorBytes(input, key||'secret')); else out = new TextDecoder().decode(xorBytes(new TextDecoder().decode(b64ToBytes(input)), key||'secret')); }
       else if(algo === 'base64') out = mode === 'encode' ? btoa(unescape(encodeURIComponent(input))) : decodeURIComponent(escape(atob(input)));
-    } catch(e){ out = '⚠️ '+e.message; }
+    } catch(e){ out = ''+e.message; }
     $('#cryptoOutput').value = out;
   }
   $('#btnCryptoEncode')?.addEventListener('click', () => runCrypto('encode'));
@@ -2963,63 +2983,63 @@ function wireSecTools(){
     const video = $('#motionVideo'), canvas = $('#motionCanvas'), status = $('#motionStatus');
     try { motionStream = await navigator.mediaDevices.getUserMedia({video:true}); video.srcObject = motionStream; video.style.display = 'block'; await video.play();
       canvas.width = 160; canvas.height = 120; const ctx = canvas.getContext('2d'); prevFrame = null;
-      status.textContent = '🟢 المراقبة نشطة...';
+      status.textContent = 'المراقبة نشطة...';
       function loop(now){ if(now - lastCheck > 200){ lastCheck = now; ctx.drawImage(video, 0, 0, canvas.width, canvas.height); const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
           if(prevFrame){ let diff = 0; for(let i=0;i<frame.data.length;i+=4) diff += Math.abs(frame.data[i]-prevFrame.data[i]);
-            const avg = diff/(frame.data.length/4); if(avg > 18) status.textContent = '🔴 حركة! ' + new Date().toLocaleTimeString(); }
+            const avg = diff/(frame.data.length/4); if(avg > 18) status.textContent = 'حركة! ' + new Date().toLocaleTimeString(); }
           prevFrame = frame; } motionRAF = requestAnimationFrame(loop); }
       loop(performance.now());
-    } catch(e){ status.textContent = '⚠️ '+e.message; }
+    } catch(e){ status.textContent = ''+e.message; }
   });
-  $('#btnMotionStop')?.addEventListener('click', () => { if(motionRAF) cancelAnimationFrame(motionRAF); if(motionStream) motionStream.getTracks().forEach(t => t.stop()); $('#motionVideo').style.display = 'none'; $('#motionStatus').textContent = '⏹️'; });
+  $('#btnMotionStop')?.addEventListener('click', () => { if(motionRAF) cancelAnimationFrame(motionRAF); if(motionStream) motionStream.getTracks().forEach(t => t.stop()); $('#motionVideo').style.display = 'none'; $('#motionStatus').textContent = ''; });
   // Port scan
   $('#btnPortscanRun')?.addEventListener('click', async () => {
     const host = $('#portscanHost').value.trim(); const box = $('#portscanResult');
-    if(!host) return; if(!$('#portscanConfirmOwn').checked){ box.textContent = '⚠️ أكد الملكية أولاً'; return; }
-    box.textContent = '⏳ فحص...';
+    if(!host) return; if(!$('#portscanConfirmOwn').checked){ box.textContent = 'أكد الملكية أولاً'; return; }
+    box.textContent = 'فحص...';
     try { const res = await fetch('/api/portscan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host})}); const data = await res.json();
-      if(data.error){ box.textContent = '⚠️ '+data.error; return; } box.textContent = data.results.map(r => `${r.port}\t${r.status}${r.service ? ' ('+r.service+')' : ''}`).join('\n');
-    } catch(e){ box.textContent = '⚠️ '+e.message; }
+      if(data.error){ box.textContent = ''+data.error; return; } box.textContent = data.results.map(r => `${r.port}\t${r.status}${r.service ? ' ('+r.service+')' : ''}`).join('\n');
+    } catch(e){ box.textContent = ''+e.message; }
   });
   // AI tools
-  $('#btnKaliAsk')?.addEventListener('click', async () => { const input = $('#kaliInput').value.trim(); if(!input) return; const box = $('#kaliResult'); box.textContent = '⏳ '+PROVIDERS.deepseek.name+' يفكر...'; try { const reply = await callProvider('deepseek',[{role:'user',content:'أنت خبير Kali Linux. اقترح الأمر المناسب وشرحه:\n'+input}]); box.textContent = reply; } catch(e){ box.textContent = '⚠️ '+e.message; } });
-  $('#btnPhishingAnalyze')?.addEventListener('click', async () => { const input = $('#phishingInput').value.trim(); if(!input) return; const box = $('#phishingResult'); box.textContent = '⏳ '+PROVIDERS.deepseek.name+'...'; try { const reply = await callProvider('deepseek',[{role:'user',content:'حلّل هذا الرابط/الإيميل وهل هو تصيّد:\n'+input}]); box.textContent = reply; } catch(e){ box.textContent = '⚠️ '+e.message; } });
-  $('#btnLogAnalyze')?.addEventListener('click', async () => { const input = $('#logInput').value.trim(); if(!input) return; const box = $('#logResult'); box.textContent = '⏳...'; try { const reply = await callProvider('deepseek',[{role:'user',content:'حلّل هذا log وابحث عن أنشطة مشبوهة:\n'+input.slice(0,6000)}]); box.textContent = reply; } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnKaliAsk')?.addEventListener('click', async () => { const input = $('#kaliInput').value.trim(); if(!input) return; const box = $('#kaliResult'); box.textContent = ''+PROVIDERS.deepseek.name+' يفكر...'; try { const reply = await callProvider('deepseek',[{role:'user',content:'أنت خبير Kali Linux. اقترح الأمر المناسب وشرحه:\n'+input}]); box.textContent = reply; } catch(e){ box.textContent = ''+e.message; } });
+  $('#btnPhishingAnalyze')?.addEventListener('click', async () => { const input = $('#phishingInput').value.trim(); if(!input) return; const box = $('#phishingResult'); box.textContent = ''+PROVIDERS.deepseek.name+'...'; try { const reply = await callProvider('deepseek',[{role:'user',content:'حلّل هذا الرابط/الإيميل وهل هو تصيّد:\n'+input}]); box.textContent = reply; } catch(e){ box.textContent = ''+e.message; } });
+  $('#btnLogAnalyze')?.addEventListener('click', async () => { const input = $('#logInput').value.trim(); if(!input) return; const box = $('#logResult'); box.textContent = '...'; try { const reply = await callProvider('deepseek',[{role:'user',content:'حلّل هذا log وابحث عن أنشطة مشبوهة:\n'+input.slice(0,6000)}]); box.textContent = reply; } catch(e){ box.textContent = ''+e.message; } });
   // Breach
-  $('#btnBreachCheck')?.addEventListener('click', async () => { const email = $('#breachEmail').value.trim(); if(!email) return; const box = $('#breachResult'); box.textContent = '⏳...'; try { const res = await fetch('/api/hibp?email='+encodeURIComponent(email)); const data = await res.json(); if(data.notConfigured){ box.textContent = '🚧 قريبًا'; return; } if(data.error){ box.textContent = '⚠️ '+data.error; return; } if(!data.breaches?.length) box.textContent = '✅ لا تسريبات معروفة'; else box.textContent = '⚠️ '+data.breaches.length+' تسريب:\n'+data.breaches.map(b => '• '+b.Name+' ('+b.BreachDate+')').join('\n'); } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnBreachCheck')?.addEventListener('click', async () => { const email = $('#breachEmail').value.trim(); if(!email) return; const box = $('#breachResult'); box.textContent = '...'; try { const res = await fetch('/api/hibp?email='+encodeURIComponent(email)); const data = await res.json(); if(data.notConfigured){ box.textContent = 'قريبًا'; return; } if(data.error){ box.textContent = ''+data.error; return; } if(!data.breaches?.length) box.textContent = 'لا تسريبات معروفة'; else box.textContent = ''+data.breaches.length+' تسريب:\n'+data.breaches.map(b => '• '+b.Name+' ('+b.BreachDate+')').join('\n'); } catch(e){ box.textContent = ''+e.message; } });
   // DarkGPT
-  $('#btnDarkgptSearch')?.addEventListener('click', async () => { const field = $('#darkgptField').value, value = $('#darkgptValue').value.trim(); if(!value) return; const box = $('#darkgptResult'); const token = authGet('aiapp_auth_token'); if(!token){ box.textContent = '🔒 سجّل دخول أولاً'; return; } box.textContent = '⏳...'; try { const res = await fetch('/api/dehashed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,field,value})}); const data = await res.json(); if(data.notConfigured){ box.textContent = '🚧 قريبًا'; return; } if(data.error){ box.textContent = '⚠️ '+(data.message||data.error); return; } if(!data.entries?.length) box.textContent = '✅ لا نتائج'; else box.textContent = '⚠️ '+data.total+' نتيجة:\n'+data.entries.slice(0,20).map(e=>JSON.stringify(e).slice(0,200)).join('\n'); } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnDarkgptSearch')?.addEventListener('click', async () => { const field = $('#darkgptField').value, value = $('#darkgptValue').value.trim(); if(!value) return; const box = $('#darkgptResult'); const token = authGet('aiapp_auth_token'); if(!token){ box.textContent = 'سجّل دخول أولاً'; return; } box.textContent = '...'; try { const res = await fetch('/api/dehashed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,field,value})}); const data = await res.json(); if(data.notConfigured){ box.textContent = 'قريبًا'; return; } if(data.error){ box.textContent = ''+(data.message||data.error); return; } if(!data.entries?.length) box.textContent = 'لا نتائج'; else box.textContent = ''+data.total+' نتيجة:\n'+data.entries.slice(0,20).map(e=>JSON.stringify(e).slice(0,200)).join('\n'); } catch(e){ box.textContent = ''+e.message; } });
   // VT
   $('#vtMode')?.addEventListener('change', () => { const isFile = $('#vtMode').value === 'file'; $('#vtValue').style.display = isFile ? 'none' : 'block'; $('#vtFile').style.display = isFile ? 'block' : 'none'; $('#vtFileNote').style.display = isFile ? 'block' : 'none'; });
   $('#vtMode')?.dispatchEvent(new Event('change'));
   $('#btnVtRun')?.addEventListener('click', async () => {
     const mode = $('#vtMode').value, box = $('#vtResult');
     let value; let prefix = '';
-    if(mode === 'file'){ const file = $('#vtFile').files[0]; if(!file){ box.textContent = '⚠️ اختر ملف'; return; } box.textContent = '⏳ SHA-256...';
+    if(mode === 'file'){ const file = $('#vtFile').files[0]; if(!file){ box.textContent = 'اختر ملف'; return; } box.textContent = 'SHA-256...';
       const buf = await file.arrayBuffer(); value = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buf))).map(b => b.toString(16).padStart(2,'0')).join('');
-      prefix = `📄 ${file.name}\n🔑 SHA-256: ${value}\n\n`;
+      prefix = `${file.name}\nSHA-256: ${value}\n\n`;
     } else value = $('#vtValue').value.trim();
-    if(!value) return; box.textContent = prefix + '⏳...';
+    if(!value) return; box.textContent = prefix + '...';
     try { const res = await fetch('/api/virustotal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode: mode === 'file' ? 'hash' : mode, value, guestId: window.getGuestId(), token: authGet('aiapp_auth_token')})}); const data = await res.json();
-      if(data.notConfigured){ box.textContent = prefix+'🚧 قريبًا'; return; } if(data.error){ box.textContent = prefix+'⚠️ '+data.error; return; }
-      const icon = data.verdict === 'malicious' ? '🚨' : data.verdict === 'clean' ? '✅' : '⚠️'; const s = data.stats || {};
+      if(data.notConfigured){ box.textContent = prefix+'قريبًا'; return; } if(data.error){ box.textContent = prefix+''+data.error; return; }
+      const icon = data.verdict === 'malicious' ? '' : data.verdict === 'clean' ? '' : ''; const s = data.stats || {};
       box.textContent = prefix+`${icon} ${data.verdict}\nخبيث: ${s.malicious||0} | نظيف: ${s.harmless||0}`;
-    } catch(e){ box.textContent = '⚠️ '+e.message; }
+    } catch(e){ box.textContent = ''+e.message; }
   });
   // Recon
-  $('#btnReconRun')?.addEventListener('click', async () => { const domain = $('#reconDomain').value.trim(); if(!domain) return; const box = $('#reconResult'); box.textContent = '⏳...'; try { const res = await fetch('/api/recon',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.error){ box.textContent = '⚠️ '+data.error; return; } const lines = [`🌍 ${data.domain}\n📡 DNS:`]; Object.entries(data.dns||{}).forEach(([k,v]) => { if(v?.length) lines.push(`  ${k}: ${v.map(x => typeof x === 'object' ? x.exchange||JSON.stringify(x) : x).join(', ')}`); }); lines.push(`\n🔍 Subdomains (${data.subdomainCount}):`); (data.subdomains||[]).slice(0,100).forEach(s => lines.push('  • '+s)); box.textContent = lines.join('\n'); } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnReconRun')?.addEventListener('click', async () => { const domain = $('#reconDomain').value.trim(); if(!domain) return; const box = $('#reconResult'); box.textContent = '...'; try { const res = await fetch('/api/recon',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.error){ box.textContent = ''+data.error; return; } const lines = [`${data.domain}\nDNS:`]; Object.entries(data.dns||{}).forEach(([k,v]) => { if(v?.length) lines.push(`  ${k}: ${v.map(x => typeof x === 'object' ? x.exchange||JSON.stringify(x) : x).join(', ')}`); }); lines.push(`\nSubdomains (${data.subdomainCount}):`); (data.subdomains||[]).slice(0,100).forEach(s => lines.push('  • '+s)); box.textContent = lines.join('\n'); } catch(e){ box.textContent = ''+e.message; } });
   // WebScan
-  $('#btnWebscanRun')?.addEventListener('click', async () => { const mode = $('#webscanMode').value, value = $('#webscanValue').value.trim(); if(!value) return; const box = $('#webscanResult'); box.textContent = '⏳...'; try { const res = await fetch('/api/webscan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode,value,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.error){ box.textContent = '⚠️ '+data.error; return; } if(mode === 'headers'){ const lines = [`🛡️ Grade: ${data.grade} (${data.score}/100)`, '']; (data.details||[]).forEach(d => lines.push((d.present ? '✅' : '❌')+' '+d.label)); box.textContent = lines.join('\n'); } else { box.textContent = `🔒 ${data.host}\nIssuer: ${data.issuer||'—'}\nValid until: ${data.validTo||'—'}\nDays left: ${data.daysLeft}\nProtocol: ${data.protocol||'—'}`; } } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnWebscanRun')?.addEventListener('click', async () => { const mode = $('#webscanMode').value, value = $('#webscanValue').value.trim(); if(!value) return; const box = $('#webscanResult'); box.textContent = '...'; try { const res = await fetch('/api/webscan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode,value,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.error){ box.textContent = ''+data.error; return; } if(mode === 'headers'){ const lines = [`Grade: ${data.grade} (${data.score}/100)`, '']; (data.details||[]).forEach(d => lines.push((d.present ? '' : '')+' '+d.label)); box.textContent = lines.join('\n'); } else { box.textContent = `${data.host}\nIssuer: ${data.issuer||'—'}\nValid until: ${data.validTo||'—'}\nDays left: ${data.daysLeft}\nProtocol: ${data.protocol||'—'}`; } } catch(e){ box.textContent = ''+e.message; } });
   // JWT
-  $('#btnJwtRun')?.addEventListener('click', async () => { const token = $('#jwtInput').value.trim(); if(!token) return; const box = $('#jwtResult'); box.textContent = '⏳...'; try { const parts = token.split('.'); if(parts.length !== 3){ box.textContent = '⚠️ JWT غير صالح'; return; } const header = JSON.parse(atob(parts[0].replace(/-/g,'+').replace(/_/g,'/'))); const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/'))); const lines = ['📋 Header:', JSON.stringify(header, null, 2), '', '📦 Payload:', JSON.stringify(payload, null, 2)]; if(payload.exp) lines.push('', '⏰ Expires: ' + new Date(payload.exp*1000).toISOString()); box.textContent = lines.join('\n'); } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnJwtRun')?.addEventListener('click', async () => { const token = $('#jwtInput').value.trim(); if(!token) return; const box = $('#jwtResult'); box.textContent = '...'; try { const parts = token.split('.'); if(parts.length !== 3){ box.textContent = 'JWT غير صالح'; return; } const header = JSON.parse(atob(parts[0].replace(/-/g,'+').replace(/_/g,'/'))); const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/'))); const lines = ['Header:', JSON.stringify(header, null, 2), '', 'Payload:', JSON.stringify(payload, null, 2)]; if(payload.exp) lines.push('', 'Expires: ' + new Date(payload.exp*1000).toISOString()); box.textContent = lines.join('\n'); } catch(e){ box.textContent = ''+e.message; } });
   // Hash ID
-  $('#btnHashidRun')?.addEventListener('click', () => { const hash = $('#hashidInput').value.trim(); if(!hash) return; const box = $('#hashidResult'); const guesses = []; if(/^[a-f0-9]{32}$/i.test(hash)) guesses.push('MD5'); if(/^[a-f0-9]{40}$/i.test(hash)) guesses.push('SHA-1'); if(/^[a-f0-9]{64}$/i.test(hash)) guesses.push('SHA-256'); if(/^\$2[aby]\$/.test(hash)) guesses.push('bcrypt'); box.textContent = guesses.length ? `🔎 ${guesses.join(', ')}` : '⚠️ نوع غير معروف'; });
+  $('#btnHashidRun')?.addEventListener('click', () => { const hash = $('#hashidInput').value.trim(); if(!hash) return; const box = $('#hashidResult'); const guesses = []; if(/^[a-f0-9]{32}$/i.test(hash)) guesses.push('MD5'); if(/^[a-f0-9]{40}$/i.test(hash)) guesses.push('SHA-1'); if(/^[a-f0-9]{64}$/i.test(hash)) guesses.push('SHA-256'); if(/^\$2[aby]\$/.test(hash)) guesses.push('bcrypt'); box.textContent = guesses.length ? `${guesses.join(', ')}` : 'نوع غير معروف'; });
   // IP Rep
-  $('#btnIprepCheck')?.addEventListener('click', async () => { const ip = $('#iprepIp').value.trim(); if(!ip) return; const box = $('#iprepResult'); box.textContent = '⏳...'; try { const res = await fetch('/api/iprep',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.notConfigured){ box.textContent = '🚧 قريبًا'; return; } if(data.error){ box.textContent = '⚠️ '+data.error; return; } const score = data.abuseScore || 0; const icon = score >= 75 ? '🚨' : score >= 25 ? '⚠️' : '✅'; box.textContent = `${icon} ${data.ip}\nAbuse Score: ${score}%\nReports: ${data.totalReports||0}\nISP: ${data.isp||'—'}\nCountry: ${data.countryName||'—'}`; } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnIprepCheck')?.addEventListener('click', async () => { const ip = $('#iprepIp').value.trim(); if(!ip) return; const box = $('#iprepResult'); box.textContent = '...'; try { const res = await fetch('/api/iprep',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.notConfigured){ box.textContent = 'قريبًا'; return; } if(data.error){ box.textContent = ''+data.error; return; } const score = data.abuseScore || 0; const icon = score >= 75 ? '' : score >= 25 ? '' : ''; box.textContent = `${icon} ${data.ip}\nAbuse Score: ${score}%\nReports: ${data.totalReports||0}\nISP: ${data.isp||'—'}\nCountry: ${data.countryName||'—'}`; } catch(e){ box.textContent = ''+e.message; } });
   // Probmath
-  $('#btnPmHouseCalc')?.addEventListener('click', () => { const box = $('#pmHouseResult'); const bet = parseFloat($('#pmBet').value), wp = parseFloat($('#pmWinProb').value)/100, po = parseFloat($('#pmPayout').value); if(!(bet>0)||!(wp>=0&&wp<=1)||!(po>0)){ box.textContent = '⚠️ أرقام غير صحيحة'; return; } const winAmt = bet*(po-1), lp = 1-wp, ev = wp*winAmt - lp*bet, he = -ev/bet*100; box.textContent = `💰 القيمة المتوقعة: ${ev.toFixed(4)}\n📊 حافة البيت: ${he.toFixed(2)}%\n${ev < 0 ? '🔴 لصالح البيت' : '🟢 لصالحك'}`; });
-  $('#btnPmKellyCalc')?.addEventListener('click', () => { const box = $('#pmKellyResult'); const bank = parseFloat($('#pmBankroll').value), p = parseFloat($('#pmKellyProb').value)/100, odds = parseFloat($('#pmKellyOdds').value); if(!(bank>0)||!(p>=0&&p<=1)||!(odds>0)){ box.textContent = '⚠️ أرقام غير صحيحة'; return; } const b = odds-1, q = 1-p, k = b > 0 ? ((b*p-q)/b) : -1; if(k <= 0) box.textContent = '🔴 لا ميزة رياضية — 0%'; else box.textContent = `📈 Kelly: ${(k*100).toFixed(2)}%\n💵 المقترح: ${(bank*k).toFixed(2)}`; });
-  $('#btnPmFairCheck')?.addEventListener('click', async () => { const box = $('#pmFairResult'); const seed = $('#pmSeedInput').value.trim(), expected = $('#pmHashInput').value.trim().toLowerCase(); if(!seed||!expected){ box.textContent = '⚠️ املأ الحقلين'; return; } try { const h = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seed)))).map(b => b.toString(16).padStart(2,'0')).join(''); box.textContent = h === expected ? `✅ متطابق!\n${h}` : `❌ غير متطابق\nالمحسوب: ${h}\nالمعلن: ${expected}`; } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnPmHouseCalc')?.addEventListener('click', () => { const box = $('#pmHouseResult'); const bet = parseFloat($('#pmBet').value), wp = parseFloat($('#pmWinProb').value)/100, po = parseFloat($('#pmPayout').value); if(!(bet>0)||!(wp>=0&&wp<=1)||!(po>0)){ box.textContent = 'أرقام غير صحيحة'; return; } const winAmt = bet*(po-1), lp = 1-wp, ev = wp*winAmt - lp*bet, he = -ev/bet*100; box.textContent = `القيمة المتوقعة: ${ev.toFixed(4)}\nحافة البيت: ${he.toFixed(2)}%\n${ev < 0 ? 'لصالح البيت' : 'لصالحك'}`; });
+  $('#btnPmKellyCalc')?.addEventListener('click', () => { const box = $('#pmKellyResult'); const bank = parseFloat($('#pmBankroll').value), p = parseFloat($('#pmKellyProb').value)/100, odds = parseFloat($('#pmKellyOdds').value); if(!(bank>0)||!(p>=0&&p<=1)||!(odds>0)){ box.textContent = 'أرقام غير صحيحة'; return; } const b = odds-1, q = 1-p, k = b > 0 ? ((b*p-q)/b) : -1; if(k <= 0) box.textContent = 'لا ميزة رياضية — 0%'; else box.textContent = `Kelly: ${(k*100).toFixed(2)}%\nالمقترح: ${(bank*k).toFixed(2)}`; });
+  $('#btnPmFairCheck')?.addEventListener('click', async () => { const box = $('#pmFairResult'); const seed = $('#pmSeedInput').value.trim(), expected = $('#pmHashInput').value.trim().toLowerCase(); if(!seed||!expected){ box.textContent = 'املأ الحقلين'; return; } try { const h = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seed)))).map(b => b.toString(16).padStart(2,'0')).join(''); box.textContent = h === expected ? `متطابق!\n${h}` : `غير متطابق\nالمحسوب: ${h}\nالمعلن: ${expected}`; } catch(e){ box.textContent = ''+e.message; } });
 
   // RTP
   const HKS_GAMES = [
@@ -3053,15 +3073,15 @@ function wireSecTools(){
     const pFilter = $('#rtpProviderFilter').value; const bFilter = $('#rtpBuyBonusFilter').value;
     const list = HKS_GAMES.filter(g => { if(f && !g.name.toLowerCase().includes(f)) return false; if(pFilter && g.provider !== pFilter) return false; if(bFilter === 'yes' && !g.buy) return false; if(bFilter === 'no' && g.buy) return false; return true; });
     if(!list.length){ box.innerHTML = '<div style="padding:12px;color:var(--text-3);font-size:12px">لا توجد نتائج</div>'; return; }
-    box.innerHTML = list.map(g => `<div class="hks-row" data-rtp="${g.rtp}"><div><div style="font-weight:600;font-size:13px">${g.name} ${g.buy ? '💰' : ''}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px">${g.provider} · ${volLabel(g.vol)} · ${g.maxWin}</div></div><div style="font-weight:700;color:var(--primary-2);font-family:var(--font-mono);font-size:12px">${g.rtp}%</div></div>`).join('');
+    box.innerHTML = list.map(g => `<div class="hks-row" data-rtp="${g.rtp}"><div><div style="font-weight:600;font-size:13px">${g.name} ${g.buy ? '' : ''}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px">${g.provider} · ${volLabel(g.vol)} · ${g.maxWin}</div></div><div style="font-weight:700;color:var(--primary-2);font-family:var(--font-mono);font-size:12px">${g.rtp}%</div></div>`).join('');
     box.querySelectorAll('.hks-row').forEach(row => { row.onclick = () => { $('#rtpSelectedRtp').value = row.getAttribute('data-rtp'); }; });
   }
   const pf = $('#rtpProviderFilter');
   if(pf){ const providers = [...new Set(HKS_GAMES.map(g => g.provider))]; pf.innerHTML = '<option value="">كل المزودين</option>' + providers.map(p => `<option value="${p}">${p}</option>`).join(''); renderRtpList(''); $('#rtpSearchInput').addEventListener('input', e => renderRtpList(e.target.value)); pf.addEventListener('change', () => renderRtpList($('#rtpSearchInput').value)); $('#rtpBuyBonusFilter').addEventListener('change', () => renderRtpList($('#rtpSearchInput').value)); }
-  $('#btnRtpCalc')?.addEventListener('click', () => { const box = $('#rtpCalcResult'); const rtp = parseFloat($('#rtpSelectedRtp').value), bet = parseFloat($('#rtpBetSize').value), spins = parseFloat($('#rtpNumSpins').value), bank = parseFloat($('#rtpBankroll').value); if(!(rtp>0&&rtp<=100)||!(bet>0)||!(spins>0)){ box.textContent = '⚠️ املأ الحقول'; return; } const total = bet*spins, he = (100-rtp)/100, loss = total*he, ret = total-loss; const lines = [`💰 إجمالي المراهنات: ${total.toFixed(2)}`, `📉 حافة البيت: ${(he*100).toFixed(2)}%`, `⬇️ الخسارة المتوقعة: ${loss.toFixed(2)}`, `↩️ العائد المتوقع: ${ret.toFixed(2)}`]; if(bank>0) lines.push('', `🛑 وقف الخسارة الموصى به: ${(bank*0.2).toFixed(2)} (20%)`); box.textContent = lines.join('\n'); });
-  $('#btnRtpSuggest')?.addEventListener('click', () => { const box = $('#rtpSuggestResult'); const bank = parseFloat($('#rtpSuggestBankroll').value), goal = $('#rtpSuggestGoal').value; if(!(bank>0)){ box.textContent = '⚠️ أدخل رصيدك'; return; } const target = goal === 'safe' ? 2 : goal === 'bold' ? 5 : 3.5; const w = goal === 'safe' ? 3 : goal === 'bold' ? 0.6 : 1.6; const betPct = goal === 'safe' ? 0.005 : goal === 'bold' ? 0.02 : 0.01; const slPct = goal === 'safe' ? 0.1 : goal === 'bold' ? 0.3 : 0.2; const scored = HKS_GAMES.map(g => { const diff = Math.abs(g.volN - target); let score = g.rtp - diff*w; if(goal === 'bold') score += Math.log10((parseInt(g.maxWin)||0)+1)*2.2; if(goal === 'safe') score += (5-g.volN)*0.8; return {...g, score}; }).sort((a,b) => b.score-a.score).slice(0,3); const lines = [`🎯 بناءً على رصيدك (${bank.toFixed(2)}) وهدفك:`, '']; scored.forEach((g, i) => lines.push(`${i+1}️⃣ ${g.name} — RTP ${g.rtp}% · ${volLabel(g.vol)} · ${g.maxWin}`)); lines.push('', `💵 الرهان المقترح: ${(bank*betPct).toFixed(2)}`, `🛑 وقف الخسارة: ${(bank*slPct).toFixed(2)}`); box.textContent = lines.join('\n'); });
-  $('#btnMcRun')?.addEventListener('click', () => { const box = $('#mcResult'); const rtp = parseFloat($('#mcRtp').value), volN = Math.min(5, Math.max(1, parseFloat($('#mcVolatility').value)||3)), bank = parseFloat($('#mcBankroll').value), bet = parseFloat($('#mcBet').value), spins = parseInt($('#mcSpins').value, 10); if(!(rtp>0&&rtp<=100)||!(bank>0)||!(bet>0)||!(spins>0)){ box.textContent = '⚠️ املأ الحقول'; return; } box.textContent = '⏳ 10,000 جلسة...'; setTimeout(() => { const N=10000, rtpF=rtp/100, hitRate=0.40-(volN-1)*0.045, jp=0.0004*volN*volN, jm=40*volN, jpEV=jp*jm, normHR=Math.max(0.01,hitRate-jp), normEV=Math.max(0.01,rtpF-jpEV), avgMN=normEV/normHR; const finals=[]; let bust=0, prof=0, sum=0, peak=0; for(let s=0;s<N;s++){ let bal=bank; for(let i=0;i<spins;i++){ if(bal<bet)break; bal-=bet; const r=Math.random(); if(r<jp)bal+=bet*jm*(0.4+Math.random()*1.2); else if(r<jp+normHR)bal+=bet*(-avgMN*Math.log(1-Math.random())); if(bal<0)bal=0; } finals.push(bal); sum+=bal; if(bal<=bet)bust++; if(bal>bank)prof++; if(bal>peak)peak=bal; } finals.sort((a,b)=>a-b); const pct=p=>finals[Math.min(finals.length-1,Math.floor(finals.length*p))]; box.textContent = [`🧪 10,000 جلسة (${spins} جولة، رهان ${bet}):`, '', `📈 احتمال الربح: ${(prof/N*100).toFixed(1)}%`, `💀 احتمال الإفلاس: ${(bust/N*100).toFixed(1)}%`, '', `📊 التوزيع:`, `  أسوأ 10%: ${pct(0.10).toFixed(2)}`, `  الوسيط: ${pct(0.50).toFixed(2)}`, `  أفضل 10%: ${pct(0.90).toFixed(2)}`, `  الأفضل: ${peak.toFixed(2)}`, `  المتوسط: ${(sum/N).toFixed(2)}`].join('\n'); }, 50); });
-  $('#btnDsRun')?.addEventListener('click', () => { const box = $('#dsResult'); const rtp = parseFloat($('#dsRtp').value), volN = Math.min(5, Math.max(1, parseFloat($('#dsVolatility').value)||3)), bank = parseFloat($('#dsBankroll').value), bet = parseFloat($('#dsBet').value), sl = parseFloat($('#dsStopLoss').value), tp = parseFloat($('#dsTakeProfit').value), ms = parseInt($('#dsMaxSpins').value, 10)||300; if(!(rtp>0&&rtp<=100)||!(bank>0)||!(bet>0)||!(sl>0)||!(tp>0)){ box.textContent = '⚠️ املأ الحقول'; return; } if(sl>=bank){ box.textContent = '⚠️ سقف الخسارة أكبر من الرصيد'; return; } box.textContent = '⏳ 10,000 جلسة...'; setTimeout(() => { const N=10000, rtpF=rtp/100, hitRate=0.40-(volN-1)*0.045, jp=0.0004*volN*volN, jm=40*volN, jpEV=jp*jm, normHR=Math.max(0.01,hitRate-jp), normEV=Math.max(0.01,rtpF-jpEV), avgMN=normEV/normHR; const floor=Math.max(0,bank-sl), ceil=bank+tp; let hitTP=0, hitSL=0, ranOut=0, sumF=0, sumS=0; for(let s=0;s<N;s++){ let bal=bank, used=0, out='ran'; for(let i=0;i<ms;i++){ if(bal<bet){ out='sl'; break; } bal-=bet; const r=Math.random(); if(r<jp)bal+=bet*jm*(0.4+Math.random()*1.2); else if(r<jp+normHR)bal+=bet*(-avgMN*Math.log(1-Math.random())); used=i+1; if(bal<=floor){ bal=Math.max(0,bal); out='sl'; break; } if(bal>=ceil){ out='tp'; break; } } if(out==='tp')hitTP++; else if(out==='sl')hitSL++; else ranOut++; sumF+=bal; sumS+=used; } const tpP=hitTP/N*100, slP=hitSL/N*100, roP=ranOut/N*100; box.textContent = [`🧭 10,000 جلسة:`, '', `🎯 هدف الربح أولاً: ${tpP.toFixed(1)}%`, `🛑 سقف الخسارة أولاً: ${slP.toFixed(1)}%`, `⏱️ انتهت الجولات: ${roP.toFixed(1)}%`, '', `📊 متوسط الرصيد النهائي: ${(sumF/N).toFixed(2)}`, `📊 متوسط الجولات: ${(sumS/N).toFixed(0)}`, '', slP > tpP ? '💡 التوصية: قلّل هدف الربح أو الرهان' : '💡 التوصية: نسبة جيدة لكن التزم بسقف الخسارة'].join('\n'); }, 50); });
+  $('#btnRtpCalc')?.addEventListener('click', () => { const box = $('#rtpCalcResult'); const rtp = parseFloat($('#rtpSelectedRtp').value), bet = parseFloat($('#rtpBetSize').value), spins = parseFloat($('#rtpNumSpins').value), bank = parseFloat($('#rtpBankroll').value); if(!(rtp>0&&rtp<=100)||!(bet>0)||!(spins>0)){ box.textContent = 'املأ الحقول'; return; } const total = bet*spins, he = (100-rtp)/100, loss = total*he, ret = total-loss; const lines = [`إجمالي المراهنات: ${total.toFixed(2)}`, `حافة البيت: ${(he*100).toFixed(2)}%`, `الخسارة المتوقعة: ${loss.toFixed(2)}`, `↩ العائد المتوقع: ${ret.toFixed(2)}`]; if(bank>0) lines.push('', `وقف الخسارة الموصى به: ${(bank*0.2).toFixed(2)} (20%)`); box.textContent = lines.join('\n'); });
+  $('#btnRtpSuggest')?.addEventListener('click', () => { const box = $('#rtpSuggestResult'); const bank = parseFloat($('#rtpSuggestBankroll').value), goal = $('#rtpSuggestGoal').value; if(!(bank>0)){ box.textContent = 'أدخل رصيدك'; return; } const target = goal === 'safe' ? 2 : goal === 'bold' ? 5 : 3.5; const w = goal === 'safe' ? 3 : goal === 'bold' ? 0.6 : 1.6; const betPct = goal === 'safe' ? 0.005 : goal === 'bold' ? 0.02 : 0.01; const slPct = goal === 'safe' ? 0.1 : goal === 'bold' ? 0.3 : 0.2; const scored = HKS_GAMES.map(g => { const diff = Math.abs(g.volN - target); let score = g.rtp - diff*w; if(goal === 'bold') score += Math.log10((parseInt(g.maxWin)||0)+1)*2.2; if(goal === 'safe') score += (5-g.volN)*0.8; return {...g, score}; }).sort((a,b) => b.score-a.score).slice(0,3); const lines = [`بناءً على رصيدك (${bank.toFixed(2)}) وهدفك:`, '']; scored.forEach((g, i) => lines.push(`${i+1}⃣ ${g.name} — RTP ${g.rtp}% · ${volLabel(g.vol)} · ${g.maxWin}`)); lines.push('', `الرهان المقترح: ${(bank*betPct).toFixed(2)}`, `وقف الخسارة: ${(bank*slPct).toFixed(2)}`); box.textContent = lines.join('\n'); });
+  $('#btnMcRun')?.addEventListener('click', () => { const box = $('#mcResult'); const rtp = parseFloat($('#mcRtp').value), volN = Math.min(5, Math.max(1, parseFloat($('#mcVolatility').value)||3)), bank = parseFloat($('#mcBankroll').value), bet = parseFloat($('#mcBet').value), spins = parseInt($('#mcSpins').value, 10); if(!(rtp>0&&rtp<=100)||!(bank>0)||!(bet>0)||!(spins>0)){ box.textContent = 'املأ الحقول'; return; } box.textContent = '10,000 جلسة...'; setTimeout(() => { const N=10000, rtpF=rtp/100, hitRate=0.40-(volN-1)*0.045, jp=0.0004*volN*volN, jm=40*volN, jpEV=jp*jm, normHR=Math.max(0.01,hitRate-jp), normEV=Math.max(0.01,rtpF-jpEV), avgMN=normEV/normHR; const finals=[]; let bust=0, prof=0, sum=0, peak=0; for(let s=0;s<N;s++){ let bal=bank; for(let i=0;i<spins;i++){ if(bal<bet)break; bal-=bet; const r=Math.random(); if(r<jp)bal+=bet*jm*(0.4+Math.random()*1.2); else if(r<jp+normHR)bal+=bet*(-avgMN*Math.log(1-Math.random())); if(bal<0)bal=0; } finals.push(bal); sum+=bal; if(bal<=bet)bust++; if(bal>bank)prof++; if(bal>peak)peak=bal; } finals.sort((a,b)=>a-b); const pct=p=>finals[Math.min(finals.length-1,Math.floor(finals.length*p))]; box.textContent = [`10,000 جلسة (${spins} جولة، رهان ${bet}):`, '', `احتمال الربح: ${(prof/N*100).toFixed(1)}%`, `احتمال الإفلاس: ${(bust/N*100).toFixed(1)}%`, '', `التوزيع:`, `  أسوأ 10%: ${pct(0.10).toFixed(2)}`, `  الوسيط: ${pct(0.50).toFixed(2)}`, `  أفضل 10%: ${pct(0.90).toFixed(2)}`, `  الأفضل: ${peak.toFixed(2)}`, `  المتوسط: ${(sum/N).toFixed(2)}`].join('\n'); }, 50); });
+  $('#btnDsRun')?.addEventListener('click', () => { const box = $('#dsResult'); const rtp = parseFloat($('#dsRtp').value), volN = Math.min(5, Math.max(1, parseFloat($('#dsVolatility').value)||3)), bank = parseFloat($('#dsBankroll').value), bet = parseFloat($('#dsBet').value), sl = parseFloat($('#dsStopLoss').value), tp = parseFloat($('#dsTakeProfit').value), ms = parseInt($('#dsMaxSpins').value, 10)||300; if(!(rtp>0&&rtp<=100)||!(bank>0)||!(bet>0)||!(sl>0)||!(tp>0)){ box.textContent = 'املأ الحقول'; return; } if(sl>=bank){ box.textContent = 'سقف الخسارة أكبر من الرصيد'; return; } box.textContent = '10,000 جلسة...'; setTimeout(() => { const N=10000, rtpF=rtp/100, hitRate=0.40-(volN-1)*0.045, jp=0.0004*volN*volN, jm=40*volN, jpEV=jp*jm, normHR=Math.max(0.01,hitRate-jp), normEV=Math.max(0.01,rtpF-jpEV), avgMN=normEV/normHR; const floor=Math.max(0,bank-sl), ceil=bank+tp; let hitTP=0, hitSL=0, ranOut=0, sumF=0, sumS=0; for(let s=0;s<N;s++){ let bal=bank, used=0, out='ran'; for(let i=0;i<ms;i++){ if(bal<bet){ out='sl'; break; } bal-=bet; const r=Math.random(); if(r<jp)bal+=bet*jm*(0.4+Math.random()*1.2); else if(r<jp+normHR)bal+=bet*(-avgMN*Math.log(1-Math.random())); used=i+1; if(bal<=floor){ bal=Math.max(0,bal); out='sl'; break; } if(bal>=ceil){ out='tp'; break; } } if(out==='tp')hitTP++; else if(out==='sl')hitSL++; else ranOut++; sumF+=bal; sumS+=used; } const tpP=hitTP/N*100, slP=hitSL/N*100, roP=ranOut/N*100; box.textContent = [`10,000 جلسة:`, '', `هدف الربح أولاً: ${tpP.toFixed(1)}%`, `سقف الخسارة أولاً: ${slP.toFixed(1)}%`, `انتهت الجولات: ${roP.toFixed(1)}%`, '', `متوسط الرصيد النهائي: ${(sumF/N).toFixed(2)}`, `متوسط الجولات: ${(sumS/N).toFixed(0)}`, '', slP > tpP ? 'التوصية: قلّل هدف الربح أو الرهان' : 'التوصية: نسبة جيدة لكن التزم بسقف الخسارة'].join('\n'); }, 50); });
 
   // CTF
   const CTF_FLAGS = {1:'TARYAM{base64_is_easy}', 2:'TARYAM{caesar_is_fun}', 3:'TARYAM{rot13_classic}', 4:'TARYAM{hex}'};
@@ -3072,8 +3092,8 @@ function wireSecTools(){
     const box = $('#ctfList'); if(!box) return;
     const solved = JSON.parse(localStorage.getItem('taryam_ctf_solved') || '[]');
     const items = await Promise.all([1,2,3,4].map(async id => ({id, title: CTF_TITLES[id], clue: CTF_CLUES[id], flagHash: await sha256(CTF_FLAGS[id])})));
-    box.innerHTML = items.map(ch => `<div class="ctf-item ${solved.includes(ch.id) ? 'solved' : ''}"><h4>${ch.title} ${solved.includes(ch.id) ? '✅' : ''}</h4><div style="font-family:var(--font-mono);font-size:12px;margin-bottom:10px;word-break:break-all;color:var(--text-2)">${ch.clue}</div><div style="display:flex;gap:6px"><input type="text" placeholder="TARYAM{...}" data-id="${ch.id}" style="flex:1;font-family:var(--font-mono)"><button class="btn ctf-btn" data-id="${ch.id}">تحقق</button></div></div>`).join('');
-    box.querySelectorAll('.ctf-btn').forEach(btn => { btn.onclick = async () => { const id = parseInt(btn.getAttribute('data-id'), 10); const input = box.querySelector(`input[data-id="${id}"]`); const h = await sha256(input.value.trim()); const item = items.find(x => x.id === id); if(h === item.flagHash){ const arr = JSON.parse(localStorage.getItem('taryam_ctf_solved') || '[]'); if(!arr.includes(id)) arr.push(id); localStorage.setItem('taryam_ctf_solved', JSON.stringify(arr)); window.renderCTF(); toast('🎉 تحدي مُنجز!', 'success'); } else toast('❌ غير صحيح', 'error'); }; });
+    box.innerHTML = items.map(ch => `<div class="ctf-item ${solved.includes(ch.id) ? 'solved' : ''}"><h4>${ch.title} ${solved.includes(ch.id) ? '' : ''}</h4><div style="font-family:var(--font-mono);font-size:12px;margin-bottom:10px;word-break:break-all;color:var(--text-2)">${ch.clue}</div><div style="display:flex;gap:6px"><input type="text" placeholder="TARYAM{...}" data-id="${ch.id}" style="flex:1;font-family:var(--font-mono)"><button class="btn ctf-btn" data-id="${ch.id}">تحقق</button></div></div>`).join('');
+    box.querySelectorAll('.ctf-btn').forEach(btn => { btn.onclick = async () => { const id = parseInt(btn.getAttribute('data-id'), 10); const input = box.querySelector(`input[data-id="${id}"]`); const h = await sha256(input.value.trim()); const item = items.find(x => x.id === id); if(h === item.flagHash){ const arr = JSON.parse(localStorage.getItem('taryam_ctf_solved') || '[]'); if(!arr.includes(id)) arr.push(id); localStorage.setItem('taryam_ctf_solved', JSON.stringify(arr)); window.renderCTF(); toast('تحدي مُنجز!', 'success'); } else toast('غير صحيح', 'error'); }; });
   };
   window.renderCTF();
 }
@@ -3091,7 +3111,7 @@ function updateClockDialog(){
   const now = new Date();
   $('#clockGregorianTime').textContent = new Intl.DateTimeFormat('en-US', {hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(now);
   $('#clockGregorianDate').textContent = new Intl.DateTimeFormat(isAr()?'ar-SA-u-nu-latn':'en-US', {weekday:'long',year:'numeric',month:'long',day:'numeric'}).format(now);
-  try { $('#clockHijriDate').textContent = '🕌 ' + new Intl.DateTimeFormat(isAr()?'ar-SA-u-ca-islamic-umalqura-nu-latn':'en-US-u-ca-islamic-umalqura', {year:'numeric',month:'long',day:'numeric'}).format(now); } catch(e){ $('#clockHijriDate').textContent = '🕌 —'; }
+  try { $('#clockHijriDate').textContent = '' + new Intl.DateTimeFormat(isAr()?'ar-SA-u-ca-islamic-umalqura-nu-latn':'en-US-u-ca-islamic-umalqura', {year:'numeric',month:'long',day:'numeric'}).format(now); } catch(e){ $('#clockHijriDate').textContent = '—'; }
   const tz = $('#clockTZSelect').value;
   if(tz){ $('#clockSelectedTime').textContent = new Intl.DateTimeFormat('en-US', {timeZone:tz, hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(now); const meta = TZS.find(x => x.tz === tz); $('#clockSelectedMeta').textContent = meta ? (isAr() ? meta.ar : meta.en) : tz; }
 }
@@ -3109,7 +3129,6 @@ function setupResizer(res, panel, {min, max, key}){
   res.addEventListener('mousedown', e => { if(window.innerWidth <= 860) return; drag = true; sX = e.clientX; sW = panel.getBoundingClientRect().width; window.addEventListener('mousemove', onM); window.addEventListener('mouseup', up); });
 }
 setupResizer($('#resizer1'), $('#sidebar'), {min:200, max:420, key:'panelWidthSidebar'});
-setupResizer($('#resizer2'), $('#chatcol'), {min:320, max:640, key:'panelWidthChat'});
 
 /* ═══ Command Palette ═══ */
 const CMD_ITEMS = [
@@ -3119,8 +3138,6 @@ const CMD_ITEMS = [
   {id:'clock', label:'التقويم والوقت', labelEn:'Calendar & Time', icon:'i-clock', action:()=>{ $('#btnClock').click(); }},
   {id:'projects', label:'قائمة المشاريع', labelEn:'Projects list', icon:'i-folder', action:()=>{ $('#btnToggleProjects').click(); }},
   {id:'install', label:'تثبيت التطبيق', labelEn:'Install App', icon:'i-install', action:()=>{ $('#btnInstall').click(); }},
-  {id:'preview', label:'تبويب المعاينة', labelEn:'Preview tab', icon:'i-preview', action:()=>{ document.querySelector('.tab[data-tab="preview"]')?.click(); }},
-  {id:'code', label:'تبويب الكود', labelEn:'Code tab', icon:'i-code', action:()=>{ document.querySelector('.tab[data-tab="code"]')?.click(); }},
   {id:'askall', label:'تفعيل اسأل الكل', labelEn:'Toggle Ask All', icon:'i-shield', action:()=>{ $('#chkAskAll').checked = !$('#chkAskAll').checked; updateChipStates(); localStorage.setItem('aiapp_askall', $('#chkAskAll').checked?'true':'false'); }},
   {id:'lang', label:'تبديل اللغة', labelEn:'Toggle language', icon:'i-shield', action:()=>{ setLang(isAr()?'en':'ar'); }},
   {id:'logout', label:'تسجيل الخروج', labelEn:'Log out', icon:'i-logout', action:()=>{ $('#btnLogout').click(); }}
