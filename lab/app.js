@@ -506,6 +506,10 @@ function renderSigningKey() {
     el('div', { class: 'hash', id: 'sign-fingerprint', 'data-alg': k.alg }, formatFingerprint(k.fingerprint)),
   );
   if (k.storage !== 'persistent') box.append(el('div', { class: 'verdict warn' }, tr('sessionKeyNote')));
+  if (k.replaced) {
+    box.append(el('div', { class: 'verdict warn', id: 'sign-replaced' }, tr('keyReplaced')));
+    if (k.previousFingerprint) box.append(el('div', {}, el('span', { class: 'muted small' }, tr('previousFingerprint')), el('div', { class: 'hash', id: 'sign-previous' }, formatFingerprint(k.previousFingerprint))));
+  }
   box.append(el('p', { class: 'muted small' }, tr('keyNote')));
 }
 
@@ -544,9 +548,14 @@ function renderVerify() {
   if (!v) return;
   const [cls, key] = VERIFY_VIEW[v.status];
   box.append(el('div', { class: 'verdict ' + cls, id: 'verify-verdict', 'data-status': v.status }, tr(key)));
-  if (v.dataIntactPdfChanged) box.append(el('div', { class: 'verdict warn' }, tr('vDataIntact')));
-  if (v.signer && v.trusted && v.trusted.match) box.append(el('p', { class: 'muted' }, tr('vTrustedMatch')));
-  else if (v.signer && !v.trusted) box.append(el('p', { class: 'muted' }, tr('vCompareFingerprint')));
+  const failedCheck = (id) => v.checks.some((c) => c.id === id && c.ok === false);
+  // Lines that explain the verdict; none of them softens a failing one.
+  if (failedCheck('signaturePresent')) box.append(el('p', { class: 'muted', id: 'verify-sig-removed' }, tr('vSignatureRemoved')));
+  if (v.status === 'wrong-key') box.append(el('p', { class: 'muted' }, tr(v.signer ? 'vOtherKey' : 'vNoSignatureTrusted')));
+  if (v.dataIntactPdfChanged) box.append(el('p', { class: 'muted' }, tr('vDataIntact')));
+  if (v.status === 'valid' && v.trusted && v.trusted.match) box.append(el('p', { class: 'muted' }, tr('vTrustedMatch')));
+  else if ((v.status === 'valid' || v.status === 'unverifiable') && v.signer && !v.trusted) box.append(el('p', { class: 'muted' }, tr('vCompareFingerprint')));
+  if (v.files.some((f) => f.status === 'original-mismatch')) box.append(el('div', { class: 'verdict warn', id: 'verify-original-mismatch' }, tr('vOriginalMismatch')));
   const rp = v.report;
   box.append(cards([
     rp && { k: 'reportIdComputed', v: rp.id },

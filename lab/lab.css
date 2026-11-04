@@ -198,3 +198,9 @@ td.na { color: var(--muted); }
 .dropzone.drag { border-color: var(--primary-2); background: rgba(139, 92, 246, 0.12); }
 #res-verify td.pass, #res-verify td.fail { text-align: center; }
 #res-verify .card .v { unicode-bidi: plaintext; }
+/* Verify tab on a phone: the result columns stay on screen, text wraps instead. */
+@media (max-width: 760px) {
+  #res-verify th, #res-verify td { white-space: normal; padding: 7px 8px; }
+  #res-verify td:first-child, #res-verify td.mono { overflow-wrap: anywhere; }
+  #res-verify td.num { white-space: nowrap; }
+}

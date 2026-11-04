@@ -17,8 +17,8 @@ try {
 const attachmentsOf = async (buf) => (await import('../../lab/core/pdf-read.js')).readPdfAttachments(new Uint8Array(buf)).attachments;
 const jsonOf = (att, name) => JSON.parse(Buffer.from(att.find((a) => a.name === name).data).toString('utf8'));
 
-async function openLab(browser, server, initScript = null) {
-  const ctx = await browser.newContext({ acceptDownloads: true, viewport: { width: 1280, height: 900 } });
+async function openLab(browser, server, initScript = null, viewport = { width: 1280, height: 900 }) {
+  const ctx = await browser.newContext({ acceptDownloads: true, viewport });
   if (initScript) await ctx.addInitScript(initScript);
   const page = await ctx.newPage();
   page.setDefaultTimeout(120000);
@@ -68,6 +68,9 @@ async function readVerdict(page) {
 }
 
 const flip = (buf, at) => { const b = Buffer.from(buf); b[at] ^= 0x01; return b; };
+// Arabic texts of lab/i18n.js (vTrustedMatch, vOtherKey), as the page shows them.
+const TRUSTED_MATCH = 'البصمة تطابق المفتاح الذي تثق به.';
+const OTHER_KEY = 'يحمل توقيعًا بمفتاح آخر';
 const fingerprintHex = (shown) => shown.replace(/\s+/g, '').toLowerCase();
 
 test('signed report: verifies in the Verify tab, a flipped byte does not, the key survives a reload', async (t) => {
@@ -105,8 +108,12 @@ test('signed report: verifies in the Verify tab, a flipped byte does not, the ke
   assert.match(v.text, /95\.517500%/, 'the signed RTP figure is shown');
 
   // Against a trusted fingerprint: the right one, another one, and a malformed one.
-  assert.strictEqual((await rerun(page, shown.toLowerCase())).status, 'valid');
-  assert.strictEqual((await rerun(page, 'ab'.repeat(32))).status, 'wrong-key');
+  v = await rerun(page, shown.toLowerCase());
+  assert.strictEqual(v.status, 'valid');
+  assert.ok(v.text.includes(TRUSTED_MATCH), 'the match is stated under a valid verdict');
+  v = await rerun(page, 'ab'.repeat(32));
+  assert.strictEqual(v.status, 'wrong-key');
+  assert.ok(v.text.includes(OTHER_KEY), v.text);
   v = await rerun(page, '1234');
   assert.strictEqual(v.status, null);
   assert.match(v.error, /64/);
@@ -116,6 +123,12 @@ test('signed report: verifies in the Verify tab, a flipped byte does not, the ke
   const json = att.find((a) => a.name === 'report.json');
   v = await verify(page, flip(pdf, json.offset + Math.floor(json.length / 2)));
   assert.strictEqual(v.status, 'invalid', v.text);
+  // With the signer's own fingerprint pasted, nothing under the red verdict sounds
+  // like reassurance.
+  v = await rerun(page, shown);
+  assert.strictEqual(v.status, 'invalid', v.text);
+  assert.ok(!v.text.includes(TRUSTED_MATCH), v.text);
+  await page.fill('#v-trusted', '');
   const latin = pdf.toString('latin1');
   const image = latin.indexOf('stream\n', latin.indexOf('/DCTDecode')) + 7;
   v = await verify(page, flip(pdf, image + 1000));
@@ -131,6 +144,16 @@ test('signed report: verifies in the Verify tab, a flipped byte does not, the ke
   v = await readVerdict(page);
   assert.strictEqual(v.status, 'valid', v.text);
   assert.match(await page.textContent('#name-verify'), /^dropped\.pdf/);
+
+  // The same report.json and inputs in a PDF rebuilt without report.sig: report.json
+  // names a signer, so this is invalid ("signature removed"), not merely unsigned.
+  const { PdfBuilder } = await import('../../lab/core/pdf.js');
+  const rebuilt = new PdfBuilder();
+  rebuilt.addPage({ lines: [{ text: 'This report is digitally signed.', x: 40, y: 800 }] });
+  for (const a of att) if (a.name !== 'report.sig') rebuilt.attach(a.name, a.data);
+  v = await verify(page, Buffer.from(rebuilt.build()), 'stripped.pdf');
+  assert.strictEqual(v.status, 'invalid', v.text);
+  assert.ok(await page.isVisible('#verify-sig-removed'));
 
   // Not a PDF, and a PDF that is not a lab report: refused with a message.
   v = await verify(page, Buffer.from('bet,win\n1,0\n'), 'log.csv');
@@ -198,5 +221,51 @@ test('without IndexedDB a session-only key is used, and the page and the report 
   const v = await verify(page, pdf);
   assert.strictEqual(v.status, 'valid', v.text);
   assert.match(v.text, /لجلسة واحدة فقط عند الموقّع/);
+  assert.deepStrictEqual(errors, []);
+});
+
+test('a stored key that no longer works is replaced with a notice; the Verify tab fits a phone screen', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const { page, errors } = await openLab(browser, server, null, { width: 390, height: 844 });
+  // An unusable record where the lab keeps its key (no private key, an all-zero
+  // 44-byte SPKI), written before the Report tab first asks for the key.
+  await page.evaluate(() => new Promise((resolve, reject) => {
+    const req = indexedDB.open('taryam-rtp-lab', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('keys');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const tx = req.result.transaction('keys', 'readwrite');
+      tx.objectStore('keys').put({ alg: 'Ed25519', privateKey: null, spki: new Uint8Array(44) }, 'report-signing-key');
+      tx.oncomplete = () => { req.result.close(); resolve(); };
+      tx.onerror = () => reject(tx.error);
+    };
+  }));
+  const pdf = await makeReport(page);
+  assert.ok(await page.isVisible('#sign-replaced'), 'the replacement is announced');
+  // The old fingerprint: SHA-256 of 44 zero bytes, computed here with node:crypto.
+  const old = require('crypto').createHash('sha256').update(Buffer.alloc(44)).digest('hex');
+  assert.strictEqual(fingerprintHex(await page.textContent('#sign-previous')), old);
+  const shown = await page.textContent('#sign-fingerprint');
+  assert.notStrictEqual(fingerprintHex(shown), old);
+  assert.strictEqual(jsonOf(await attachmentsOf(pdf), 'report.json').signer.keyFingerprint, fingerprintHex(shown));
+
+  // At 390 px every column of the result tables is on screen, in both languages.
+  const v = await verify(page, pdf);
+  assert.strictEqual(v.status, 'valid', v.text);
+  for (const lang of ['ar', 'en']) {
+    const widths = await page.$$eval('#res-verify .table-wrap', (ws) => ws.map((w) => [w.scrollWidth, w.clientWidth]));
+    assert.ok(widths.length >= 3, JSON.stringify(widths));
+    for (const [scroll, client] of widths) assert.ok(scroll <= client, lang + ' table wider than the screen: ' + JSON.stringify(widths));
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), lang + ': page scrolls sideways');
+    await page.click('#langToggle');
+  }
+  // Reloaded, the new key is simply the stored key: no notice any more.
+  await page.reload();
+  await page.click('#tab-report');
+  await page.waitForSelector('#sign-fingerprint');
+  assert.strictEqual(await page.textContent('#sign-fingerprint'), shown);
+  assert.strictEqual(await page.$('#sign-replaced'), null);
   assert.deepStrictEqual(errors, []);
 });
