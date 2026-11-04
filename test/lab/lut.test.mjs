@@ -131,15 +131,31 @@ test('malformed rows are rejected with the line number in both languages', () =>
   assert.throws(() => parseLutCsv('1,0,0\n2,0,100\n', 't.csv'), bilingual(/weights sum to 0/));
 });
 
-test('a header line and blank lines are read but reported, as Stake would refuse them', () => {
+test('a header line and blank lines are read and noted as the lab\'s inference, not as Stake refusals', () => {
   const t = parseLutCsv('﻿id,weight,payout\r\n1,3,0\r\n\r\n2,1,200\r\n', 't.csv');
   assert.strictEqual(t.rows, 2);
   assert.strictEqual(t.header, true);
   assert.strictEqual(t.blankLines, 1);
   assert.strictEqual(t.totalWeight, 4n);
-  const r = analyzeLutFiles([indexFile([['base', 1, 't.csv']]), { name: 't.csv', text: 'id,weight,payout\n1,3,0\n\n2,1,200\n' }]);
-  const issues = r.profile.submission.filter((c) => !c.ok).map((c) => c.id);
-  assert.ok(issues.includes('noHeader') && issues.includes('noBlank'), issues.join());
+  // Regression: these two checks are not in rgs_verification.py, so they must not count
+  // as submission issues. The table otherwise passes every published submission check
+  // (by hand): weights 9 and 1 on 0x and 9.6x, so RTP = 960 / (100 * 10) = 0.96, inside
+  // [0.960, 0.967]; cost 1; top win 9.6x; payouts 0 and 960 are multiples of 10; total
+  // weight 10; SD = sqrt(0.1 * 9.6^2 - 0.96^2) = sqrt(8.2944) = 2.88 >= 0.6.
+  // The text has a header and one blank line between rows plus one after the last row.
+  const r = analyzeLutFiles([indexFile([['base', 1, 't.csv']]), { name: 't.csv', text: 'id,weight,payout\n1,9,0\n\n2,1,960\n\n' }]);
+  assert.strictEqual(r.modes[0].rtp.fraction, '24/25');
+  assert.deepStrictEqual(r.profile.submission.filter((c) => !c.ok).map((c) => c.id), []);
+  assert.strictEqual(r.profile.submissionIssues, 0);
+  assert.ok(!r.profile.submission.some((c) => c.id === 'noHeader' || c.id === 'noBlank'), 'not listed as published checks');
+  const inferred = Object.fromEntries(r.profile.inferred.map((c) => [c.id, c]));
+  assert.deepStrictEqual([inferred.noHeader.ok, inferred.noHeader.value], [false, 1]);
+  assert.deepStrictEqual([inferred.noBlank.ok, inferred.noBlank.value], [false, 2]);
+  assert.strictEqual(r.profile.inferredIssues, 2);
+  // A clean file has no inferred notes either.
+  const clean = analyzeLutFiles([indexFile([['base', 1, 't.csv']]), { name: 't.csv', text: '1,9,0\n2,1,960\n' }]);
+  assert.strictEqual(clean.profile.inferredIssues, 0);
+  assert.strictEqual(clean.profile.submissionIssues, 0);
 });
 
 test('index.json errors and file mismatches are rejected in both languages', () => {
@@ -209,6 +225,12 @@ function expanded(rows, cost) {
     variance, max, pMax: share((x) => x.equals(max)), q, cvar, cvarRel: cvar.div(c),
     rtp40: sum(xs.filter((x) => x.cmp(c.mul(40)) >= 0)).div(n).div(c),
     rtp10k: sum(xs.filter((x) => x.cmp(10000) >= 0)).div(n).div(c),
+    // Stake's expected tail liabilities in base bets (etl40, etl10k of rgs_verification.py):
+    // the mean of X * [X >= 40 * cost] and of X * [X >= 10,000].
+    etl40: sum(xs.filter((x) => x.cmp(c.mul(40)) >= 0)).div(n),
+    etl10k: sum(xs.filter((x) => x.cmp(10000) >= 0)).div(n),
+    ldwShare: new Fraction(BigInt(xs.filter((x) => !x.isZero() && x.cmp(c) < 0).length), BigInt(xs.filter((x) => !x.isZero()).length)),
+    maxCost: max.div(c),
     big: BIG_WIN_THRESHOLDS.map((T) => share((x) => x.cmp(T) >= 0)),
     buckets,
     ess: new Fraction(1n).div(sum(qs.map((x) => x.mul(x)))), // 1 / sum q^2
@@ -236,7 +258,8 @@ test('every metric equals a direct computation over the expanded outcomes (rando
       rows.push([i + 1, rnd(6), p]);
     }
     rows.push([701, 1, 10000010]); // so some weight sits on the top row
-    const m = run([['m', cost, 't.csv']], { 't.csv': rows }).modes[0];
+    const full = run([['m', cost, 't.csv']], { 't.csv': rows });
+    const m = full.modes[0];
     const x = expanded(rows, cost);
     const tag = `seed ${seed}, cost ${cost}`;
     sameFraction(m.rtp.fraction, x.rtp.toString(), tag + ' RTP');
@@ -265,6 +288,18 @@ test('every metric equals a direct computation over the expanded outcomes (rando
     assert.strictEqual(m.transparency.rows, rows.length);
     // The share of RTP from the tail is the contribution over the RTP.
     sameFraction(m.tail.shareFrom40xCost.fraction, x.rtp40.div(x.rtp).toString(), tag + ' share >= 40x');
+    sameFraction(m.tail.shareFrom10kx.fraction, x.rtp10k.div(x.rtp).toString(), tag + ' share >= 10,000x');
+    sameFraction(m.ldwShareOfWins.fraction, x.ldwShare.toString(), tag + ' LDW share of wins');
+    sameFraction(m.maxWin.costMultiple.fraction, x.maxCost.toString(), tag + ' top win / cost');
+    // Tail-liability risk inputs: "Both combined" = (etl40 + etl10k) / cost, "Combined, in
+    // base bets" = etl40 + etl10k. Shown as floats; the pass flag is value <= limit, exactly.
+    const risk = (id) => full.profile.risk.find((e) => e.measure === id);
+    for (const [id, want, limit] of [['combined', x.etl40.add(x.etl10k).div(c), 1.5], ['combinedAbs', x.etl40.add(x.etl10k), 10000]]) {
+      const got = risk(id);
+      assert.ok(Math.abs(got.value - want.toNumber()) <= 1e-12 * Math.max(1, want.toNumber()), `${tag} ${id}: ${got.value} vs ${want.toNumber()}`);
+      assert.strictEqual(got.limit, limit, `${tag} ${id} limit`);
+      assert.strictEqual(got.ok, want.cmp(Fraction.fromDecimal(String(limit))) <= 0, `${tag} ${id} verdict`);
+    }
   }
 });
 
@@ -368,6 +403,35 @@ test('Stake profile: risk checks lower the bet template instead of rejecting', (
   assert.strictEqual(all.profile.failedCategories.length, 6);
   assert.strictEqual(all.profile.riskPassing, 0);
   assert.strictEqual(all.profile.maxBaseBet.fraction, '5/3');
+});
+
+test('Stake profile: tail liability "Both combined" and "Combined, in base bets" at and over their limits', () => {
+  const measure = (r, id) => r.profile.risk.find((x) => x.measure === id);
+  // Cost 1; weight 1 on 40x and 1 on 10,000x out of W. A 40x win counts in etl40 only; a
+  // 10,000x win counts in both (it is also >= 40 x cost). By hand:
+  // etl40 = (40 + 10000) / W, etl10k = 10000 / W, combined = 20040 / W.
+  // W = 13360: 20040 / 13360 = 3/2 exactly -> passes (limit 1.5, rule value > limit).
+  const at = run([['base', 1, 'a.csv']], { 'a.csv': [[1, 13358, 0], [2, 1, 4000], [3, 1, 1000000]] });
+  assert.strictEqual(measure(at, 'combined').value, 1.5);
+  assert.strictEqual(measure(at, 'combined').ok, true);
+  // The same rows give the share of RTP from >= 10,000x: 10000 / (40 + 10000) = 250/251,
+  // and from >= 40x cost all of it.
+  assert.strictEqual(at.modes[0].tail.shareFrom10kx.fraction, '250/251');
+  assert.strictEqual(at.modes[0].tail.shareFrom40xCost.fraction, '1');
+  // W = 13359: 20040 / 13359 > 3/2 -> fails.
+  const over = run([['base', 1, 'a.csv']], { 'a.csv': [[1, 13357, 0], [2, 1, 4000], [3, 1, 1000000]] });
+  assert.strictEqual(measure(over, 'combined').ok, false);
+
+  // Cost 2 separates the two: one 10,000x win in W = 2 gives etl40 = etl10k = 5000 base
+  // bets, so "in base bets" = 10000 (equal to its limit: passes) while "combined" =
+  // 10000 / 2 = 5000 (over 1.5: fails).
+  const c2 = run([['base', 1, 'b.csv'], ['buy', 2, 'a.csv']], { 'a.csv': [[1, 1, 0], [2, 1, 1000000]], 'b.csv': [[1, 1, 0]] });
+  const buy = (id) => c2.profile.risk.find((x) => x.measure === id && x.mode === 'buy');
+  assert.deepStrictEqual([buy('combinedAbs').value, buy('combinedAbs').ok], [10000, true]);
+  assert.deepStrictEqual([buy('combined').value, buy('combined').ok], [5000, false]);
+  // 10,000.1x instead: "in base bets" = 2 * 10000.1 / 2 = 10000.1 > 10000 -> fails.
+  const c3 = run([['base', 1, 'b.csv'], ['buy', 2, 'a.csv']], { 'a.csv': [[1, 1, 0], [2, 1, 1000010]], 'b.csv': [[1, 1, 0]] });
+  assert.strictEqual(c3.profile.risk.find((x) => x.measure === 'combinedAbs' && x.mode === 'buy').ok, false);
 });
 
 test('Stake profile: a risk value equal to its limit passes (the rule is value > limit)', () => {

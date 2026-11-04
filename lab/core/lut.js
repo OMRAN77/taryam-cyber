@@ -9,7 +9,9 @@
 // Every sum is BigInt, so weights above 2^53 keep their exact value (Stake's own
 // verifier reads them with float()). For a mode costing c base bets:
 //   RTP = sum(w*p) / (100 * c * sum(w))
-// and every other figure here is an exact fraction until it is shown.
+// The RTP, the probabilities, the variance, CVaR and the effective size are exact
+// fractions until they are shown; the standard deviation (a square root), KL (a sum of
+// logarithms) and the "1 in N" figures are floating point.
 import { Fraction } from './fraction.js';
 
 export class LutError extends Error {
@@ -298,18 +300,22 @@ const round4 = (f) => (f.num * 20000n + f.den) / (2n * f.den);
 
 export function stakeRgsChecks(stats) {
   const L = STAKE_RGS_PROFILE.submission;
-  const submission = [];
+  const submission = [], inferred = [];
   for (const s of stats) {
     const mode = s.mode.name, t = s.table;
     const r4 = round4(s.rtp);
     submission.push({ id: 'rtp', mode, unit: 'rtp', value: s.rtp.toNumber(), rounded: Number(r4) / 1e4, limit: [L.minRtp, L.maxRtp], ok: r4 >= 9600n && r4 <= 9670n });
     submission.push({ id: 'maxCost', mode, unit: 'x', value: s.mode.cost.toNumber(), limit: L.maxCost, ok: s.mode.cost.cmp(L.maxCost) <= 0 });
     submission.push({ id: 'maxWin', mode, unit: 'x', value: s.maxX.toNumber(), limit: L.maxWin, ok: s.maxX.cmp(L.maxWin) <= 0 });
-    // verify_lookup_format(): the RGS refuses a table that breaks these.
+    // verify_lookup_format() ("Duplicate RGS verification before upload") asserts these.
     submission.push({ id: 'increment', mode, unit: 'n', value: t.badIncrementRows, limit: 0, ok: t.badIncrementRows === 0 });
     submission.push({ id: 'weightSum', mode, unit: 'n', value: s.W.toString(), limit: UINT64_MAX.toString(), ok: s.W <= UINT64_MAX });
-    submission.push({ id: 'noHeader', mode, unit: 'n', value: t.header ? 1 : 0, limit: 0, ok: !t.header });
-    submission.push({ id: 'noBlank', mode, unit: 'n', value: t.blankLines, limit: 0, ok: t.blankLines === 0 });
+    // Not published checks but the lab's inference: verify_lookup_format() unpacks
+    // line.strip().split(",") into three numbers, so a header or a blank line stops the
+    // local script with a ValueError. How Stake's RGS treats such a file is unverified,
+    // so these are kept apart and never counted as submission issues.
+    inferred.push({ id: 'noHeader', mode, unit: 'n', value: t.header ? 1 : 0, limit: 0, ok: !t.header });
+    inferred.push({ id: 'noBlank', mode, unit: 'n', value: t.blankLines, limit: 0, ok: t.blankLines === 0 });
   }
   const minCost = stats.reduce((m, s) => (m === null || s.mode.cost.cmp(m) < 0 ? s.mode.cost : m), null);
   submission.push({ id: 'baseCost', mode: null, unit: 'x', value: minCost.toNumber(), limit: L.baseCost, ok: minCost.equals(L.baseCost) });
@@ -347,6 +353,8 @@ export function stakeRgsChecks(stats) {
     profile: { id: STAKE_RGS_PROFILE.id, repository: STAKE_RGS_PROFILE.repository, source: STAKE_RGS_PROFILE.source, commit: STAKE_RGS_PROFILE.commit, commitDate: STAKE_RGS_PROFILE.commitDate, researchDate: STAKE_RGS_PROFILE.researchDate },
     submission,
     submissionIssues: submission.filter((c) => !c.ok).length,
+    inferred,
+    inferredIssues: inferred.filter((c) => !c.ok).length,
     risk,
     riskCategories: RISK.length,
     failedCategories,
