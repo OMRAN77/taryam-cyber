@@ -4,6 +4,10 @@
 // follow the publication; tests/lab/nist.test.js checks them against its worked
 // examples. runNist() applies NIST's recommended parameters and input-size limits.
 import { erfc, igamc, normalCdf, lgamma } from './specfun.js';
+import { dftMagnitudes } from './fft.js';
+
+// The FFT lives in fft.js (moved unchanged); re-exported for existing callers.
+export { dftMagnitudes };
 
 export const ALPHA = 0.01;
 
@@ -117,69 +121,6 @@ export function matrixRank(bits) {
 }
 
 // 2.6 Discrete Fourier transform (spectral), with the Rev. 1a threshold and variance.
-function fftInPlace(re, im, inverse) {
-  const n = re.length;
-  for (let i = 1, j = 0; i < n; i++) {
-    let bit = n >> 1;
-    for (; j & bit; bit >>= 1) j ^= bit;
-    j ^= bit;
-    if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
-  }
-  for (let len = 2; len <= n; len <<= 1) {
-    const ang = (inverse ? 2 : -2) * Math.PI / len;
-    const wr = Math.cos(ang), wi = Math.sin(ang);
-    for (let i = 0; i < n; i += len) {
-      let cr = 1, ci = 0;
-      for (let k = 0; k < len / 2; k++) {
-        const a = i + k, b = a + len / 2;
-        const xr = re[b] * cr - im[b] * ci, xi = re[b] * ci + im[b] * cr;
-        re[b] = re[a] - xr; im[b] = im[a] - xi;
-        re[a] += xr; im[a] += xi;
-        const ncr = cr * wr - ci * wi;
-        ci = cr * wi + ci * wr; cr = ncr;
-      }
-    }
-  }
-  if (inverse) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
-}
-
-// |X_j| for j < count of the DFT of a real sequence of any length (Bluestein's algorithm).
-export function dftMagnitudes(x, count) {
-  const n = x.length;
-  const out = new Float64Array(count);
-  if ((n & (n - 1)) === 0) {
-    const re = Float64Array.from(x), im = new Float64Array(n);
-    fftInPlace(re, im, false);
-    for (let j = 0; j < count; j++) out[j] = Math.hypot(re[j], im[j]);
-    return out;
-  }
-  let m = 1;
-  while (m < 2 * n - 1) m <<= 1;
-  const wr = new Float64Array(n), wi = new Float64Array(n);
-  for (let k = 0; k < n; k++) {
-    const ang = Math.PI * ((k * k) % (2 * n)) / n;
-    wr[k] = Math.cos(ang); wi[k] = -Math.sin(ang);
-  }
-  const ar = new Float64Array(m), ai = new Float64Array(m), br = new Float64Array(m), bi = new Float64Array(m);
-  for (let k = 0; k < n; k++) { ar[k] = x[k] * wr[k]; ai[k] = x[k] * wi[k]; }
-  br[0] = wr[0]; bi[0] = -wi[0];
-  for (let k = 1; k < n; k++) { br[k] = br[m - k] = wr[k]; bi[k] = bi[m - k] = -wi[k]; }
-  fftInPlace(ar, ai, false);
-  fftInPlace(br, bi, false);
-  for (let i = 0; i < m; i++) {
-    const r = ar[i] * br[i] - ai[i] * bi[i];
-    ai[i] = ar[i] * bi[i] + ai[i] * br[i];
-    ar[i] = r;
-  }
-  fftInPlace(ar, ai, true);
-  for (let j = 0; j < count; j++) {
-    const r = ar[j] * wr[j] - ai[j] * wi[j];
-    const i = ar[j] * wi[j] + ai[j] * wr[j];
-    out[j] = Math.hypot(r, i);
-  }
-  return out;
-}
-
 export function spectral(bits) {
   const n = bits.length;
   const x = new Float64Array(n);
