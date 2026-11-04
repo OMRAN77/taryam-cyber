@@ -111,7 +111,7 @@ export function parseWeight(v, ar, en) {
     w = BigInt(v);
   } else if (typeof v === 'string' && /^\s*\d+\s*$/.test(v)) w = BigInt(v.trim());
   if (w === null) throw err(`${ar}: الوزن "${v}" ليس عددًا صحيحًا`, `${en}: weight "${v}" is not a whole number`);
-  if (w < 1n) throw err(`${ar}: الوزن يجب أن يكون 1 على الأقل (احذف الموقع بدل إعطائه الوزن 0)`, `${en}: a weight must be at least 1 (remove the stop instead of giving it weight 0)`);
+  if (w < 1n) throw err(`${ar}: الوزن يجب أن يكون 1 على الأقل (ما لا يظهر أبدًا يُحذف بدل إعطائه الوزن 0)`, `${en}: a weight must be at least 1 (remove what should never show instead of giving it weight 0)`);
   if (w > MAX_WEIGHT) throw err(`${ar}: الوزن أكبر من الحد الأقصى ${MAX_WEIGHT}`, `${en}: weight is above the maximum ${MAX_WEIGHT}`);
   return w;
 }
@@ -141,8 +141,9 @@ function weightedStrips(rawReels, rawWeights, what) {
 }
 
 // The reels of the base game or of the free spins: "reels" (+ "weights") or "reelSets".
-// Returns [{ weight, strips, weights }] or null when neither is given.
-function reelSource(raw, what) {
+// Returns [{ weight, strips, weights }] or null when neither is given. `what` and
+// `setsWhat` name the two keys in error messages.
+function reelSource(raw, what, setsWhat) {
   if (raw.reelSets === undefined || raw.reelSets === null) {
     if (raw.reels === undefined || raw.reels === null) {
       if (raw.weights !== undefined && raw.weights !== null) throw err(`${what}: توجد أوزان بلا بكرات`, `${what}: weights are given without reels`);
@@ -154,17 +155,17 @@ function reelSource(raw, what) {
   if (raw.reels !== undefined && raw.reels !== null) throw err(`${what}: استخدم reels أو reelSets وليس الاثنين`, `${what}: use either reels or reelSets, not both`);
   if (raw.weights !== undefined && raw.weights !== null) throw err(`${what}: ضع الأوزان داخل كل مجموعة في reelSets`, `${what}: put the weights inside each entry of reelSets`);
   const sets = raw.reelSets;
-  if (!Array.isArray(sets) || sets.length === 0) throw err(`${what}: قائمة reelSets فارغة`, `${what}: reelSets is empty`);
-  if (sets.length > MAX_REEL_SETS) throw err(`${what}: الحد الأقصى ${MAX_REEL_SETS} مجموعة بكرات`, `${what}: at most ${MAX_REEL_SETS} reel sets`);
+  if (!Array.isArray(sets) || sets.length === 0) throw err(`${setsWhat}: القائمة فارغة`, `${setsWhat} is empty`);
+  if (sets.length > MAX_REEL_SETS) throw err(`${setsWhat}: الحد الأقصى لعدد مجموعات البكرات ${MAX_REEL_SETS}`, `${setsWhat}: at most ${MAX_REEL_SETS} reel sets`);
   const out = sets.map((set, j) => {
-    const name = `${what}: reelSets[${j + 1}]`;
+    const name = `${setsWhat}[${j + 1}]`;
     if (!set || typeof set !== 'object' || Array.isArray(set)) throw err(`${name}: يجب أن تكون كائنًا { weight, reels }`, `${name}: must be an object { weight, reels }`);
     if (set.weight === undefined || set.weight === null) throw err(`${name}: لا يوجد وزن للمجموعة`, `${name}: the set has no weight`);
     const weight = parseWeight(set.weight, `${name}: وزن المجموعة`, `${name}: set weight`);
     if (set.reels === undefined || set.reels === null) throw err(`${name}: لا توجد بكرات`, `${name}: no reels`);
     return { weight, ...weightedStrips(set.reels, set.weights, name) };
   });
-  if (out.some((s) => s.strips.length !== out[0].strips.length)) throw err(`${what}: كل مجموعات البكرات يجب أن تكون بنفس عدد البكرات`, `${what}: every reel set must have the same number of reels`);
+  if (out.some((s) => s.strips.length !== out[0].strips.length)) throw err(`${setsWhat}: كل مجموعات البكرات يجب أن تكون بنفس عدد البكرات`, `${setsWhat}: every reel set must have the same number of reels`);
   return out;
 }
 
@@ -181,7 +182,7 @@ export function normalizeModel(raw) {
   if (!raw || typeof raw !== 'object') throw err('النموذج ليس كائن JSON', 'The model is not a JSON object');
   const rows = Number(raw.rows ?? 1);
   if (!Number.isInteger(rows) || rows < 1 || rows > MAX_ROWS) throw err(`عدد الصفوف يجب أن يكون بين 1 و${MAX_ROWS}`, `rows must be between 1 and ${MAX_ROWS}`);
-  const baseSets = reelSource(raw, 'reels') || [{ weight: 1n, strips: strips(raw.reels, 'reels'), weights: null }];
+  const baseSets = reelSource(raw, 'reels', 'reelSets') || [{ weight: 1n, strips: strips(raw.reels, 'reels'), weights: null }];
   const baseStrips = baseSets.flatMap((set) => set.strips);
   const nReels = baseSets[0].strips.length;
 
@@ -218,7 +219,7 @@ export function normalizeModel(raw) {
     const mult = Fraction.of(f.multiplier ?? 1);
     if (mult.cmp(0) <= 0 || mult.cmp(10000) > 0) throw err('مضاعف الفري سبين يجب أن يكون بين 0 و10000', 'freeSpins.multiplier must be in (0, 10000]');
     // An empty reels list means "the base reels", as in the form.
-    fsSets = reelSource({ ...f, reels: f.reels || undefined }, 'freeSpins.reels');
+    fsSets = reelSource({ ...f, reels: f.reels || undefined }, 'freeSpins.reels', 'freeSpins.reelSets');
     if (fsSets) {
       if (fsSets[0].strips.length !== nReels) throw err('بكرات الفري سبين يجب أن تكون بنفس عدد البكرات', 'freeSpins.reels must have the same number of reels');
       fsSets.forEach((set) => set.strips.forEach((s) => s.forEach(idOf)));
