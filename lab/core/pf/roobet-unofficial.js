@@ -20,7 +20,7 @@ export const roobet = {
   id: 'roobet',
   version: 'unofficial-2021',
   kind: 'chain',
-  name: ['Roobet Crash (غير مؤكد)', 'Roobet Crash (unconfirmed)'],
+  name: ['Roobet Crash', 'Roobet Crash'], // the evidence level is shown next to the name
   sourceUrl: 'https://github.com/drewnicolette/roobet/blob/218ac001e6cd8ead023a5aa03600b5afc7a0c642/roobet/roobet.py',
   sources: [],
   captureDate: '2026-11-02',

@@ -428,7 +428,7 @@ function syncPfFields() {
   $('#pfFields').hidden = !on;
   $('#pfInfo').hidden = !on;
   $('#pfVersionLabel').hidden = true;
-  if (!on) return;
+  if (!on) { $('#sample-fair').textContent = tr($('#p-scheme').value === 'chain' ? 'sampleChain' : 'sampleFair'); return; }
   $('#sample-fair').textContent = tr('pfSample');
   if (!pfAdapters) return;
   const versions = pfAdapters.filter((a) => a.id === sel.value);
@@ -442,7 +442,7 @@ function syncPfFields() {
   $('#pfLimboLabel').hidden = !games.includes('limbo');
   $('#pfTilesLabel').hidden = !games.includes('mines');
   $('#pfEraLabel').hidden = !a.eraOption;
-  if (a.eraOption) fillSelect($('#p-era'), a.eraOption.map((e) => [e, e]));
+  if (a.eraOption) fillSelect($('#p-era'), a.eraOption.map((e) => [e, tr('pfEra_' + e)]));
   $('#pfExactLabel').hidden = a.kind === 'chain';
   $('#pfChainFields').hidden = a.kind !== 'chain';
   renderPfInfo(a);
@@ -535,18 +535,31 @@ function renderPfResult(box, fr) {
     box.append(sub('pfIssuesTable'), table(['pfSeverity', 'pfDescription', 'line', 'expected', 'claimed', ''], issues.slice(0, 100).map((i) => [
       { v: tr('pfSev_' + i.severity), cls: SEV_CLASS[i.severity] }, tr('pfI_' + i.code),
       { v: i.line ?? (i.lines ? i.lines.slice(0, 4).join(' · ') : ''), cls: 'num' },
-      { v: i.expected ?? '', cls: 'mono' }, { v: i.claimed ?? '', cls: 'mono' }, { v: pfIssueDetail(i), cls: 'mono' },
+      { v: i.expected ?? '', cls: 'mono' }, { v: i.claimed ?? '', cls: 'mono' }, { v: pfIssueDetail(i, lang), cls: 'mono' },
     ])));
     box.lastChild.id = 'pf-issues';
+  }
+  // per-row verdicts: rounds that do not match (first), then rounds not checked, by line
+  const rows = r.problemRows || [];
+  if (rows.length) {
+    box.append(sub('pfRowsTable'), table(['line', 'pfGame', 'pfRowStatus', 'expected', 'claimed'], rows.slice(0, 100).map((p) => [
+      { v: p.line, cls: 'num' }, p.game || '—',
+      p.status === 'mismatch' ? { v: tr('pfRow_mismatch'), cls: 'fail' } : { v: tr('pfR_' + p.reason), cls: 'na' },
+      { v: p.computed ?? '—', cls: 'mono' }, { v: p.claimed ?? '', cls: 'mono' },
+    ])));
+    box.lastChild.id = 'pf-rows';
+    const total = r.counts.mismatch + r.counts.notChecked;
+    if (total > 100) box.append(el('p', { class: 'muted small' }, `${tr('pfRowsShown')}: 100 / ${n(total)}`));
   }
   if (r.epochs.length) {
     box.append(sub('pfEpochTable'), table(['pfCommitment', ['SHA-256', 'SHA-256'], 'roundsChecked', 'pfNonces', 'pfGaps', 'pfForward', 'pfMatched'], r.epochs.slice(0, 50).map((e) => [
       { v: tr('pfCm_' + e.commitment), cls: e.commitment === 'ok' ? 'pass' : e.commitment === 'mismatch' ? 'fail' : 'na' },
       { v: e.hash.slice(0, 16) + '…', cls: 'mono' }, { v: e.rows, cls: 'num' },
       { v: e.nonceMin === null ? '—' : `${e.nonceMin} – ${e.nonceMax}`, cls: 'num' }, { v: e.gaps, cls: 'num' },
-      e.forward ? { v: tr('pfFw_' + e.forward), cls: e.forward === 'break' ? 'fail' : e.forward === 'ok' ? 'pass' : 'na' } : '—',
+      e.forward ? { v: tr('pfFw_' + e.forward), cls: e.forward === 'break' ? 'fail' : e.forward === 'gap' ? 'warn' : e.forward === 'ok' ? 'pass' : 'na' } : '—',
       { v: `${e.ok} / ${e.ok + e.mismatch}`, cls: 'num' },
     ])), el('p', { class: 'muted small' }, tr('pfCommitmentNote')));
+    if (r.listed === 'newest-first') box.append(el('p', { class: 'muted small' }, tr('pfListedNewest')));
   }
   if (r.uniformity.length) {
     box.append(sub('pfUniformity'), table(['pfGame', 'roundsChecked', ['χ² / df', 'χ² / df'], 'pValue', 'result'], r.uniformity.map((u) => [

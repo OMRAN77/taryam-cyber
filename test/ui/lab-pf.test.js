@@ -51,12 +51,20 @@ test('provably fair v2: adapters, self-test, samples and the batch audit', async
   const ids = options.map((o) => o.value);
   for (const id of ['custom', 'stake', 'stake-crash', 'stake-slide', 'bustabit', 'primedice', 'duelbits', 'duel', 'bcgame-dice', 'bcgame-crash', 'aviator', 'roobet']) assert.ok(ids.includes(id), 'adapter ' + id);
   assert.ok(options.find((o) => o.value === 'aviator').text.includes('غير مؤكد'), 'Aviator is labelled unconfirmed');
+  // ... once: the evidence level is not repeated inside the name
+  assert.strictEqual(options.find((o) => o.value === 'aviator').text.split('غير مؤكد').length, 2);
   assert.ok(options.find((o) => o.value === 'duel').text.includes('موثّق'), 'Duel is labelled verified');
   assert.ok(!options.some((o) => o.text.includes('معطّل')), 'no adapter disabled');
 
   // Custom mode (the generic HMAC template) stays the default.
   assert.strictEqual(await page.inputValue('#p-adapter'), 'custom');
   assert.strictEqual(await page.isVisible('#hmacFields'), true);
+  // The sample button names the generic sample again after an adapter was picked.
+  const customLabel = await page.textContent('#sample-fair');
+  await page.selectOption('#p-adapter', 'stake');
+  assert.notStrictEqual(await page.textContent('#sample-fair'), customLabel);
+  await page.selectOption('#p-adapter', 'custom');
+  assert.strictEqual(await page.textContent('#sample-fair'), customLabel);
 
   // Stake: info card with evidence badge and self-test; a clean sample passes.
   await page.selectOption('#p-adapter', 'stake');
@@ -70,6 +78,15 @@ test('provably fair v2: adapters, self-test, samples and the batch audit', async
   assert.strictEqual(await sampleAndRun(page, 'stake', { plant: true }), 'FAIL');
   const issues = await page.textContent('#pf-issues');
   for (const label of ['نتيجة منشورة تختلف عن المحسوبة', 'فجوة في تسلسل الـnonce', 'دفعة لا تطابق', 'عادت للاستعمال']) assert.ok(issues.includes(label), 'issue: ' + label);
+  // issue details in Arabic ("nonce: N"), and the per-row verdicts with line numbers
+  const gapRow = await page.$$eval('#pf-issues tbody tr', (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent)).find((c) => c[1].includes('فجوة في تسلسل')));
+  assert.match(gapRow[5], /^nonce: \d+$/);
+  const rowCells = await page.$$eval('#pf-rows tbody tr', (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent)));
+  assert.ok(rowCells.length >= 1 && /^\d+$/.test(rowCells[0][0]) && rowCells[0][2] === 'لا تطابق', JSON.stringify(rowCells[0]));
+
+  // Era names are translated (bustabit: current / previous chain).
+  await page.selectOption('#p-adapter', 'bustabit');
+  assert.deepStrictEqual(await page.$$eval('#p-era option', (o) => o.map((x) => x.textContent)), ['السلسلة الحالية', 'السلسلة السابقة (حتى اللعبة 10,000,000)']);
 
   // BC.Game Dice has two versions; the legacy one is selectable.
   await page.selectOption('#p-adapter', 'bcgame-dice');
@@ -127,5 +144,47 @@ test('provably fair v2: an uploaded CSV with a malformed hash is "not checked", 
   const text = await page.textContent('#res-fair');
   assert.match(text, /1 \/ 1/); // the 0x-prefixed upper-case hash was normalized and matched
   assert.ok(text.includes('hash مشوّه'), 'malformed hash reported as not checked');
+  assert.deepStrictEqual(errors, []);
+});
+
+test('provably fair v2: an honest history exported newest first, without times, passes; phone layout of the tables', async (t) => {
+  const { page, errors } = await openFair(t);
+  // Three Stake dice epochs of 30 bets built with node:crypto (ticks = floor(u x 10001 / 2^32)
+  // in BigInt), each announcing the next one's SHA-256, written newest first.
+  const crypto = require('crypto');
+  const sha = (x) => crypto.createHash('sha256').update(x).digest('hex');
+  const seeds = ['a', 'b', 'c', 'd'].map((w) => sha('ui-seed-' + w));
+  const lines = [];
+  for (let e = 0; e < 3; e++) {
+    for (let n = 0; n < 30; n++) {
+      const u = BigInt(crypto.createHmac('sha256', seeds[e]).update(`p${e}:${n}:0`).digest().readUInt32BE(0));
+      lines.push(`${seeds[e]},${sha(seeds[e])},${sha(seeds[e + 1])},p${e},${n},${(Number((u * 10001n) >> 32n) / 100).toFixed(2)}`);
+    }
+  }
+  // one tampered round in the middle epoch, so the issue and row tables appear
+  const tampered = lines.slice();
+  tampered[45] = tampered[45].replace(/,(\d+\.\d\d)$/, (m, v) => ',' + (Number(v) >= 99 ? Number(v) - 0.01 : Number(v) + 0.01).toFixed(2));
+  const os = require('os'), path = require('path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-pf-'));
+  const header = 'server_seed,server_seed_hash,next_server_seed_hash,client_seed,nonce,result';
+  const upload = async (name, rows) => {
+    const file = path.join(dir, name);
+    fs.writeFileSync(file, [header, ...rows.reverse()].join('\n') + '\n');
+    await page.setInputFiles('#fairFile', file);
+    await page.waitForFunction((n) => document.querySelector('#name-fair').textContent.includes(n), name);
+    await page.click('#run-fair');
+    await page.waitForFunction(() => !document.querySelector('#run-fair').disabled && document.querySelector('#pf-verdict'));
+    return page.getAttribute('#pf-verdict', 'data-code');
+  };
+  await page.selectOption('#p-adapter', 'stake');
+  assert.strictEqual(await upload('newest-first.csv', lines.slice()), 'PASS');
+  assert.match(await page.textContent('#res-fair'), /90 \/ 90/);
+
+  await page.setViewportSize({ width: 390, height: 900 });
+  assert.strictEqual(await upload('newest-first-tampered.csv', tampered), 'FAIL');
+  // At phone width no table cell collapses into a one-character column.
+  const cells = await page.$$eval('#pf-issues tbody tr:first-child td, #pf-rows tbody tr:first-child td', (tds) => tds.map((td) => { const r = td.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; }));
+  for (const [w, h] of cells) assert.ok(w >= 40 && h <= 120, JSON.stringify(cells));
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'no horizontal page scroll');
   assert.deepStrictEqual(errors, []);
 });

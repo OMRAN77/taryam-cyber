@@ -18,7 +18,7 @@ export const aviator = {
   id: 'aviator',
   version: 'unofficial-2025',
   kind: 'combined',
-  name: ['Aviator (غير مؤكد)', 'Aviator (unconfirmed)'],
+  name: ['Aviator', 'Aviator'], // the evidence level is shown next to the name
   sourceUrl: 'https://github.com/side-quest-dev/aviator-verifier/blob/d024be598e82bca5f3051a0997c867c3fab4a50d/README.md',
   sources: [],
   captureDate: '2026-11-02',

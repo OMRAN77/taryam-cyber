@@ -428,25 +428,34 @@ function pfPayload(fr) {
     adapter: { key: a.key, id: a.id, version: a.version, evidence: a.evidence, sourceUrl: a.sourceUrl, captureDate: a.captureDate, selfTest: a.selfTest ? { ok: a.selfTest.ok, passed: a.selfTest.passed, total: a.selfTest.total } : null },
     options: { ...fr.options, paytable: fr.options.paytable || null },
     verdict: r.verdict, rows: r.rows, counts: r.counts, payout: r.payout,
-    epochs: r.epochs.slice(0, 100), chain: r.chain, uniformity: r.uniformity,
+    epochs: r.epochs.slice(0, 100), listed: r.listed || null, chain: r.chain, uniformity: r.uniformity, games: r.games || {},
     issueCounts: r.issueCounts, issues: r.issues.slice(0, 100),
+    // per-row verdicts: mismatches first, then rounds not checked (with the reason)
+    problemRows: (r.problemRows || []).slice(0, 200),
   };
 }
 
-// Short text for an issue's detail (nonce range, P-value, link count...).
-export function pfIssueDetail(i) {
+// Short text for an issue's detail (nonce range, P-value, link count...) in `lang`.
+export function pfIssueDetail(i, lang = 'en') {
   const d = i.detail || {};
-  if (d.from !== undefined) return `nonce ${d.from}${d.to !== d.from ? '–' + d.to : ''}`;
-  if (d.nonce !== undefined) return 'nonce ' + d.nonce;
+  const tx = (k, v) => pair(k)[lang === 'en' ? 1 : 0].replace('{0}', v);
+  if (d.from !== undefined) return tx('pfD_nonce', `${d.from}${d.to !== d.from ? '–' + d.to : ''}`);
+  if (d.nonce !== undefined) return tx('pfD_nonce', d.nonce);
   if (d.pValue !== undefined) return 'P = ' + fmtP(d.pValue);
-  if (d.links !== undefined && d.links !== null) return num(d.links, 0);
-  if (d.missing !== undefined) return '+' + d.missing;
-  if (d.rows !== undefined) return String(d.rows);
-  if (d.first !== undefined) return 'nonce ' + d.first;
-  if (d.edge) return d.edge;
-  if (d.era) return d.era;
-  if (d.message) return d.message;
-  if (d.gap !== undefined) return 'gap ' + d.gap;
+  if (d.links !== undefined && d.links !== null) return tx('pfD_links', num(d.links, 0));
+  if (d.missing !== undefined) return tx('pfD_missing', d.missing);
+  if (d.rows !== undefined) return tx('pfD_rows', d.rows);
+  if (d.first !== undefined) return tx('pfD_first', d.first);
+  if (d.edge) return tx('pfEdge_' + d.edge);
+  if (d.era) return tx('pfEra_' + d.era);
+  if (d.formula) return tx('pfLimboShort_' + d.formula);
+  if (d.message) return typeof d.message === 'object' ? d.message[lang === 'en' ? 'en' : 'ar'] : String(d.message);
+  if (d.gap !== undefined) return tx('pfD_gap', d.gap);
+  if (d.clients !== undefined) return tx('pfD_clients', d.clients);
+  if (d.length !== undefined) return tx('pfD_length', d.length);
+  if (d.fromGame !== undefined) return tx('pfD_game', `${d.fromGame} → ${d.toGame}`);
+  if (d.gameId !== undefined) return tx('pfD_game', d.gameId);
+  if (d.hash) return d.hash.slice(0, 12) + '…';
   return i.epoch ? i.epoch.slice(0, 12) + '…' : '';
 }
 
@@ -462,8 +471,18 @@ function pfSection(L, fr) {
   L.kv('pfSource', a.sourceUrl, { mono: true });
   L.kv('pfCaptureDate', a.captureDate);
   if (a.selfTest) L.kv('pfSelfTest', `${a.selfTest.passed} / ${a.selfTest.total}`, { color: a.selfTest.ok ? C.pass : C.fail });
-  if (r.options.game) L.kv('pfGame', r.options.game + (a.games && a.games[r.options.game] && a.games[r.options.game].formula ? ' — ' + a.games[r.options.game].formula : ''));
-  if (a.games && a.games.limbo) L.kv('pfLimbo', r.options.limboFormula === 'docs' ? 'docs: 1e8 / (f × 1e8) × 0.99' : 'calculator: 2^24 / (floor(f × 2^24) + 1) × 0.99');
+  // the games the audit actually covered (rows per game), not only the default one
+  const played = Object.entries(r.games || {});
+  const formulaOf = (g) => (a.games && a.games[g] && a.games[g].formula ? a.games[g].formula : null);
+  if (played.length > 1) {
+    L.kv('pfGame', played.map(([g, c]) => `${g}: ${n(c)}`).join(' · '));
+    const lines = played.filter(([g]) => formulaOf(g)).map(([g]) => `${g} — ${formulaOf(g)}`);
+    if (lines.length) L.note(null, [lines.join(' ؛ '), lines.join('; ')]);
+  } else {
+    const g = played.length ? played[0][0] : r.options.game;
+    if (g) L.kv('pfGame', g + (formulaOf(g) ? ' — ' + formulaOf(g) : ''));
+  }
+  if (a.games && a.games.limbo && (!played.length || r.games.limbo)) L.kv('pfLimbo', r.options.limboFormula === 'docs' ? 'docs: 1e8 / (f × 1e8) × 0.99' : 'calculator: 2^24 / (floor(f × 2^24) + 1) × 0.99');
   L.note('pfEvNote_' + a.evidence);
   L.note(null, a.notes);
   L.kv('roundsChecked', n(r.rows));
@@ -496,11 +515,19 @@ function pfSection(L, fr) {
       L.note(null, [`${ar} (${code})`, `${code}: ${en}`]);
     }
   }
+  const rows = r.problemRows || [];
+  if (rows.length) {
+    L.section('pfRowsTable');
+    L.table([{ key: 'line', w: 0.1, mono: true }, { key: 'pfGame', w: 0.14, mono: true }, { key: 'pfRowStatus', w: 0.36 }, { key: 'expected', w: 0.2, mono: true }, { key: 'claimed', w: 0.2, mono: true }],
+      rows.slice(0, 25).map((p) => [p.line, p.game || '—', p.status === 'mismatch' ? { text: both('pfRow_mismatch'), color: C.fail, bold: true } : { text: both('pfR_' + p.reason), color: C.muted }, p.computed ?? '—', p.claimed ?? '']));
+    if (rows.length > 25) L.note(null, [`${pair('pfRowsShown')[0]}: 25 / ${n(r.counts.mismatch + r.counts.notChecked)}`, `${pair('pfRowsShown')[1]}: 25 / ${n(r.counts.mismatch + r.counts.notChecked)}`]);
+  }
   if (r.epochs.length) {
     L.section('pfEpochTable');
     L.table([{ key: 'pfCommitment', w: 0.22 }, { labels: ['SHA-256', 'SHA-256'], w: 0.24, mono: true }, { key: 'roundsChecked', w: 0.1, mono: true }, { key: 'pfNonces', w: 0.16, mono: true }, { key: 'pfForward', w: 0.28 }],
       r.epochs.slice(0, 20).map((e) => [both('pfCm_' + e.commitment), e.hash.slice(0, 20) + '…', e.rows, e.nonceMin === null ? '—' : `${e.nonceMin}–${e.nonceMax}`, e.forward ? both('pfFw_' + e.forward) : '—']));
     L.note('pfCommitmentNote');
+    if (r.listed === 'newest-first') L.note('pfListedNewest');
   }
   if (r.uniformity.length) {
     L.section('pfUniformity');

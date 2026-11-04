@@ -9,6 +9,8 @@ import { auditCsv, auditRounds, parsePfCsv } from '../../lab/core/pf/audit.js';
 import { makeSample } from '../../lab/core/pf/sample.js';
 import { adapterKey, ADAPTERS } from '../../lab/core/pf/registry.js';
 import { parseNumber, compareMultiplier } from '../../lab/core/pf/common.js';
+import { reportPayload, pfIssueDetail } from '../../lab/report.js';
+import { describeAdapter, getAdapter } from '../../lab/core/pf/registry.js';
 
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const csv = (cols, rows) => [cols.join(','), ...rows.map((r) => cols.map((c) => r[c] ?? '').join(','))].join('\n') + '\n';
@@ -471,4 +473,21 @@ test('numbers: a comma that may be a thousands separator is unreadable, not a di
     [null, null, null, null, 1.5, 12.34, 0.123, 1.2345, 1234, 2.5]);
   assert.strictEqual(compareMultiplier({ raw: 1234, cents: 123400, alt: [] }, '1,234'), 'unparsable');
   assert.strictEqual(compareMultiplier({ raw: 1234, cents: 123400, alt: [] }, '1234.00'), 'match');
+});
+
+test('report.json carries the per-row verdicts and the games covered; issue details follow the language', () => {
+  const f = stakeFixture();
+  const rows = f.rows.map((x) => ({ ...x }));
+  rows[10].result = (Number(rows[10].result) + 0.01).toFixed(2); // line 12
+  rows.splice(rows.findIndex((x) => x.client_seed === 'player-1' && x.nonce === 17), 1); // gap at nonce 17
+  const result = run(rows);
+  const session = { meta: {}, inputs: [], results: { fair: { mode: 'adapter', inputId: 'fair', adapter: describeAdapter(getAdapter('stake')), options: {}, result } } };
+  const out = reportPayload(session, '2026-11-04T00:00:00Z').results.fair;
+  assert.deepStrictEqual(out.problemRows.map((p) => [p.line, p.status, p.game]), [[12, 'mismatch', 'dice']]);
+  assert.deepStrictEqual(out.games, { dice: 119 });
+  const gap = result.issues.find((i) => i.code === 'NONCE_GAP');
+  assert.deepStrictEqual([pfIssueDetail(gap, 'ar'), pfIssueDetail(gap, 'en')], ['nonce: 17', 'nonce 17']);
+  const bi = { code: 'PARAMS_INVALID', detail: { message: { ar: 'يلزم ثلاث بذور للاعبين', en: 'three client seeds are needed' } } };
+  assert.deepStrictEqual([pfIssueDetail(bi, 'ar'), pfIssueDetail(bi, 'en')], ['يلزم ثلاث بذور للاعبين', 'three client seeds are needed']);
+  assert.strictEqual(pfIssueDetail({ code: 'ERA_UNSUPPORTED', detail: { era: 'vx' } }, 'ar'), 'حقبة Vx (توقيع BLS)');
 });

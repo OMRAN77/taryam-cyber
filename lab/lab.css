@@ -201,4 +201,5 @@ td.na { color: var(--muted); }
 .pf-selftest.verdict { color: var(--red); }
 td.warn { color: var(--amber); font-weight: 700; }
 #pfFields > * + * { margin-top: 12px; }
-#res-fair td.mono { white-space: normal; overflow-wrap: anywhere; max-width: 260px; }
+/* long hashes wrap, but a column never shrinks below 12 characters (phones scroll the table instead) */
+#res-fair td.mono { white-space: normal; overflow-wrap: anywhere; min-width: 12ch; max-width: 260px; }
