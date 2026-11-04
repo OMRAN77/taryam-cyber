@@ -13,6 +13,8 @@ import { auditDistribution, pmfFromExact, parsePmfCsv, examplePmf, pmfCsv, sampl
 import { analyzeLutFiles, makeSampleLut } from './core/lut.js';
 import { verifyReportPdf } from './core/report-sign.js';
 import { selfTest, listAdapters, disabledAdapters } from './core/pf/registry.js';
+import { attachRoundDistribution, capStats, topAward } from './core/round-dist.js';
+import { sessionFunnel } from './core/session.js';
 import { auditCsv } from './core/pf/audit.js';
 import { makeSample } from './core/pf/sample.js';
 
@@ -41,8 +43,29 @@ function slimNist(n) {
   };
 }
 
+// ---- Whole-round distribution, max-win cap and session funnel (P0-8) ----
+// The exact analysis, then the whole-round distribution from its per-spin entries
+// (result.round, or result.roundError when it cannot be computed).
+function exactWithRound(model, progress) {
+  let spins = null;
+  const result = analyzeExact(model, { onProgress: (p) => progress(0.75 * p), onEntries: (e) => { spins = e; } });
+  return attachRoundDistribution(result, model, spins, { onProgress: (p) => progress(0.75 + 0.25 * p) });
+}
+const ROUND_TASKS = {
+  // A max-win cap M on the whole-round pmf; top award = min(M, the largest win).
+  roundCap: ({ round, cap, rtp }) => {
+    const c = cap === null || cap === undefined || String(cap).trim() === '' ? null : capStats(round, String(cap).trim(), rtp);
+    return { cap: c, top: topAward(round, c) };
+  },
+  // n paid rounds at a flat bet; budget in bets (null: no ruin figure).
+  session: async ({ pmf, rtp, sd, rounds, budget, seed }, progress) => sessionFunnel(pmf, {
+    rounds, budget, rtp, sd, seed, rng: await prngFromSeed(String(seed ?? 'taryam-session')), onProgress: progress,
+  }),
+};
+// ---- end P0-8 ----
+
 const TASKS = {
-  exact: ({ raw }, progress) => analyzeExact(normalizeModel(raw), { onProgress: progress }),
+  exact: ({ raw }, progress) => exactWithRound(normalizeModel(raw), progress),
 
   actual: ({ bytes, options }) => {
     const log = parsePlayLog(decode(bytes));
@@ -160,6 +183,8 @@ const TASKS = {
   // ---- signed reports: check a report PDF (signatures, attached files) ----
   verifyReport: ({ bytes, trusted, originals }) => verifyReportPdf(bytes, { trustedFingerprint: trusted, originals: originals || [] }),
 };
+
+Object.assign(TASKS, ROUND_TASKS);
 
 self.onmessage = async (e) => {
   const { id, task, payload } = e.data;

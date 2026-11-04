@@ -95,8 +95,8 @@ test('RTP lab: distribution tests, version identification, e-process and report'
   assert.ok(await page.$('#dist-verdict.fail'));
   assert.match(await page.textContent('#dist-verdict'), /أرباح لا يستطيع التوزيع المعلن إنتاجها/);
 
-  // Theoretical model of Desert Gold: its pmf covers the paid spin (free spins retrigger),
-  // and the example log now has a trigger column, so the whole family runs.
+  // Theoretical model of Desert Gold: its pmf covers the whole round (free spins
+  // included, P0-8), and the example log has a trigger column, so the whole family runs.
   await page.click('#tab-theory');
   await page.click('[data-sample="desertGold"]');
   await page.click('#run-theory');
@@ -112,7 +112,7 @@ test('RTP lab: distribution tests, version identification, e-process and report'
   await runDist();
   assert.ok(await page.$('#dist-verdict.pass'), await page.textContent('#dist-verdict'));
   const dg = await page.textContent('#res-dist');
-  assert.match(dg, /اللفة المدفوعة وحدها/);
+  assert.match(dg, /الجولة كاملة/);
   assert.match(dg, /نسبة تفعيل الميزة/);
   // Retriggers: no max-win cap, so no "below declared" test is possible (Bahadur-Savage).
   assert.ok(await page.$('#dist-bet.warn'));

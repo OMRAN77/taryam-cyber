@@ -135,7 +135,7 @@ function applyLang() {
 }
 
 // ---------- theoretical RTP ----------
-const FORM = ['name', 'rows', 'reels', 'paytable', 'linePreset', 'lines', 'wild', 'scatter', 'fsEnabled', 'fsTrigger', 'fsSpins', 'fsMultiplier', 'fsRetrigger', 'fsReels'];
+const FORM = ['name', 'rows', 'reels', 'paytable', 'linePreset', 'lines', 'wild', 'scatter', 'fsEnabled', 'fsTrigger', 'fsSpins', 'fsMultiplier', 'fsRetrigger', 'fsReels', 'fsMaxSpins', 'fsMaxRetriggers'];
 function readForm() {
   const f = {};
   for (const k of FORM) { const n = $('#f-' + k); f[k] = n.type === 'checkbox' ? n.checked : n.value; }
@@ -151,6 +151,7 @@ function syncFormVisibility() {
   const fs = $('#f-fsEnabled').checked;
   $('#fsFields').hidden = !fs;
   $('#f-fsReels').closest('label').hidden = !fs;
+  $('#fsCapFields').hidden = !fs || !$('#f-fsRetrigger').checked; // caps apply with retrigger only (P0-8)
 }
 
 // ---------- weighted stops and reel sets (P0-5) ----------
@@ -242,7 +243,9 @@ async function runTheory() {
     const result = await runTask('exact', { raw }, progress);
     session.results.theoretical = { inputId: 'model', modelSha256, result, raw };
     delete session.results.montecarlo;
+    delete session.results.session; // the session funnel belongs to the previous model
     renderTheory();
+    renderSession();
     renderDistCandidates();
   });
 }
@@ -250,6 +253,7 @@ async function runTheory() {
 function renderTheory() {
   const box = $('#res-theory');
   box.replaceChildren();
+  renderRound();
   const th = session.results.theoretical;
   if (!th) return;
   const x = th.result, d = x.distribution;
@@ -264,6 +268,7 @@ function renderTheory() {
     mw && { k: 'maxWinBase', v: fmt(mw.base, 2) + '×' },
     mw && mw.perFreeSpin !== undefined && { k: 'maxWinFs', v: fmt(mw.perFreeSpin, 2) + '×' },
     mw && mw.perFreeSpin !== undefined && { k: 'maxWinTotal', v: mw.unbounded ? '∞' : fmt(mw.withFeature, 2) + '×', s: mw.unbounded ? tr('unbounded') : null },
+    mw && mw.perFreeSpin !== undefined && fsCaps(th.raw) && { k: 'roundCapsCard', v: capsText(fsCaps(th.raw)) },
     ways ? { k: 'waysCombinations', v: BigInt(x.model.combinations).toLocaleString('en-US'), s: `${tr('waysRange')}: ${BigInt(ways.base.minWays).toLocaleString('en-US')} – ${BigInt(ways.base.maxWays).toLocaleString('en-US')}`, cls: 'ways-text' }
       : { k: 'combinations', v: BigInt(x.model.combinations).toLocaleString('en-US'), s: x.model.reels + '×' + x.model.rows + ' · ' + x.model.lines + ' ' + tr('lines') },
     x.model.weighted && { k: 'weightedModel', v: tr('weightedYes'), s: tr('reelSetsCount') + ': ' + x.model.reelSets.length + (x.model.freeSpinReelSets ? ' · ' + tr('fsReelSetsCount') + ': ' + x.model.freeSpinReelSets.length : '') },
@@ -303,6 +308,218 @@ function renderTheory() {
       { v: b.to === 0 ? '0' : b.to === null ? '≥ ' + b.from : b.from + ' – ' + b.to, cls: 'num' }, { v: pct(b.probability.value, 4), cls: 'num' }, { v: bar(b.probability.value / maxP) },
     ])));
   }
+}
+
+// ---------- whole-round distribution, max-win cap, session funnel (P0-8) ----------
+// A bound rounded up to two significant digits, so "< x" stays an upper bound.
+function upper2(v) {
+  if (!(v > 0)) return '0';
+  let e = Math.floor(Math.log10(v));
+  let m = Math.ceil(v / 10 ** (e - 1) - 1e-9);
+  if (m >= 100) { m = 10; e += 1; }
+  return (m / 10).toFixed(1) + 'e' + e;
+}
+// A probability { value, method: exact | fft | bound, below }: never a number under the floor.
+const probText = (p) => {
+  if (!p) return '—';
+  if (p.method === 'bound') return '< ' + upper2(p.below);
+  if (p.value === 0) return '0';
+  return p.value >= 1e-3 ? pct(p.value, 3) : p.value.toExponential(3);
+};
+const bigCount = (n) => (n >= 1e9 ? n.toExponential(2) : fmt(n, n < 100 ? 2 : 0));
+const oneInText = (p) => {
+  if (!p) return '—';
+  if (p.method === 'bound') return '> ' + bigCount(1 / p.below);
+  return p.value > 0 ? bigCount(1 / p.value) : '—';
+};
+const pctSmall = (v, d = 2) => (v === 0 ? '0%' : v < 1e-4 ? (v * 100).toExponential(2) + '%' : pct(v, d));
+const quantileLabel = (q) => (q * 100).toFixed(q >= 0.9999 ? 2 : q >= 0.999 ? 1 : 0) + '%';
+// The free-spin caps of a raw model (P0-8), or null.
+const fsCaps = (raw) => {
+  const f = raw && raw.scatter && typeof raw.scatter === 'object' ? raw.scatter.freeSpins : null;
+  const has = (v) => v !== undefined && v !== null && v !== '';
+  return f && (has(f.maxSpins) || has(f.maxRetriggers)) ? { maxSpins: has(f.maxSpins) ? f.maxSpins : null, maxRetriggers: has(f.maxRetriggers) ? f.maxRetriggers : null } : null;
+};
+const capsText = (c) => [c.maxSpins !== null ? `${tr('fsMaxSpinsShort')}: ${c.maxSpins}` : null, c.maxRetriggers !== null ? `${tr('fsMaxRetriggersShort')}: ${c.maxRetriggers}` : null].filter(Boolean).join(' · ');
+
+function renderRound() {
+  const sec = $('#round'), box = $('#res-round');
+  box.replaceChildren();
+  const th = session.results.theoretical;
+  const x = th && th.result;
+  sec.hidden = !x || (!x.round && !x.roundError);
+  renderRoundCap();
+  if (sec.hidden) return;
+  if (x.roundError) {
+    const e = x.roundError;
+    box.append(el('div', { class: 'verdict ' + (e.internal ? 'fail' : 'warn'), id: 'round-error' }, tr('roundUnavailable') + ': ' + pick([e.ar, e.en])));
+    if (e.tooLarge) box.append(el('p', { class: 'muted small' }, tr('roundUseMc')));
+    return;
+  }
+  const r = x.round;
+  const worst = Math.max(...Object.values(r.checks).map((c) => c.relativeError));
+  box.append(cards([
+    { k: 'roundMethod', v: tr('roundMethod_' + r.method), s: r.caps ? capsText(r.caps) : null },
+    r.maxWin.bounded
+      ? { k: 'roundTop', v: fmt(r.maxWin.x, 2) + '×', s: `${tr('probability')}: ${probText(r.maxWin)}` }
+      : { k: 'roundTop', v: tr('roundUnboundedTop'), s: `${tr('roundLargestShown')}: ${fmt(r.maxWin.largestAboveFloor, 2)}×` },
+  ]));
+  if (!r.exact) {
+    box.append(el('p', { class: 'muted small', id: 'round-precision' }, [
+      `${tr('roundGrid')}: ${r.grid.size.toLocaleString('en-US')}`, `${tr('roundAlias')}: ${r.aliasBound ? upper2(r.aliasBound) : '0'}`,
+      `${tr('roundFloor')}: ${upper2(r.floor)}`, `${tr('roundChecks')}: ${worst.toExponential(1)}`,
+    ].join(' · ')));
+  }
+  const rows = r.thresholds.map((t) => [{ v: iso('≥ ' + fmt(t.x, 0) + '×'), cls: 'num' }, { v: probText(t), cls: 'mono' }, { v: oneInText(t), cls: 'num' }, tr('roundSrc_' + t.method)]);
+  if (r.maxWin.bounded) rows.push([{ v: tr('roundTop') + ' ' + iso(fmt(r.maxWin.x, 2) + '×'), cls: 'num' }, { v: probText(r.maxWin), cls: 'mono' }, { v: oneInText(r.maxWin), cls: 'num' }, tr('roundSrc_' + r.maxWin.method)]);
+  const big = table(['roundWinCol', 'probability', 'roundOneInCol', 'roundSource'], rows);
+  big.id = 'round-big';
+  box.append(sub('roundBig'), big);
+  const qt = table(['roundQuantile', 'roundWinCol'], r.quantiles.map((q) => [{ v: quantileLabel(q.q), cls: 'num' }, { v: fmt(q.x, 2) + '×', cls: 'num' }]));
+  qt.id = 'round-quantiles';
+  box.append(sub('roundQuantiles'), qt, el('p', { class: 'muted small' }, tr('roundNote')));
+}
+
+function renderRoundCap() {
+  const box = $('#res-roundcap');
+  box.replaceChildren();
+  const th = session.results.theoretical;
+  const c = th && th.cap;
+  if (!c) return;
+  const res = c.result;
+  if (res.cap) {
+    const k = res.cap;
+    // An exact result has no upper bound on what the cap removes.
+    const upTo = typeof k.lost.upper === 'number' && pctSmall(k.lost.upper, 4) !== pctSmall(k.lost.value, 4) ? `${tr('roundUpTo')} ${pctSmall(k.lost.upper, 4)}` : null;
+    box.append(cards([
+      { k: 'roundCapM', v: iso(fmt(k.M, 4) + '×') },
+      { k: 'roundCapped', v: (k.rtpCapped.value * 100).toFixed(4) + '%', title: k.rtpCapped.fraction, cls: 'accent' },
+      { k: 'roundLost', v: pctSmall(k.lost.value, 4), s: upTo },
+      { k: 'roundReach', v: probText(k.reach), s: `${tr('roundOneInCol')}: ${oneInText(k.reach)}` },
+    ]));
+    box.firstChild.id = 'round-cap-cards';
+    if (k.aboveMax) box.append(el('p', { class: 'muted small', id: 'round-cap-above' }, tr('roundCapAboveMax')));
+    box.append(el('p', { class: 'muted small' }, tr('roundCapNote')));
+  }
+  if (!c.odds) return;
+  if (!res.top) { box.append(el('div', { class: 'verdict warn', id: 'round-needcap' }, tr('roundNeedCap'))); return; }
+  const ch = res.top.checks;
+  const cell = (pass) => (pass === true ? { v: tr('roundPass'), cls: 'pass' } : pass === false ? { v: tr('roundFail'), cls: 'fail' } : { v: tr('roundUndecided'), cls: 'na' });
+  const tb = table(['roundRule', 'result'], [[tr('roundRuleGli'), cell(ch.gli19.pass)], [tr('roundRulePa'), cell(ch.pa.pass)]]);
+  tb.id = 'round-odds';
+  box.append(sub('roundOddsTitle'), cards([{ k: 'roundTopAward', v: fmt(res.top.x, 2) + '×', s: `${tr('probability')}: ${probText(res.top.prob)} · ${tr('roundOneInCol')}: ${oneInText(res.top.prob)}` }]), tb, el('p', { class: 'muted small' }, tr('roundOddsNote')));
+}
+
+async function runRoundCap() {
+  await withTask('round', async () => {
+    const th = session.results.theoretical;
+    if (!th || !th.result.round) throw { ar: t('roundNeedRun', 'ar'), en: t('roundNeedRun', 'en') };
+    const cap = $('#r-cap').value.trim();
+    // The previous cap's figures go now: next to an error they would belong to another M
+    // (and would stay in the report).
+    th.cap = null;
+    renderRoundCap();
+    const result = await runTask('roundCap', { round: th.result.round, cap: cap || null, rtp: th.result.rtp.fraction });
+    th.cap = { M: cap || null, odds: $('#r-odds').checked, result };
+    renderRoundCap();
+  });
+}
+
+// A session probability: the value (± its standard error), "< bound" when it is under
+// the precision floor, or a 95% bound when Monte Carlo saw it in no session (or in all),
+// with a note saying which. Bounds are rounded outwards.
+const pctUp = (v) => (v * 100 >= 0.01 ? (Math.ceil(v * 1e4 - 1e-9) / 100).toFixed(2) + '%' : upper2(v * 100) + '%');
+const pctDown = (v) => (Math.floor(v * 1e4 + 1e-9) / 100).toFixed(2) + '%';
+function sessProb(p, { below = null, se = null, upper95, lower95 } = {}) {
+  if (p === null || p === undefined) return { v: '< ' + pctUp(below), note: tr('sessBelowFloor') };
+  if (typeof upper95 === 'number') return { v: '< ' + pctUp(upper95), note: tr('sessNone95') };
+  if (typeof lower95 === 'number') return { v: '> ' + pctDown(lower95), note: tr('sessAll95') };
+  return { v: pctSmall(p) + (se !== undefined && se !== null ? ' ± ' + pctSmall(se) : ''), note: null };
+}
+
+const readPositive = (text) => {
+  let f = null;
+  try { f = Fraction.of(String(text).trim().replace(',', '.')); } catch (e) { /* not a number */ }
+  return f && f.cmp(0) > 0 ? f : null;
+};
+async function runSession() {
+  await withTask('session', async (progress) => {
+    const th = session.results.theoretical;
+    if (!th) throw { ar: t('roundNeedRun', 'ar'), en: t('roundNeedRun', 'en') };
+    if (!th.result.round) throw { ar: t('sessNoRound', 'ar'), en: t('sessNoRound', 'en') };
+    const rounds = Number($('#s-rounds').value);
+    const betText = $('#s-bet').value.trim(), budgetText = $('#s-budget').value.trim();
+    const bet = readPositive(betText);
+    if (!bet) throw { ar: t('sessBetInvalid', 'ar'), en: t('sessBetInvalid', 'en') };
+    let budget = null;
+    if (budgetText) {
+      const b = readPositive(budgetText);
+      if (!b) throw { ar: t('sessBudgetInvalid', 'ar'), en: t('sessBudgetInvalid', 'en') };
+      budget = b.div(bet).toString(); // in bets, exact
+    }
+    const seed = $('#s-seed').value;
+    const result = await runTask('session', { pmf: th.result.round.pmf, rtp: th.result.rtp.fraction, sd: th.result.distribution.sd, rounds, budget, seed }, progress);
+    // The bet and budget as read (a decimal comma becomes a point), so every figure,
+    // the report and report.json use the same numbers.
+    const asRead = (s) => s.replace(',', '.');
+    session.results.session = { inputId: 'model', modelSha256: th.modelSha256, options: { rounds, bet: asRead(betText), budget: budgetText ? asRead(budgetText) : null, budgetInBets: budget, seed }, result };
+    renderSession();
+    renderReportSections();
+  });
+}
+
+// The funnel: bands of 90% and 50% of sessions, the median and the expected result.
+function funnelChart(r, bet) {
+  const W = 640, H = 240, L = 58, R = 10, T = 12, B = 28;
+  const zero = { rounds: 0, mean: 0, percentiles: r.percentiles.map((p) => ({ q: p.q, net: 0 })) };
+  const pts = [zero, ...r.funnel];
+  const at = (p, q) => p.percentiles.find((x) => x.q === q).net * bet;
+  const all = pts.flatMap((p) => [at(p, 0.05), at(p, 0.95), p.mean * bet]);
+  const lo = Math.min(0, ...all), hi = Math.max(0, ...all), span = hi - lo || 1;
+  const X = (n) => (L + ((W - L - R) * n) / r.rounds).toFixed(1), Y = (v) => (T + ((H - T - B) * (hi - v)) / span).toFixed(1);
+  const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart funnel', role: 'img', 'aria-label': tr('sessFunnel'), id: 'sess-funnel' });
+  const band = (qa, qb, cls) => s.append(svg('polygon', { class: cls, points: [...pts.map((p) => `${X(p.rounds)},${Y(at(p, qb))}`), ...pts.slice().reverse().map((p) => `${X(p.rounds)},${Y(at(p, qa))}`)].join(' ') }));
+  band(0.05, 0.95, 'f90');
+  band(0.25, 0.75, 'f50');
+  s.append(svg('line', { x1: L, x2: W - R, y1: Y(0), y2: Y(0), class: 'fzero' }));
+  s.append(svg('polyline', { class: 'fmean', points: pts.map((p) => `${X(p.rounds)},${Y(p.mean * bet)}`).join(' ') }));
+  s.append(svg('polyline', { class: 'fmedian', points: pts.map((p) => `${X(p.rounds)},${Y(at(p, 0.5))}`).join(' ') }));
+  for (const v of [hi, 0, lo]) s.append(svg('text', { x: L - 6, y: Number(Y(v)) + 4, 'text-anchor': 'end' }, fmt(v, 0)));
+  s.append(svg('text', { x: L, y: H - 8 }, '0'));
+  s.append(svg('text', { x: W - R, y: H - 8, 'text-anchor': 'end' }, r.rounds.toLocaleString('en-US')));
+  const key = (cls, k) => el('span', { class: 'fkey' }, el('i', { class: cls }), tr(k));
+  return el('figure', { class: 'funnel-wrap' }, s, el('figcaption', { class: 'muted small' }, tr('sessFunnel'), ' ', key('f90', 'sessBand90'), key('f50', 'sessBand50'), key('fmedian', 'sessMedianLine'), key('fmean', 'sessMeanLine')));
+}
+
+function renderSession() {
+  const sec = $('#session'), box = $('#res-session');
+  box.replaceChildren();
+  const th = session.results.theoretical;
+  sec.hidden = !th;
+  if (!th) return;
+  if (!th.result.round) { box.append(el('div', { class: 'verdict warn' }, tr('sessNoRound'))); return; }
+  const s = session.results.session;
+  if (!s) return;
+  const r = s.result, bet = Number(String(s.options.bet).replace(',', '.'));
+  const money = (v) => iso((v > 0 ? '+' : '') + fmt(v * bet, 2)); // a sign stays in front in Arabic text
+  const ahead = sessProb(r.pAhead, { below: r.pAheadBelow, se: r.pAheadSe, upper95: r.pAheadUpper95, lower95: r.pAheadLower95 });
+  const ruin = r.ruin && sessProb(r.ruin.p, r.ruin);
+  box.append(cards([
+    { k: 'sessExpectedLoss', v: fmt(r.expectedLoss.value * bet, 2), s: iso(`${r.rounds.toLocaleString('en-US')} × ${s.options.bet} × (1 − ${th.result.rtp.percent}%)`), cls: 'bad' },
+    { k: 'sessMedian', v: money(r.median), cls: r.median < 0 ? 'bad' : '' },
+    { k: 'sessAhead', v: ahead.v, s: [ahead.note, r.normal ? `${tr('sessNormal')}: ${pctSmall(r.normal.pAhead)}` : null].filter(Boolean).join(' · ') || null },
+    r.ruin && { k: 'sessRuin', v: ruin.v, s: [ruin.note, tr('sessRuinMethod_' + r.ruin.method)].filter(Boolean).join(' · ') },
+    r.nStar && { k: 'sessNStar', v: r.nStar.rounds.toLocaleString('en-US'), s: tr('sessNStarNote') },
+  ]));
+  box.firstChild.id = 'sess-cards';
+  // One statement per method: the range (and the chance to finish ahead), then the budget.
+  const mc = r.sessions ? ` (${tr('sessSessions')}: ${r.sessions.toLocaleString('en-US')} · ${tr('seed')}: ${s.options.seed})` : '';
+  box.append(el('p', { class: 'muted small', id: 'sess-method' }, `${tr('sessMethodRange')}: ${tr('sessMethod_' + r.method)}` + (r.method === 'mc' ? mc : '')
+    + (r.ruin ? ` · ${tr('sessMethodRuin')}: ${tr('sessRuinMethod_' + r.ruin.method)}` + (r.ruin.method === 'mc' && r.method !== 'mc' ? mc : '') : '')
+    + (r.droppedMass > 0 ? ` · ${tr('sessDropped')}: ${upper2(r.droppedMass)}` : '')));
+  const tb = table(['sessPct', 'sessNet'], r.percentiles.map((p) => [{ v: pct(p.q, 0), cls: 'num' }, { v: money(p.net), cls: 'num' }]));
+  tb.id = 'sess-percentiles';
+  box.append(sub('sessPercentiles'), tb, funnelChart(r, bet), el('p', { class: 'muted small' }, tr('sessNote')));
 }
 
 // ---------- observed RTP ----------
@@ -435,7 +652,9 @@ async function runDist() {
       const d = c.th.result.distribution;
       if (c.th.result.scope === 'firstDrop') throw { ar: t('distFirstDrop', 'ar'), en: t('distFirstDrop', 'en') };
       if (!d || !d.pmf) throw { ar: t('distNoModelPmf', 'ar'), en: t('distNoModelPmf', 'en') };
-      return { kind: 'exact', label: c.label, pmf: d.pmf };
+      // The whole round (free spins included) when available (P0-8); else the paid spin.
+      const round = c.th.result.round;
+      return { kind: 'exact', label: c.label, pmf: round && round.pmf ? round.pmf : d.pmf };
     });
     const refIndex = Math.max(0, list.findIndex((c) => c.key === $('#d-ref').value));
     // The theoretical model gives sigma, M and the RTP only when it is the reference:
@@ -463,7 +682,7 @@ const rounds = (v) => (v === null || v === undefined ? '—' : !Number.isFinite(
 const times = (x) => fmt(x, 4) + '×';
 function binLabel(b) {
   const range = b.lo === null ? null : b.lo === b.hi ? times(b.lo) : `${fmt(b.lo, 4)} – ${times(b.hi)}`;
-  return [range, b.triggered ? tr('distTriggered') : null].filter(Boolean).join(' + ');
+  return [range, b.triggered ? tr('distTriggered') : null, b.rest ? tr('distRestCell') : null].filter(Boolean).join(' + ');
 }
 // Minimum detectable effect as a card: "±0.60%", "w = 0.0089 · relative change in
 // the share of rounds with no win · at Holm's strictest level (α ÷ m): 0.001667".
@@ -1115,7 +1334,8 @@ function renderLut() {
 }
 
 // ---------- report ----------
-const SECTION_KEYS = { theoretical: 'tabTheory', actual: 'tabActual', distTests: 'distTitle', rng: 'tabRng', fair: 'tabFair', montecarlo: 'tabMc', lut: 'tabLut' };
+// 'round' only names a headline figure of the theoretical section (no result of its own).
+const SECTION_KEYS = { theoretical: 'tabTheory', actual: 'tabActual', distTests: 'distTitle', rng: 'tabRng', fair: 'tabFair', montecarlo: 'tabMc', lut: 'tabLut', session: 'sessTitle', round: 'roundTitle' };
 function renderReportSections() {
   const names = Object.keys(SECTION_KEYS).filter((k) => session.results[k]).map((k) => tr(SECTION_KEYS[k]));
   $('#rep-sections').textContent = names.length ? names.join(' · ') : tr('sectionsNone');
@@ -1218,6 +1438,8 @@ function figureText(f) {
   if (f.section === 'distTests') return [f.value ? tr('distB_' + f.value) : null, f.rounds !== null ? `${tr('roundsChecked')}: ${n(f.rounds)}` : null].filter(Boolean).join(' · ') || '—';
   if (f.section === 'montecarlo') return [f.value, f.scope === 'firstDrop' ? tr('firstDropShort') : null, f.spins !== null ? `${tr('spins')}: ${n(f.spins)}` : null].filter(Boolean).join(' · ');
   if (f.section === 'theoretical') return [f.value, f.scope === 'firstDrop' ? tr('firstDropShort') : null].filter(Boolean).join(' · ');
+  if (f.section === 'round') return [f.value ? `${tr('figRoundTop')}: ${f.value}` : null, f.oneIn ? `${tr('lutOneIn')} ${f.oneIn}` : null].filter(Boolean).join(' · ') || '—';
+  if (f.section === 'session') return [`${tr('figSessAhead')}: ${f.value}`, `${tr('sessRounds')}: ${n(f.rounds)}`].join(' · ');
   return f.value ?? '—';
 }
 function renderVerify() {
@@ -1260,6 +1482,7 @@ function renderVerify() {
 
 function renderAll() {
   renderTheory(); renderActual(); renderRng(); renderFair(); renderMc(); renderMcModel(); renderLut(); renderReportSections(); renderReport();
+  renderSession();
   renderDistCandidates(); renderDist();
   syncFairFields();
   if (signerState.key || signerState.error) renderSigningKey();
@@ -1274,6 +1497,9 @@ function init() {
   document.querySelectorAll('[data-sample]').forEach((b) => b.addEventListener('click', () => { setModel(samples[b.dataset.sample]); showError('theory', null); }));
   $('#f-linePreset').addEventListener('change', syncFormVisibility);
   $('#f-fsEnabled').addEventListener('change', syncFormVisibility);
+  $('#f-fsRetrigger').addEventListener('change', syncFormVisibility);
+  $('#run-round').addEventListener('click', runRoundCap);
+  $('#run-session').addEventListener('click', runSession);
   $('#modelFile').addEventListener('change', async (e) => {
     showError('theory', null);
     try {
