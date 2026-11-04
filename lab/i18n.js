@@ -554,6 +554,7 @@ const S = {
   refUseSts: ['الكود المرجعي للمقارنة', 'Reference code compared'],
   refUseHmac: ['العدالة المثبتة', 'Provably fair'],
   refUseMc: ['مولّد مونت كارلو', 'Monte Carlo generator'],
+  refUseLut: ['صيغة جداول النتائج (LUT) وحدود Stake', 'Outcome-table (LUT) format and Stake limits'],
   deviationsTitle: ['انحرافات موثقة عن المراجع', 'Documented deviations from the references'],
   devOverlapping: ['القوالب المتداخلة (2.8): تُستخدم احتمالات الفئات الدقيقة من القسم 3.8، محسوبة بالبرمجة الديناميكية على آلة حالات القالب (0.364091، 0.185659، 0.139381، 0.100571، 0.070432، 0.139865 عند m = 9 وM = 1032 وK = 5). الكود المرجعي STS 2.1.2 والمثال المحلول في 2.8.8 يستخدمان تقريبًا أقدم، فتختلف قيمة P هنا عن قيمتهما.', 'Overlapping template (2.8): the exact class probabilities of section 3.8 are used, computed by dynamic programming over the template automaton (m = 9, M = 1032, K = 5: 0.364091, 0.185659, 0.139381, 0.100571, 0.070432, 0.139865). STS 2.1.2 and the worked example of 2.8.8 use an older approximation, so this P-value differs from theirs.'],
   devLinearPi0: ['التعقيد الخطي: π₀ = 0.01047 كما في الكود المرجعي، بينما يعطي جدول المنشور 1/96 = 0.010417.', 'Linear complexity: π₀ = 0.01047 as in the reference code; the publication\'s table gives 1/96 = 0.010417.'],

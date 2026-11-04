@@ -42,7 +42,8 @@ const REFERENCES = [
   { id: 'NIST SP 800-22 Rev. 1a', title: 'A Statistical Test Suite for Random and Pseudorandom Number Generators (April 2010)', usedFor: 'RNG tests', when: (s) => !!s.results.rng },
   { id: 'NIST STS 2.1.2', title: 'reference implementation of SP 800-22', usedFor: 'compared against; see deviations', when: (s) => !!s.results.rng },
   { id: 'RFC 2104', title: 'HMAC', usedFor: 'HMAC-SHA256 outcomes of provably-fair rounds', when: (s) => s.results.fair && s.results.fair.scheme !== 'chain' },
-  { id: 'xoshiro128** 1.1', title: 'Blackman & Vigna, scrambled linear generator', usedFor: 'Monte Carlo generator', when: (s) => !!s.results.montecarlo },
+  { id: 'xoshiro128** 1.1', title: 'Blackman & Vigna, scrambled linear generator', usedFor: 'Monte Carlo generator (simulation, and the P-values of the distribution tests)', when: (s) => !!(s.results.montecarlo || s.results.distTests) },
+  { id: 'Stake Engine math-sdk', title: 'StakeEngine/math-sdk (MIT): docs/rgs_docs/data_format.md and utils/rgs_verification.py', usedFor: 'outcome-table (LUT) format and RGS limits; the commit is in parameters.lut.rgsProfile', when: (s) => !!s.results.lut },
 ];
 
 const nistApplicable = (s, id) => !!(s.results.rng && s.results.rng.nist.results.some((t) => t.id === id && t.applicable));
@@ -78,6 +79,16 @@ export const DEVIATIONS = [
   },
 ];
 
+// A provably-fair run is either the custom mode (a scheme) or an operator adapter
+// (provably fair v2), which has no scheme: it is named by its key and version.
+function fairParameters(f) {
+  if (f.mode === 'adapter') {
+    const a = f.adapter || {};
+    return { input: f.inputId, mode: 'adapter', adapter: { key: a.key ?? null, id: a.id ?? null, version: a.version ?? null }, options: f.options || null };
+  }
+  return { input: f.inputId, scheme: f.scheme ?? null, options: f.options || null };
+}
+
 // session: { inputs (from planAttachments), results, signer, attachLimit (the limit
 // planAttachments was given; the default when absent) }.
 export function buildManifest(session) {
@@ -95,7 +106,12 @@ export function buildManifest(session) {
     parameters: {
       actual: r.actual ? { input: r.actual.inputId, options: r.actual.options || null } : null,
       rng: r.rng ? { input: r.rng.inputId, options: r.rng.options || null } : null,
-      fair: r.fair ? { input: r.fair.inputId, scheme: r.fair.scheme, options: r.fair.options || null } : null,
+      fair: r.fair ? fairParameters(r.fair) : null,
+      distTests: r.distTests ? {
+        input: r.distTests.inputId, inputs: r.distTests.inputIds || [], options: r.distTests.options || null,
+        generator: (r.distTests.result && r.distTests.result.generator) || null,
+      } : null,
+      lut: r.lut ? { inputs: r.lut.inputIds || [], rgsProfile: (r.lut.result && r.lut.result.profile && r.lut.result.profile.profile) || null } : null,
     },
     references: REFERENCES.filter((x) => !x.when || x.when(session)).map(({ id, title, usedFor }) => ({ id, title, usedFor })),
     deviations: DEVIATIONS.filter((x) => x.when(session)).map(({ id, reference, text }) => ({ id, reference, text })),

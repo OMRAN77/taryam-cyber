@@ -455,11 +455,13 @@ export function formFromModel(raw) {
 
 // Stable JSON (sorted keys) so the same model always hashes the same way. A BigInt
 // (e.g. a weight above 2^53) is written as a string of its digits.
+// Like JSON.stringify, a member whose value is undefined is left out and an
+// undefined array element is written as null, so the text is always valid JSON.
 export function canonicalJson(value) {
   if (typeof value === 'bigint') return JSON.stringify(value.toString());
-  if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']';
+  if (Array.isArray(value)) return '[' + value.map((v) => (v === undefined ? 'null' : canonicalJson(v))).join(',') + ']';
   if (value && typeof value === 'object') {
-    return '{' + Object.keys(value).sort().map((k) => JSON.stringify(k) + ':' + canonicalJson(value[k])).join(',') + '}';
+    return '{' + Object.keys(value).sort().filter((k) => value[k] !== undefined).map((k) => JSON.stringify(k) + ':' + canonicalJson(value[k])).join(',') + '}';
   }
   return JSON.stringify(value);
 }

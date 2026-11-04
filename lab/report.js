@@ -864,6 +864,7 @@ function lutAscii(lines, x) {
 const REFERENCE_USE = {
   'FIPS 180-4': 'refUseHash', 'PDF 1.4': 'refUsePdf', 'RFC 8032': 'refUseSignature', 'FIPS 186-5': 'refUseSignature',
   'RFC 5280': 'refUseSpki', 'NIST SP 800-22 Rev. 1a': 'refUseNist', 'NIST STS 2.1.2': 'refUseSts', 'RFC 2104': 'refUseHmac', 'xoshiro128** 1.1': 'refUseMc',
+  'Stake Engine math-sdk': 'refUseLut',
 };
 const DEVIATION_TEXT = {
   'nist-overlapping-exact': 'devOverlapping', 'nist-linear-pi0': 'devLinearPi0', 'nist-cusum-bounds': 'devCusum',

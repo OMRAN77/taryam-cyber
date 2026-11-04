@@ -108,9 +108,16 @@ function figures(report) {
   const out = [];
   if (r.theoretical && r.theoretical.rtp) out.push({ section: 'theoretical', value: r.theoretical.rtp.percent + '%' });
   if (r.actual) out.push({ section: 'actual', value: pct(r.actual.rtp), rounds: r.actual.rounds ?? null, verdict: (r.actual.declared && r.actual.declared.verdict) || null });
+  if (r.distTests) out.push({ section: 'distTests', value: (r.distTests.fit && r.distTests.fit.verdict) || null, rounds: r.distTests.rounds ?? null });
   if (r.rng) out.push({ section: 'rng', value: r.rng.bits ?? null, pass: r.rng.family ? !!r.rng.family.pass : null });
-  if (r.fair) out.push({ section: 'fair', value: r.fair.scheme || null, pass: !!r.fair.ok });
+  // Provably fair v2 runs (an operator adapter) carry a verdict code, not ok/scheme.
+  if (r.fair && r.fair.mode === 'adapter') {
+    const code = (r.fair.verdict && r.fair.verdict.code) || null;
+    const a = r.fair.adapter || {};
+    out.push({ section: 'fair', value: a.key || null, verdict: code, pass: code === null ? null : code === 'PASS' });
+  } else if (r.fair) out.push({ section: 'fair', value: r.fair.scheme || null, pass: !!r.fair.ok });
   if (r.montecarlo && r.montecarlo.result) out.push({ section: 'montecarlo', value: pct(r.montecarlo.result.rtp), spins: r.montecarlo.spins ?? null });
+  if (r.lut && Array.isArray(r.lut.modes)) out.push({ section: 'lut', value: r.lut.modes.map((m) => `${m.name}: ${m.rtp && m.rtp.percent}%`).join(' · ') || null });
   return out;
 }
 

@@ -1151,7 +1151,9 @@ function figureText(f) {
   const n = (x) => Number(x).toLocaleString('en-US');
   if (f.section === 'actual') return [f.value, f.rounds !== null ? `${tr('roundsChecked')}: ${n(f.rounds)}` : null, f.verdict && VERDICT[f.verdict] ? pick(VERDICT[f.verdict]) : null].filter(Boolean).join(' · ');
   if (f.section === 'rng') return [f.pass === null ? null : tr(f.pass ? 'familyPassShort' : 'familyFailShort'), f.value !== null ? `${tr('bitsCount')}: ${n(f.value)}` : null].filter(Boolean).join(' · ');
+  if (f.section === 'fair' && f.verdict) return [f.value, tr('pfV_' + f.verdict)].filter(Boolean).join(' · ');
   if (f.section === 'fair') return tr(f.pass ? 'allVerified' : 'someFailed');
+  if (f.section === 'distTests') return [f.value ? tr('distB_' + f.value) : null, f.rounds !== null ? `${tr('roundsChecked')}: ${n(f.rounds)}` : null].filter(Boolean).join(' · ') || '—';
   if (f.section === 'montecarlo') return [f.value, f.spins !== null ? `${tr('spins')}: ${n(f.spins)}` : null].filter(Boolean).join(' · ');
   return f.value ?? '—';
 }
