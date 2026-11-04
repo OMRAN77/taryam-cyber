@@ -305,6 +305,7 @@ function theorySection(L, th) {
     L.kv('expectedSpins', num(f.expectedSpinsPerTrigger.value, 4));
     L.kv('evPerTrigger', num(f.evPerTrigger.value, 4) + '×');
   }
+  if (x.model.weighted) weightsSection(L, x.model);
   L.section('symbolTable');
   const rows = [];
   for (const s of x.symbols) for (const b of s.byCount) rows.push([s.symbol + (s.isWild ? ' (wild)' : ''), b.count, num(b.pay, 4), b.probabilityPerLine.value.toExponential(4), b.rtp.percent + '%']);
@@ -318,6 +319,32 @@ function theorySection(L, th) {
     L.table([{ key: 'range', w: 0.5 }, { key: 'probability', w: 0.5, mono: true }],
       d.buckets.map((b) => [b.to === 0 ? '0' : b.to === null ? `≥ ${b.from}` : `${b.from} – ${b.to}`, pct(b.probability.value, 4)]));
   }
+}
+
+// ---- Weighted stops and reel sets (P0-5) ----
+const bigNum = (s) => BigInt(s).toLocaleString('en-US');
+// One row per reel of each set, so no cell holds more than one number: L.table cuts a
+// cell that does not fit with '…'. The widest values still fit their columns at 19px
+// mono: a set weight up to 2^64 - 1 (26 characters with commas) and a reel total up to
+// 10,000 stops x (2^64 - 1) (31 characters).
+function reelSetsTable(L, sets) {
+  const rows = [];
+  sets.forEach((st, i) => st.reelTotals.forEach((total, k) => rows.push(k === 0
+    ? [i + 1, bigNum(st.weight), st.probability.percent + '%', k + 1, st.stops[k], bigNum(total)]
+    : ['', '', '', k + 1, st.stops[k], bigNum(total)])));
+  L.table([{ key: 'reelSet', w: 0.1 }, { key: 'setWeight', w: 0.25, mono: true }, { key: 'probability', w: 0.15, mono: true },
+    { key: 'reelNo', w: 0.08 }, { key: 'reelStops', w: 0.12, mono: true }, { key: 'reelTotal', w: 0.3, mono: true }], rows);
+}
+function weightsSection(L, m) {
+  L.section('weightedModel');
+  L.kv('totalWeight', bigNum(m.totalWeight), { mono: true });
+  L.kv('reelSetsCount', m.reelSets.length);
+  reelSetsTable(L, m.reelSets);
+  if (m.freeSpinReelSets) {
+    L.kv('fsReelSetsCount', m.freeSpinReelSets.length);
+    reelSetsTable(L, m.freeSpinReelSets);
+  }
+  L.note('weightsNote');
 }
 
 function actualSection(L, ac) {
@@ -440,7 +467,7 @@ function mcSection(L, mc) {
 }
 
 // Pretty JSON, but arrays of plain values stay on one line (reel strips, pay rows).
-function compactJson(v, indent = '') {
+export function compactJson(v, indent = '') {
   if (Array.isArray(v)) {
     if (v.every((x) => x === null || typeof x !== 'object')) return JSON.stringify(v);
     return '[\n' + v.map((x) => indent + '  ' + compactJson(x, indent + '  ')).join(',\n') + '\n' + indent + ']';
@@ -483,6 +510,10 @@ function asciiSummary(payload, reportId, digest) {
   lines.push('', 'Results:');
   const r = payload.results;
   if (r.theoretical) lines.push(`  Theoretical RTP: ${r.theoretical.rtp.percent}% = ${r.theoretical.rtp.fraction.length > 80 ? r.theoretical.rtp.fraction.slice(0, 77) + '...' : r.theoretical.rtp.fraction}`);
+  if (r.theoretical && r.theoretical.model.weighted) {
+    const m = r.theoretical.model;
+    lines.push(`  Weighted reels: base reel sets ${m.reelSets.length}` + (m.freeSpinReelSets ? `, free-spin reel sets ${m.freeSpinReelSets.length}` : '') + `; exact for the weights as entered, not a certification`);
+  }
   if (r.theoretical && r.theoretical.distribution) lines.push(`  Hit frequency ${(r.theoretical.distribution.hitFrequency.value * 100).toFixed(4)}%, SD ${r.theoretical.distribution.sd.toFixed(4)} x bet`);
   if (r.actual) lines.push(`  Observed RTP: ${(r.actual.rtp * 100).toFixed(4)}% over ${r.actual.rounds} rounds, ${(r.actual.confidence * 100).toFixed(1)}% CI ${(r.actual.ci[0] * 100).toFixed(3)}% - ${(r.actual.ci[1] * 100).toFixed(3)}%` + (r.actual.declared ? `, declared ${(r.actual.declared.rtp * 100).toFixed(2)}%, p = ${r.actual.declared.pValue.toPrecision(4)} (${r.actual.declared.verdict})` : ''));
   if (r.rng) {

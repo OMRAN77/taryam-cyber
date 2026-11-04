@@ -255,6 +255,25 @@ const S = {
   verifyEnd: ['انتهى التحقق خلال', 'Verification finished in'],
   yes: ['نعم', 'Yes'],
   no: ['لا', 'No'],
+
+  // ---- Weighted stops and reel sets (P0-5) ----
+  sampleDesertWeighted: ['ديزرت جولد الموزونة (مثال)', 'Desert Gold, weighted (example)'],
+  modelJson: ['النموذج بصيغة JSON', 'Model as JSON'],
+  jsonModeNote: ['هذا النموذج يستخدم أوزان المواقع أو مجموعات البكرات (المفتاحان weights وreelSets)، ولا يعرضهما النموذج المبسّط، فعدّله هنا بصيغة JSON. وزن الموقع هو وزن النافذة التي يظهر فيها هذا الموقع في الصف الأول (العلوي). اختر مثالًا آخر للعودة إلى النموذج المبسّط.', 'This model uses stop weights or reel sets (the weights or reelSets keys), which the form cannot show, so edit it here as JSON. A stop\'s weight is that of the window showing the stop in row 1 (the top row). Pick another example to go back to the form.'],
+  weightedModel: ['أوزان البكرات', 'Reel weights'],
+  weightedYes: ['موزونة', 'Weighted'],
+  reelSetsCount: ['مجموعات البكرات', 'Reel sets'],
+  fsReelSetsCount: ['مجموعات بكرات اللفات المجانية', 'Free-spin reel sets'],
+  reelSetsTable: ['مجموعات بكرات الجولة الأساسية', 'Base-game reel sets'],
+  reelSet: ['المجموعة', 'Set'],
+  setWeight: ['وزن المجموعة', 'Set weight'],
+  reelTotals: ['مجموع الأوزان في كل بكرة', 'Total weight per reel'],
+  reelNo: ['البكرة', 'Reel'],
+  reelStops: ['المواقع', 'Stops'],
+  reelTotal: ['مجموع أوزان البكرة', 'Reel total weight'],
+  weightPerLine: ['الوزن لكل خط', 'Weight per line'],
+  totalWeight: ['مجموع أوزان الدورة الكاملة', 'Total weight of a full cycle'],
+  weightsNote: ['كل لفة تختار مجموعة بكرات باحتمال وزنها ÷ مجموع أوزان المجموعات، ثم موقعًا في كل بكرة باحتمال وزنه ÷ مجموع أوزان البكرة، وكل لفة مجانية تختار مجموعتها من جديد. الموقع المختار يظهر في الصف الأول (العلوي) وتليه المواقع التالية في الصفوف تحته، فوزن الموقع هو وزن النافذة التي يبدأ بها. إن كانت أوزان ورقتك للرمز الظاهر في الصف الأوسط من 3 صفوف فأزح كل قائمة موقعًا واحدًا قبل إدخالها: وزن الموقع هنا هو وزن الموقع الذي يليه في ورقتك، وإلا اختلف RTP. الحساب دقيق لهذه الأوزان كما أُدخلت فقط: أوزان اللعبة الحقيقية لا تُعرف إلا من ورقة PAR المعتمدة أو من المزوّد، وهذه النتيجة ليست شهادة اعتماد.', 'Each spin picks a reel set with probability set weight ÷ sum of set weights, then a stop on each reel with probability stop weight ÷ reel total; each free spin picks its set again. The picked stop shows in row 1 (the top row) and the next stops fill the rows below, so a stop\'s weight is that of the window it starts. If your sheet weights the symbol shown in the middle row of 3, shift each list by one stop before entering it: the weight of a stop here is your sheet\'s weight of the stop after it; otherwise the RTP differs. The result is exact for these weights as entered: a game\'s real weights are known only from its certified PAR sheet or its supplier, and this result is not a certification.'],
 };
 
 export function getLang() {

@@ -2,9 +2,10 @@
 // results and builds the PDF report. Nothing leaves the browser: the page's CSP
 // (connect-src 'none') blocks every network request a script could make.
 import { t, pair, getLang, setLang, NIST_NAMES, VOLATILITY, VERDICT } from './i18n.js';
-import { modelFromForm, formFromModel, applyCsv, parseModelJson, normalizeModel, canonicalJson } from './core/slot-model.js';
+import { modelFromForm, formFromModel, applyCsv, parseModelJson, normalizeModel, canonicalJson, isWeightedModel } from './core/slot-model.js';
 import { sha256Hex } from './core/fair.js';
-import { buildReport } from './report.js';
+import { Fraction } from './core/fraction.js';
+import { buildReport, compactJson } from './report.js';
 import * as samples from './samples.js';
 
 const $ = (s) => document.querySelector(s);
@@ -146,9 +147,47 @@ function syncFormVisibility() {
   $('#f-fsReels').closest('label').hidden = !fs;
 }
 
+// ---------- weighted stops and reel sets (P0-5) ----------
+// The form has no weights or reel sets, so a model that uses them is edited as JSON.
+let jsonMode = false;
+function setJsonMode(on) {
+  jsonMode = on;
+  $('#panel-theory').classList.toggle('json-mode', on);
+  $('#modelJsonBox').hidden = !on;
+}
+function setModel(raw) {
+  if (isWeightedModel(raw)) {
+    $('#f-json').value = compactJson(raw) + '\n';
+    setJsonMode(true);
+  } else {
+    setJsonMode(false);
+    fillForm(raw);
+  }
+}
+const currentRaw = () => (jsonMode ? parseModelJson($('#f-json').value) : modelFromForm(readForm()));
+// A weight count can pass 2^53 or be a fraction (an average over lines). Both are
+// written exactly in BigInt: every integer digit kept, a fraction rounded to 2 places.
+const fmtWeight = (s) => {
+  if (!s.includes('/')) return BigInt(s).toLocaleString('en-US');
+  const [int, dec] = new Fraction(...s.split('/').map(BigInt)).toDecimal(2).split('.');
+  return BigInt(int).toLocaleString('en-US') + '.' + dec;
+};
+function reelSetsTable(sets) {
+  return table([['#', '#'], 'setWeight', 'probability', 'stops', 'reelTotals'], sets.map((st, i) => [
+    { v: i + 1, cls: 'num' }, { v: fmtWeight(st.weight), cls: 'num' }, { v: st.probability.percent + '%', cls: 'num' },
+    { v: st.stops.join(' / '), cls: 'num' }, { v: st.reelTotals.map(fmtWeight).join(' / '), cls: 'num' },
+  ]));
+}
+function renderWeights(box, m) {
+  if (!m.weighted) return;
+  box.append(sub('reelSetsTable'), reelSetsTable(m.reelSets));
+  if (m.freeSpinReelSets) box.append(sub('fsReelSetsCount'), reelSetsTable(m.freeSpinReelSets));
+  box.append(el('p', { class: 'muted small weight-total' }, tr('totalWeight') + ': ' + fmtWeight(m.totalWeight)), el('p', { class: 'muted small' }, tr('weightsNote')));
+}
+
 async function runTheory() {
   await withTask('theory', async (progress) => {
-    const raw = modelFromForm(readForm());
+    const raw = currentRaw();
     normalizeModel(raw); // fails fast with a readable message
     const bytes = enc.encode(canonicalJson(raw));
     const name = (raw.name || 'model').replace(/[^\w؀-ۿ-]+/g, '-').replace(/^-|-$/g, '').toLowerCase() + '.json';
@@ -174,10 +213,12 @@ function renderTheory() {
     d && { k: 'maxWinBase', v: fmt(d.maxWin.base, 2) + '×' },
     d && d.maxWin.perFreeSpin !== undefined && { k: 'maxWinFs', v: fmt(d.maxWin.perFreeSpin, 2) + '×' },
     d && d.maxWin.perFreeSpin !== undefined && { k: 'maxWinTotal', v: d.maxWin.unbounded ? '∞' : fmt(d.maxWin.withFeature, 2) + '×', s: d.maxWin.unbounded ? tr('unbounded') : null },
-    { k: 'combinations', v: Number(x.model.combinations).toLocaleString('en-US'), s: x.model.reels + '×' + x.model.rows + ' · ' + x.model.lines + ' ' + tr('lines') },
+    { k: 'combinations', v: BigInt(x.model.combinations).toLocaleString('en-US'), s: x.model.reels + '×' + x.model.rows + ' · ' + x.model.lines + ' ' + tr('lines') },
+    x.model.weighted && { k: 'weightedModel', v: tr('weightedYes'), s: tr('reelSetsCount') + ': ' + x.model.reelSets.length + (x.model.freeSpinReelSets ? ' · ' + tr('fsReelSetsCount') + ': ' + x.model.freeSpinReelSets.length : '') },
   ]));
   if (x.distributionError) box.append(el('div', { class: 'verdict warn' }, pick([x.distributionError.ar, x.distributionError.en])));
   box.append(el('div', {}, el('span', { class: 'muted small' }, tr('modelHash')), el('div', { class: 'hash' }, th.modelSha256)));
+  renderWeights(box, x.model);
   const c = x.contributions;
   box.append(sub('contributions'), table(['contributions', 'contribution', ['حصة من RTP', 'Share of RTP'], ''], [
     ['contribLines', c.lines], ['contribWild', c.wildAssistedLines], ['contribScatter', c.scatter], ['contribFs', c.freeSpins],
@@ -192,9 +233,9 @@ function renderTheory() {
   }
   const rows = [];
   for (const s of x.symbols) for (const b of s.byCount) {
-    rows.push([s.symbol + (s.isWild ? ' (wild)' : ''), { v: b.count, cls: 'num' }, { v: fmt(b.pay, 4), cls: 'num' }, { v: b.probabilityPerLine.value.toExponential(4), cls: 'mono' }, { v: Number(b.combosPerLine).toLocaleString('en-US'), cls: 'num' }, { v: b.rtp.percent + '%', cls: 'num' }]);
+    rows.push([s.symbol + (s.isWild ? ' (wild)' : ''), { v: b.count, cls: 'num' }, { v: fmt(b.pay, 4), cls: 'num' }, { v: b.probabilityPerLine.value.toExponential(4), cls: 'mono' }, { v: x.model.weighted ? fmtWeight(b.combosPerLine) : Number(b.combosPerLine).toLocaleString('en-US'), cls: 'num' }, { v: b.rtp.percent + '%', cls: 'num' }]);
   }
-  box.append(sub('symbolTable'), table(['symbol', 'count', 'pay', 'probability', ['التوليفات لكل خط', 'Combinations per line'], 'contribution'], rows));
+  box.append(sub('symbolTable'), table(['symbol', 'count', 'pay', 'probability', x.model.weighted ? 'weightPerLine' : ['التوليفات لكل خط', 'Combinations per line'], 'contribution'], rows));
   if (x.scatter.length) {
     box.append(table([['عدد الـScatter', 'Scatters'], 'probability', ['الدفع × الرهان', 'Pay × bet'], ['تفعيل', 'Trigger']],
       x.scatter.map((s) => [{ v: s.count, cls: 'num' }, { v: s.probability.value.toExponential(4), cls: 'mono' }, { v: fmt(s.pay, 4), cls: 'num' }, s.triggers ? '✓' : ''])));
@@ -484,25 +525,25 @@ function init() {
   document.querySelectorAll('[role="tab"]').forEach((b) => b.addEventListener('click', () => selectTab(b.id.slice(4))));
   $('#langToggle').addEventListener('click', () => { lang = lang === 'ar' ? 'en' : 'ar'; setLang(lang); applyLang(); });
 
-  document.querySelectorAll('[data-sample]').forEach((b) => b.addEventListener('click', () => { fillForm(samples[b.dataset.sample]); showError('theory', null); }));
+  document.querySelectorAll('[data-sample]').forEach((b) => b.addEventListener('click', () => { setModel(samples[b.dataset.sample]); showError('theory', null); }));
   $('#f-linePreset').addEventListener('change', syncFormVisibility);
   $('#f-fsEnabled').addEventListener('change', syncFormVisibility);
   $('#modelFile').addEventListener('change', async (e) => {
     showError('theory', null);
     try {
       const files = [...e.target.files].sort((a, b) => (a.name.endsWith('.json') ? -1 : 0) - (b.name.endsWith('.json') ? -1 : 0));
-      let raw = modelFromForm(readForm());
+      let raw = null; // the current model is read only if a CSV needs it
       for (const f of files) {
         const text = await f.text();
-        raw = /\.json$/i.test(f.name) || text.trim().startsWith('{') ? parseModelJson(text) : applyCsv(raw, text, f.name);
+        raw = /\.json$/i.test(f.name) || text.trim().startsWith('{') ? parseModelJson(text) : applyCsv(raw || currentRaw(), text, f.name);
       }
-      fillForm(raw);
+      if (raw) setModel(raw);
     } catch (err) { showError('theory', err); }
     e.target.value = '';
   });
   $('#exportModel').addEventListener('click', () => {
     try {
-      const raw = modelFromForm(readForm());
+      const raw = currentRaw();
       download(enc.encode(JSON.stringify(raw, null, 2) + '\n'), (raw.name || 'model').replace(/[^\w-]+/g, '-') + '.json', 'application/json');
     } catch (err) { showError('theory', err); }
   });

@@ -186,3 +186,11 @@ td.na { color: var(--muted); }
 .table-view summary { cursor: pointer; color: var(--primary-2); font-size: 13.5px; margin: 10px 0 8px; }
 .help ul { margin: 0; padding-inline-start: 20px; }
 .help li + li { margin-top: 6px; }
+
+/* ---- Weighted stops and reel sets (P0-5) ---- */
+/* A weighted model is edited as JSON, so the form fields are hidden. */
+#panel-theory.json-mode > :not(.toolbar):not(#modelJsonBox):not(.actions):not(.error):not(.results) { display: none !important; }
+#modelJsonBox > * + * { margin-top: 10px; }
+#f-json { min-height: 320px; }
+/* The cycle's total weight is one long run of digits and commas: let it wrap on phones. */
+.weight-total { overflow-wrap: anywhere; }
