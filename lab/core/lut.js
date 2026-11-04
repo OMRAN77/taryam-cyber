@@ -412,9 +412,9 @@ export function makeSampleLut() {
     out[count - 1] += total - out.reduce((x, y) => x + y, 0n);
     return out;
   };
-  // levels: [x base bet, probability-ish share, rows]. The `fill` level absorbs the
-  // weight that sets the RTP to the target, which must be below every other level's
-  // mean for base (fill = 0) and above it for the bonus.
+  // levels: [x base bet, share of 2^62, rows]. The `fill` level [x base bet, rows] gets
+  // whatever weight brings the RTP to the target: the other levels average above the
+  // target and the fill payout (0x for base, 10x for the bonus) sits below it.
   const build = (levels, fill, costHundredths, zeroWeightRows) => {
     const rows = [];
     let s = 0n, w = 0n;
