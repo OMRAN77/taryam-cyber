@@ -270,6 +270,10 @@ export function reportPayload(session, createdAt) {
     const m = r.montecarlo;
     out.results.montecarlo = { modelSha256: m.modelSha256, seed: m.seed, spins: m.spins, generator: m.generator, result: m.result, resultSha256: m.resultSha256, exactRtp: m.exactRtp ?? null };
   }
+  if (r.lut) {
+    const x = r.lut.result;
+    out.results.lut = { inputs: r.lut.inputIds, format: x.format, indexFile: x.indexFile, ignored: x.ignored, provablyFair: false, modes: x.modes, profile: x.profile };
+  }
   return out;
 }
 
@@ -616,6 +620,118 @@ function mcSection(L, mc) {
   L.note('reproduce');
 }
 
+// ---- Outcome tables (LUT, P0-7) ----
+const lutPct = (v) => (v === 0 ? '0%' : v < 1e-5 ? (v * 100).toExponential(2) + '%' : pct(v, 4));
+const lutOneIn = (n) => (n === null || n === undefined ? '—' : '1 / ' + num(n, n < 100 ? 2 : 0));
+const lutBig = (s) => (/^\d+$/.test(String(s)) ? BigInt(s).toLocaleString('en-US') : String(s));
+function lutValue(unit, v) {
+  if (typeof v === 'string') return lutBig(v);
+  if (unit === 'rtp') return pct(v, 4);
+  if (unit === 'p') return lutPct(v);
+  if (unit === 'x' || unit === 'xc') return num(v, 4) + '×';
+  return num(v, 4);
+}
+
+// A small heading above a table (Arabic right, English left), kept with the table.
+function lutSub(L, key) {
+  const [ar, en] = pair(key);
+  L.ensure(160);
+  L.y += 10;
+  L.draw(ar, W - M, L.y, { size: 24, weight: '700', align: 'right', dir: 'rtl' });
+  L.draw(en, M, L.y, { size: 21, weight: '600', color: C.muted });
+  L.y += 46;
+}
+
+function lutSection(L, lu) {
+  const x = lu.result;
+  L.section('tabLut');
+  L.badge('lutNotPfShort', C.warn);
+  L.note('lutNotPf');
+  L.table([{ key: 'lutMode', w: 0.16 }, { key: 'lutCostShort', w: 0.12 }, { key: 'rtp', w: 0.18, mono: true }, { key: 'lutHitShort', w: 0.16, mono: true }, { key: 'lutSdShort', w: 0.14, mono: true }, { key: 'lutMaxShort', w: 0.24, mono: true }],
+    x.modes.map((m) => [m.name, m.cost.text + '×', m.rtp.percent + '%', pct(m.hitRate.value, 4), num(m.sd, 4), `${num(m.maxWin.multiplier.value, 2)}× (${lutOneIn(m.maxWin.oneIn)})`]));
+  L.note('lutCostNote');
+  for (const m of x.modes) {
+    L.y += 16;
+    L.kv('lutMode', `${m.name}  ·  ${m.cost.text}×  ·  ${m.weightsFile}`, { color: C.accent });
+    L.kv('rtp', m.rtp.percent + '%', { color: C.accent });
+    L.kv('exactFraction', m.rtp.fraction, { mono: true });
+    L.kv('lutTotalWeight', lutBig(m.totalWeight), { mono: true });
+    L.kv('lutHit', `${pct(m.hitRate.value, 4)}  (${lutOneIn(m.hitRate.oneIn)})`);
+    L.kv('lutLdw', pct(m.ldw.value, 4) + (m.ldwShareOfWins ? `  (${pair('lutLdwShare')[1]}: ${pct(m.ldwShareOfWins.value, 2)})` : ''));
+    L.kv('lutBelowCost', pct(m.belowCost.value, 4));
+    L.kv('lutSd', num(m.sd, 4));
+    L.kv('lutMaxWin', `${num(m.maxWin.multiplier.value, 2)}×  (${lutOneIn(m.maxWin.oneIn)})`);
+    L.kv('lutCvar', `${num(m.cvar999.absolute.value, 2)}×  (÷ cost: ${num(m.cvar999.relative.value, 2)})`);
+    L.kv('lutMea_rtp40', pct(m.tail.rtpFrom40xCost.value, 4) + (m.tail.shareFrom40xCost ? `  (${pair('lutShare')[1]}: ${pct(m.tail.shareFrom40xCost.value, 2)})` : ''));
+    L.kv('lutMea_rtp10k', pct(m.tail.rtpFrom10kx.value, 4) + (m.tail.shareFrom10kx ? `  (${pair('lutShare')[1]}: ${pct(m.tail.shareFrom10kx.value, 2)})` : ''));
+    lutSub(L, 'lutBigWins');
+    L.table([{ key: 'lutWinAtLeast', w: 0.34 }, { key: 'probability', w: 0.33, mono: true }, { labels: ['1 من N', '1 in N'], w: 0.33, mono: true }],
+      m.bigWins.map((b) => [b.threshold.toLocaleString('en-US') + '×', lutPct(b.probability.value), lutOneIn(b.oneIn)]));
+    // Buckets are in multiples of the mode's cost, unlike the base-bet tables above.
+    lutSub(L, 'lutBuckets');
+    L.table([{ key: 'lutRangeCost', w: 0.34 }, { key: 'probability', w: 0.33, mono: true }, { key: 'lutContribution', w: 0.33, mono: true }],
+      m.buckets.map((b) => [b.to === 0 ? '0' : b.to === null ? `≥ ${b.from}` : `${b.from} – ${b.to}`, lutPct(b.probability.value), pct(b.rtp.value, 4)]));
+  }
+  L.note('lutCvarNote');
+  L.section('lutTransparency');
+  L.table([{ key: 'lutMode', w: 0.16 }, { key: 'lutRows', w: 0.14, mono: true }, { key: 'lutZeroRows', w: 0.18, mono: true }, { key: 'lutEssShort', w: 0.18, mono: true }, { key: 'lutMaxRowShort', w: 0.18, mono: true }, { key: 'lutKlShort', w: 0.16, mono: true }],
+    x.modes.map((m) => {
+      const tp = m.transparency;
+      return [m.name, tp.rows.toLocaleString('en-US'), tp.zeroWeightRows.toLocaleString('en-US'), num(tp.effectiveSize.value, 1), lutPct(tp.maxRowProbability.value), num(tp.klBits, 4)];
+    }));
+  L.note('lutTransparencyNote');
+  if (x.ignored.length) L.kv('lutIgnored', x.ignored.join(', '));
+  L.note('lutBooksNote'); // books are never read, whether or not any were selected
+
+  const pr = x.profile;
+  L.section('lutStake');
+  L.note('lutStakeSource');
+  if (pr.submissionIssues) L.badge('lutSubmissionBadShort', C.fail);
+  else if (pr.inferredIssues) L.badge('lutInferredBadShort', C.warn);
+  else L.badge('lutSubmissionOk', C.pass);
+  L.kv('lutRiskPassing', `${pr.riskPassing} / ${pr.riskCategories}`, { color: pr.riskPassing === pr.riskCategories ? C.pass : C.warn });
+  L.kv('lutMaxBet', `$${num(pr.maxBaseBet.value, 2)}  (${pair('lutTemplate')[1]} ${pr.maxBaseBet.template})`);
+  L.note('lutStakeRiskNote');
+  const mode = (m) => (m === null ? pair('lutAllShort').join(' / ') : m);
+  const cell = (ok) => statusCell(ok ? 'pass' : 'fail');
+  // Arabic and English labels in their own columns: a mixed cell with numbers reorders badly.
+  // Submission labels state their own limit ("Cost ≤ 50,000×").
+  lutSub(L, 'lutSubmission');
+  L.table([{ key: 'lutCheckAr', w: 0.28 }, { key: 'lutCheckEn', w: 0.24 }, { key: 'lutMode', w: 0.1 }, { key: 'lutValue', w: 0.26, mono: true }, { key: 'result', w: 0.12 }],
+    pr.submission.map((c) => [pair('lutChk_' + c.id)[0], pair('lutChk_' + c.id)[1], mode(c.mode), c.id === 'rtp' ? `${pct(c.value, 4)} → ${pct(c.rounded, 2)}` : lutValue(c.unit, c.value), cell(c.ok)]));
+  lutSub(L, 'lutInferred');
+  L.table([{ key: 'lutCheckAr', w: 0.28 }, { key: 'lutCheckEn', w: 0.24 }, { key: 'lutMode', w: 0.1 }, { key: 'lutValue', w: 0.26, mono: true }, { key: 'result', w: 0.12 }],
+    pr.inferred.map((c) => [pair('lutChk_' + c.id)[0], pair('lutChk_' + c.id)[1], c.mode, lutValue(c.unit, c.value), statusCell(c.ok ? 'pass' : 'flag')]));
+  L.note('lutInferredNote');
+  // Risk measures grouped under their category (a category fails if any measure in any mode does).
+  const riskRows = [];
+  for (const cat of [...new Set(pr.risk.map((c) => c.category))]) {
+    const [ar, en] = pair('lutCat_' + cat);
+    riskRows.push([{ text: ar, bold: true }, { text: en, bold: true }, '', '', '', pr.failedCategories.includes(cat) ? cell(false) : cell(true)]);
+    for (const c of pr.risk.filter((r) => r.category === cat)) {
+      riskRows.push([pair('lutMea_' + c.measure)[0], pair('lutMea_' + c.measure)[1], c.mode, lutValue(c.unit, c.value), lutValue(c.unit, c.limit), cell(c.ok)]);
+    }
+  }
+  lutSub(L, 'lutRisk');
+  L.table([{ key: 'lutCheckAr', w: 0.26 }, { key: 'lutCheckEn', w: 0.22 }, { key: 'lutMode', w: 0.1 }, { key: 'lutValue', w: 0.16, mono: true }, { key: 'lutLimit', w: 0.14, mono: true }, { key: 'result', w: 0.12 }], riskRows);
+  L.note('lutStakeNotCert');
+  L.note('lutStakeExactNote');
+}
+
+function lutAscii(lines, x) {
+  lines.push(`  Outcome tables (Stake Engine LUT format), modes: ${x.modes.length}. A LUT drawn on the server is not provably fair without commit-reveal.`);
+  for (const m of x.modes) {
+    const f = m.rtp.fraction.length > 60 ? m.rtp.fraction.slice(0, 57) + '...' : m.rtp.fraction;
+    lines.push(`    ${m.name} (cost ${m.cost.text}x): RTP ${m.rtp.percent}% = ${f}, hit ${(m.hitRate.value * 100).toFixed(4)}%, SD ${m.sd.toFixed(4)} x cost, top win ${m.maxWin.multiplier.value}x (1 in ${Math.round(m.maxWin.oneIn).toLocaleString('en-US')}), effective size ${m.transparency.effectiveSize.value.toFixed(1)} of ${m.transparency.rows} rows`);
+  }
+  const pr = x.profile;
+  lines.push(`  Stake Engine RGS limits (${pr.profile.source} @${pr.profile.commit.slice(0, 7)}, ${pr.profile.commitDate}): submission issues ${pr.submissionIssues}`
+    + (pr.inferredIssues ? ` (plus format notes ${pr.inferredIssues}: the lab's inference, not published checks)` : '')
+    + `; risk categories passing ${pr.riskPassing} of ${pr.riskCategories}`
+    + (pr.failedCategories.length ? ` (failing: ${pr.failedCategories.join(', ')}; this lowers bet limits, it does not reject the game)` : '')
+    + `; max base bet $${pr.maxBaseBet.value}. A recomputation, not a certification. Book files are not read, so their match with the tables is not checked.`);
+}
+
 // Pretty JSON, but arrays of plain values stay on one line (reel strips, pay rows).
 export function compactJson(v, indent = '') {
   if (Array.isArray(v)) {
@@ -688,6 +804,7 @@ function asciiSummary(payload, reportId, digest) {
   }
   if (r.fair) lines.push(`  Provably fair (${r.fair.scheme}): ${r.fair.ok ? 'all rounds verified' : 'FAILURES FOUND'}`);
   if (r.montecarlo) lines.push(`  Monte Carlo: ${r.montecarlo.spins} rounds, seed "${r.montecarlo.seed}", RTP ${(r.montecarlo.result.rtp * 100).toFixed(4)}%, result SHA-256 ${r.montecarlo.resultSha256}`);
+  if (r.lut) lutAscii(lines, r.lut);
   lines.push('', 'How to verify: extract the attached files, compute their SHA-256 and compare with the', 'values above. Any change to an input or to report.json changes its fingerprint.', 'The fingerprint detects changes; it is not a digital signature of the issuer.');
   const out = [];
   for (const l of lines) {
@@ -704,8 +821,8 @@ function asciiSummary(payload, reportId, digest) {
   return out;
 }
 
-const SECTION_ORDER = ['theoretical', 'actual', 'distTests', 'rng', 'fair', 'montecarlo'];
-const RENDER = { theoretical: theorySection, actual: actualSection, distTests: distSection, rng: rngSection, fair: fairSection, montecarlo: mcSection };
+const SECTION_ORDER = ['theoretical', 'actual', 'distTests', 'rng', 'fair', 'montecarlo', 'lut'];
+const RENDER = { theoretical: theorySection, actual: actualSection, distTests: distSection, rng: rngSection, fair: fairSection, montecarlo: mcSection, lut: lutSection };
 
 // session: { meta, inputs: [{ id, name, kind, size, sha256, bytes, mime }], results: {...} }
 export async function buildReport(session, { createCanvas, now = new Date(), onProgress = () => {} } = {}) {

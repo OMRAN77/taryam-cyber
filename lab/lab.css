@@ -205,3 +205,9 @@ td.na { color: var(--muted); }
 .echart .ethr { stroke: var(--red); stroke-width: 1.5; stroke-dasharray: 6 4; }
 .echart .ezero { stroke: rgba(255, 255, 255, 0.18); stroke-width: 1; }
 #res-dist .card .v, #res-dist .card .s { unicode-bidi: plaintext; }
+
+/* Outcome tables (LUT, P0-7) */
+.lut-pf { padding: 10px 14px; border-radius: 12px; background: rgba(251, 191, 36, 0.08); border: 1px solid rgba(251, 191, 36, 0.35); color: #fde68a; font-size: 13.5px; }
+h3.lut-mode { font-size: 16.5px; color: var(--text); margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+/* Card values mixing a number and a word ("1 in 333,161") take their direction from the word. */
+#res-lut .card .v, #res-lut .card .s { unicode-bidi: plaintext; }

@@ -10,6 +10,7 @@ import { prngFromSeed, PRNG_DESCRIPTION } from './core/prng.js';
 import { simulate, generatorDescription } from './core/montecarlo.js';
 import { sampler, slotSampler, simulatePlayers } from './core/casino.js';
 import { auditDistribution, pmfFromExact, parsePmfCsv, examplePmf, pmfCsv, samplePmfLog, EXAMPLE_MAX_WIN } from './core/audit-stats.js';
+import { analyzeLutFiles, makeSampleLut } from './core/lut.js';
 
 const decode = (bytes) => new TextDecoder().decode(bytes);
 const encode = (text) => new TextEncoder().encode(text);
@@ -129,6 +130,11 @@ const TASKS = {
     const versions = [0.96, 0.94, 0.92].map((rtp) => ({ rtp, csv: encode(pmfCsv(examplePmf(rtp))) }));
     return { versions, log: encode(samplePmfLog(examplePmf(0.94), rounds, await prngFromSeed(seed))), maxWin: EXAMPLE_MAX_WIN };
   },
+
+  // ---- Outcome tables (LUT, P0-7) ----
+  // files: [{ name, bytes }]; book files arrive with bytes null and are only listed.
+  lut: ({ files }, progress) => analyzeLutFiles(files.map((f) => ({ name: f.name, text: f.bytes ? decode(f.bytes) : null })), { onProgress: progress }),
+  sampleLut: () => makeSampleLut().map((f) => ({ name: f.name, bytes: encode(f.text) })),
 };
 
 self.onmessage = async (e) => {
