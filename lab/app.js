@@ -2,7 +2,8 @@
 // results and builds the PDF report. Nothing leaves the browser: the page's CSP
 // (connect-src 'none') blocks every network request a script could make.
 import { t, pair, getLang, setLang, NIST_NAMES, VOLATILITY, VERDICT } from './i18n.js';
-import { modelFromForm, formFromModel, applyCsv, parseModelJson, normalizeModel, canonicalJson, isWeightedModel } from './core/slot-model.js';
+import { modelFromForm, formFromModel, applyCsv, parseModelJson, normalizeModel, canonicalJson, isWeightedModel, isWaysModel } from './core/slot-model.js';
+import { controlVariate } from './core/montecarlo.js';
 import { sha256Hex } from './core/fair.js';
 import { Fraction } from './core/fraction.js';
 import { buildReport, compactJson, pfIssueDetail } from './report.js';
@@ -161,8 +162,11 @@ function setJsonMode(on) {
   $('#modelJsonBox').hidden = !on;
 }
 function setModel(raw) {
-  if (isWeightedModel(raw)) {
+  // A ways model (P0-6) also stays in JSON: the form edits line games only.
+  if (isWeightedModel(raw) || isWaysModel(raw)) {
     $('#f-json').value = compactJson(raw) + '\n';
+    $('#jsonModeNote').hidden = !isWeightedModel(raw);
+    $('#waysJsonNote').hidden = !isWaysModel(raw);
     setJsonMode(true);
   } else {
     setJsonMode(false);
@@ -190,6 +194,37 @@ function renderWeights(box, m) {
   box.append(el('p', { class: 'muted small weight-total' }, tr('totalWeight') + ': ' + fmtWeight(m.totalWeight)), el('p', { class: 'muted small' }, tr('weightsNote')));
 }
 
+// ---------- ways / Megaways (P0-6) ----------
+const fill = (key, ...args) => args.reduce((text, a, i) => text.replace('{' + i + '}', a), tr(key));
+const bigText = (s) => BigInt(s).toLocaleString('en-US');
+// Probabilities to 2 places here (the report and report.json carry 6); the cell wraps on phones.
+function waysHeightsTable(src) {
+  return table(['reelNo', 'waysHeights', 'waysTopCell', 'waysJoint'], src.heights.map((h, i) => [
+    { v: i + 1, cls: 'num' }, { v: h.rows.map((r, j) => `${r}:\u00a0${Number(h.probabilities[j]).toFixed(2)}%`).join(' · '), cls: 'num ways-h' }, h.topCell ? '✓' : '', h.joint ? '✓' : '',
+  ]));
+}
+function waysSourceCards(src) {
+  const top = src.topReel;
+  return cards([
+    { k: 'maxWays', v: bigText(src.maxWays), s: `${tr('waysRange')}: ${bigText(src.minWays)} – ${bigText(src.maxWays)}`, cls: 'ways-text' },
+    { k: 'topReelWord', v: top ? fill('topReelValue', top.covers.join(lang === 'en' ? ', ' : '، '), top.stops) : tr('topReelNone'), cls: 'ways-text' },
+  ]);
+}
+function renderWays(box, x) {
+  const w = x.model.ways;
+  box.append(sub('waysTitle'), cards([{ k: 'waysEval', v: tr('waysWord'), cls: 'ways-text' }, { k: 'betCostLabel', v: String(w.betCost) }]), waysSourceCards(w.base), waysHeightsTable(w.base));
+  if (w.freeSpins) box.append(sub('fsWindows'), waysSourceCards(w.freeSpins), waysHeightsTable(w.freeSpins));
+  const rules = [
+    tr('multStrategy') + ': ' + tr('multStrategy_' + w.multiplierStrategy) + (w.multiplierStrategy === 'global' ? ` (${tr('globalMultLabel')}: ${w.globalMultiplier})` : ''),
+    tr('wildReel1') + ': ' + tr('wildReel1_' + w.wildStartsWin),
+  ];
+  if (w.multiplierSymbols.length) rules.push(tr('multiplierSymbolsLabel') + ': ' + w.multiplierSymbols.map((m) => `${m.symbol} = ${m.countsAs} × ${m.multiplier}`).join(' · '));
+  box.append(el('ul', { class: 'ways-rules', id: 'ways-rules' }, rules.map((r) => el('li', {}, r))));
+  box.append(el('p', { class: 'muted small' }, tr('waysPayUnit')), el('p', { class: 'muted small ways-source' }, tr('waysSource')));
+  if (w.multiplierStrategy === 'board') box.append(el('p', { class: 'muted small' }, tr('waysBoardNote')));
+  box.append(el('p', { class: 'muted small' }, tr('waysNotCert')));
+}
+
 async function runTheory() {
   await withTask('theory', async (progress) => {
     const raw = currentRaw();
@@ -211,23 +246,29 @@ function renderTheory() {
   const th = session.results.theoretical;
   if (!th) return;
   const x = th.result, d = x.distribution;
+  const ways = x.model.ways, firstDrop = x.scope === 'firstDrop';
+  // A ways game too large for the full distribution has no max win or buckets (closed form).
+  const mw = d && d.maxWin;
   const fraction = x.rtp.fraction.length > 40 ? x.rtp.fraction.slice(0, 37) + '…' : x.rtp.fraction;
   box.append(cards([
-    { k: 'rtp', v: x.rtp.percent + '%', s: tr('exactFraction') + ': ' + fraction, title: x.rtp.fraction, cls: 'accent' },
-    d && { k: 'hitFrequency', v: pct(d.hitFrequency.value, 3) },
+    { k: firstDrop ? 'rtpFirstDrop' : 'rtp', v: x.rtp.percent + '%', s: tr('exactFraction') + ': ' + fraction, title: x.rtp.fraction, cls: 'accent' },
+    d && { k: 'hitFrequency', v: d.hitFrequency ? pct(d.hitFrequency.value, 3) : '—', s: d.hitFrequency ? null : tr('hitUnavailable'), cls: d.hitFrequency ? '' : 'ways-text' },
     d && { k: 'sd', v: fmt(d.sd, 3), s: tr('volatility') + ': ' + pick(VOLATILITY[d.volatilityClass]) + ' · VI90 ' + fmt(d.volatilityIndex90, 2) },
-    d && { k: 'maxWinBase', v: fmt(d.maxWin.base, 2) + '×' },
-    d && d.maxWin.perFreeSpin !== undefined && { k: 'maxWinFs', v: fmt(d.maxWin.perFreeSpin, 2) + '×' },
-    d && d.maxWin.perFreeSpin !== undefined && { k: 'maxWinTotal', v: d.maxWin.unbounded ? '∞' : fmt(d.maxWin.withFeature, 2) + '×', s: d.maxWin.unbounded ? tr('unbounded') : null },
-    { k: 'combinations', v: BigInt(x.model.combinations).toLocaleString('en-US'), s: x.model.reels + '×' + x.model.rows + ' · ' + x.model.lines + ' ' + tr('lines') },
+    mw && { k: 'maxWinBase', v: fmt(mw.base, 2) + '×' },
+    mw && mw.perFreeSpin !== undefined && { k: 'maxWinFs', v: fmt(mw.perFreeSpin, 2) + '×' },
+    mw && mw.perFreeSpin !== undefined && { k: 'maxWinTotal', v: mw.unbounded ? '∞' : fmt(mw.withFeature, 2) + '×', s: mw.unbounded ? tr('unbounded') : null },
+    ways ? { k: 'waysCombinations', v: BigInt(x.model.combinations).toLocaleString('en-US'), s: `${tr('waysRange')}: ${BigInt(ways.base.minWays).toLocaleString('en-US')} – ${BigInt(ways.base.maxWays).toLocaleString('en-US')}`, cls: 'ways-text' }
+      : { k: 'combinations', v: BigInt(x.model.combinations).toLocaleString('en-US'), s: x.model.reels + '×' + x.model.rows + ' · ' + x.model.lines + ' ' + tr('lines') },
     x.model.weighted && { k: 'weightedModel', v: tr('weightedYes'), s: tr('reelSetsCount') + ': ' + x.model.reelSets.length + (x.model.freeSpinReelSets ? ' · ' + tr('fsReelSetsCount') + ': ' + x.model.freeSpinReelSets.length : '') },
   ]));
+  if (firstDrop) box.append(el('div', { class: 'verdict warn', id: 'first-drop-note' }, tr('firstDropNote')));
   if (x.distributionError) box.append(el('div', { class: 'verdict warn' }, pick([x.distributionError.ar, x.distributionError.en])));
   box.append(el('div', {}, el('span', { class: 'muted small' }, tr('modelHash')), el('div', { class: 'hash' }, th.modelSha256)));
   renderWeights(box, x.model);
+  if (ways) renderWays(box, x);
   const c = x.contributions;
   box.append(sub('contributions'), table(['contributions', 'contribution', ['حصة من RTP', 'Share of RTP'], ''], [
-    ['contribLines', c.lines], ['contribWild', c.wildAssistedLines], ['contribScatter', c.scatter], ['contribFs', c.freeSpins],
+    [ways ? 'contribWays' : 'contribLines', c.lines], ['contribWild', c.wildAssistedLines], ['contribScatter', c.scatter], ['contribFs', c.freeSpins],
   ].map(([k, v]) => [tr(k), { v: v.percent + '%', cls: 'num' }, { v: pct(v.value / x.rtp.value, 2), cls: 'num' }, { v: bar(v.value / x.rtp.value) }])));
   if (x.freeSpins) {
     const f = x.freeSpins;
@@ -239,14 +280,16 @@ function renderTheory() {
   }
   const rows = [];
   for (const s of x.symbols) for (const b of s.byCount) {
-    rows.push([s.symbol + (s.isWild ? ' (wild)' : ''), { v: b.count, cls: 'num' }, { v: fmt(b.pay, 4), cls: 'num' }, { v: b.probabilityPerLine.value.toExponential(4), cls: 'mono' }, { v: x.model.weighted ? fmtWeight(b.combosPerLine) : Number(b.combosPerLine).toLocaleString('en-US'), cls: 'num' }, { v: b.rtp.percent + '%', cls: 'num' }]);
+    rows.push([s.symbol + (s.isWild ? ' (wild)' : ''), { v: b.count, cls: 'num' }, { v: fmt(b.pay, 4), cls: 'num' }, { v: b.probabilityPerLine.value.toExponential(4), cls: 'mono' },
+      ways ? { v: fmt(b.averageWays.value, 2), cls: 'num' } : { v: x.model.weighted ? fmtWeight(b.combosPerLine) : Number(b.combosPerLine).toLocaleString('en-US'), cls: 'num' }, { v: b.rtp.percent + '%', cls: 'num' }]);
   }
-  box.append(sub('symbolTable'), table(['symbol', 'count', 'pay', 'probability', x.model.weighted ? 'weightPerLine' : ['التوليفات لكل خط', 'Combinations per line'], 'contribution'], rows));
+  box.append(sub(ways ? 'symbolTableWays' : 'symbolTable'), table(ways ? ['symbol', 'count', 'payPerWay', 'probabilityRun', 'averageWays', 'contribution']
+    : ['symbol', 'count', 'pay', 'probability', x.model.weighted ? 'weightPerLine' : ['التوليفات لكل خط', 'Combinations per line'], 'contribution'], rows));
   if (x.scatter.length) {
     box.append(table([['عدد الـScatter', 'Scatters'], 'probability', ['الدفع × الرهان', 'Pay × bet'], ['تفعيل', 'Trigger']],
       x.scatter.map((s) => [{ v: s.count, cls: 'num' }, { v: s.probability.value.toExponential(4), cls: 'mono' }, { v: fmt(s.pay, 4), cls: 'num' }, s.triggers ? '✓' : ''])));
   }
-  if (d) {
+  if (d && d.buckets) {
     const maxP = Math.max(...d.buckets.map((b) => b.probability.value));
     box.append(sub('distribution'), table(['range', 'probability', ''], d.buckets.map((b) => [
       { v: b.to === 0 ? '0' : b.to === null ? '≥ ' + b.from : b.from + ' – ' + b.to, cls: 'num' }, { v: pct(b.probability.value, 4), cls: 'num' }, { v: bar(b.probability.value / maxP) },
@@ -269,7 +312,10 @@ async function runActual() {
     if (!input) throw { ar: tr('noFile'), en: t('noFile', 'en') };
     const num = (s) => (String(s).trim() === '' ? null : Number(String(s).replace(',', '.')));
     let sigma = num($('#a-sigma').value);
-    if (sigma === null && $('#a-useTheory').checked && session.results.theoretical && session.results.theoretical.result.distribution) sigma = session.results.theoretical.result.distribution.sd;
+    if (sigma === null && $('#a-useTheory').checked && session.results.theoretical && session.results.theoretical.result.distribution) {
+      if (session.results.theoretical.result.scope === 'firstDrop') throw { ar: t('sigmaFirstDrop', 'ar'), en: t('sigmaFirstDrop', 'en') };
+      sigma = session.results.theoretical.result.distribution.sd;
+    }
     const declared = num($('#a-declared').value);
     const options = { declaredRtp: declared === null ? null : declared / 100, confidence: Number($('#a-confidence').value), sigma };
     const result = await runTask('actual', { bytes: input.bytes, options }, progress);
@@ -379,6 +425,7 @@ async function runDist() {
     const candidates = list.map((c) => {
       if (c.kind === 'csv') return { kind: 'csv', label: c.label, bytes: session.inputs.get(c.inputId).bytes };
       const d = c.th.result.distribution;
+      if (c.th.result.scope === 'firstDrop') throw { ar: t('distFirstDrop', 'ar'), en: t('distFirstDrop', 'en') };
       if (!d || !d.pmf) throw { ar: t('distNoModelPmf', 'ar'), en: t('distNoModelPmf', 'en') };
       return { kind: 'exact', label: c.label, pmf: d.pmf };
     });
@@ -390,7 +437,7 @@ async function runDist() {
     let sigma = optNum($('#a-sigma').value), sigmaSource = 'input';
     if (sigma === null && thd) { sigma = thd.sd; sigmaSource = 'model'; }
     let maxWin = optNum($('#d-maxWin').value), maxWinSource = 'input';
-    if (maxWin === null && thd && !thd.maxWin.unbounded) { maxWin = thd.maxWin.withFeature ?? thd.maxWin.base; maxWinSource = 'model'; }
+    if (maxWin === null && thd && thd.maxWin && !thd.maxWin.unbounded) { maxWin = thd.maxWin.withFeature ?? thd.maxWin.base; maxWinSource = 'model'; }
     const declared = optNum($('#a-declared').value);
     const gap = optNum($('#d-gap').value);
     const options = {
@@ -878,7 +925,10 @@ async function runMc(compareTo = null) {
     const spins = Number($('#m-spins').value), seed = $('#m-seed').value;
     const t0 = performance.now();
     const run = await runTask('montecarlo', { raw: th.raw, seed, spins, modelSha256: th.modelSha256 }, progress);
-    session.results.montecarlo = { ...run, exactRtp: th.result.rtp.value, ms: performance.now() - t0, confirmed: compareTo ? compareTo === run.resultSha256 : null };
+    // Ways games with free spins: the paid spin's exact mean as a control variate.
+    const cvMean = th.result.controlVariate;
+    const cv = cvMean && th.result.freeSpins && run.result.paidSpin ? controlVariate(run.result, cvMean.mean.value, normalizeModel(th.raw).totalBetUnits) : null;
+    session.results.montecarlo = { ...run, exactRtp: th.result.rtp.value, ms: performance.now() - t0, confirmed: compareTo ? compareTo === run.resultSha256 : null, controlVariate: cv };
     renderMc();
   });
   $('#stop-mc').hidden = true;
@@ -891,8 +941,10 @@ function renderMc() {
   if (!mc) return;
   const s = mc.result;
   const z = (s.rtp - mc.exactRtp) / s.standardError;
+  const cv = mc.controlVariate;
   box.append(cards([
-    { k: 'simRtp', v: pct(s.rtp, 4), s: '95%: ' + pct(s.ci95[0], 3) + ' – ' + pct(s.ci95[1], 3), cls: 'accent' },
+    { k: s.scope === 'firstDrop' ? 'simRtpFirstDrop' : 'simRtp', v: pct(s.rtp, 4), s: '95%: ' + pct(s.ci95[0], 3) + ' – ' + pct(s.ci95[1], 3), cls: 'accent' },
+    cv && { k: 'cvRtp', v: pct(cv.rtp, 4), s: '95%: ' + pct(cv.ci95[0], 3) + ' – ' + pct(cv.ci95[1], 3) },
     { k: 'vsExact', v: pct(mc.exactRtp, 4), s: 'z = ' + fmt(z, 2), cls: Math.abs(z) < 4 ? 'good' : 'bad' },
     { k: 'hitFrequency', v: pct(s.hitFrequency, 3) },
     { k: 'sd', v: fmt(s.sd, 3) },
@@ -907,6 +959,8 @@ function renderMc() {
     el('div', { class: 'muted small' }, tr('resultDigest')), el('div', { class: 'hash', id: 'mc-digest' }, mc.resultSha256),
     el('p', { class: 'muted small' }, tr('reproduce')),
   ));
+  if (s.scope === 'firstDrop') box.append(el('p', { class: 'muted small' }, tr('firstDropNote')));
+  if (cv) box.append(el('p', { class: 'muted small', id: 'mc-cv-note' }, `${tr('cvNote')} ${fill('cvSe', fmt(cv.standardError, 5), fmt(s.standardError, 5))} · μ = ${pct(cv.muX, 4)} · β = ${fmt(cv.beta, 4)}`));
   if (mc.confirmed !== null) box.append(el('div', { class: 'verdict ' + (mc.confirmed ? 'pass' : 'fail') }, tr(mc.confirmed ? 'sameAgain' : 'differentAgain')));
   const again = el('button', { type: 'button', id: 'rerun-mc' }, tr('rerun'));
   again.addEventListener('click', () => runMc(mc.resultSha256));
@@ -1154,7 +1208,8 @@ function figureText(f) {
   if (f.section === 'fair' && f.verdict) return [f.value, tr('pfV_' + f.verdict)].filter(Boolean).join(' · ');
   if (f.section === 'fair') return tr(f.pass ? 'allVerified' : 'someFailed');
   if (f.section === 'distTests') return [f.value ? tr('distB_' + f.value) : null, f.rounds !== null ? `${tr('roundsChecked')}: ${n(f.rounds)}` : null].filter(Boolean).join(' · ') || '—';
-  if (f.section === 'montecarlo') return [f.value, f.spins !== null ? `${tr('spins')}: ${n(f.spins)}` : null].filter(Boolean).join(' · ');
+  if (f.section === 'montecarlo') return [f.value, f.scope === 'firstDrop' ? tr('firstDropShort') : null, f.spins !== null ? `${tr('spins')}: ${n(f.spins)}` : null].filter(Boolean).join(' · ');
+  if (f.section === 'theoretical') return [f.value, f.scope === 'firstDrop' ? tr('firstDropShort') : null].filter(Boolean).join(' · ');
   return f.value ?? '—';
 }
 function renderVerify() {

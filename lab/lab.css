@@ -246,3 +246,11 @@ td.warn { color: var(--amber); font-weight: 700; }
 #pfFields > * + * { margin-top: 12px; }
 /* long hashes wrap, but a column never shrinks below 12 characters (phones scroll the table instead) */
 #res-fair td.mono { white-space: normal; overflow-wrap: anywhere; min-width: 12ch; max-width: 260px; }
+
+/* Ways / Megaways (P0-6): the rules list under the window tables */
+.ways-rules { margin: 10px 0 6px; padding-inline-start: 20px; display: grid; gap: 4px; font-size: 14px; }
+.ways-rules li, #res-theory .ways-source { overflow-wrap: anywhere; }
+#first-drop-note { font-weight: 600; }
+#res-theory td.ways-h { white-space: normal; min-width: 18ch; }
+/* Ways cards mixing words and numbers take their direction from the words. */
+#res-theory .card.ways-text .v, #res-theory .card.ways-text .s, #res-mc .card.ways-text .s { unicode-bidi: plaintext; }

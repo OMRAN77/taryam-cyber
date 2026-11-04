@@ -41,12 +41,14 @@
         <button type="button" data-sample="rouletteEuropean" data-t="sampleEU"></button>
         <button type="button" data-sample="rouletteAmerican" data-t="sampleUS"></button>
         <button type="button" data-sample="desertGoldWeighted" data-t="sampleDesertWeighted"></button>
+        <button type="button" data-sample="oasisCaravanWays" data-t="sampleWays"></button>
         <label class="file-btn"><input type="file" id="modelFile" accept=".json,.csv,application/json,text/csv" multiple><span data-t="uploadModel"></span></label>
         <button type="button" id="exportModel" data-t="exportJson"></button>
       </div>
-      <!-- Weighted stops and reel sets: the form cannot show them, so such a model is edited as JSON. -->
+      <!-- Weighted stops, reel sets and ways models: the form cannot show them, so such a model is edited as JSON. -->
       <div id="modelJsonBox" hidden>
-        <p class="muted small" data-t="jsonModeNote"></p>
+        <p class="muted small" id="jsonModeNote" data-t="jsonModeNote"></p>
+        <p class="muted small" id="waysJsonNote" data-t="waysJsonNote" hidden></p>
         <label><span data-t="modelJson"></span><textarea id="f-json" rows="18" dir="ltr" spellcheck="false" wrap="off"></textarea></label>
       </div>
       <div class="grid two">
