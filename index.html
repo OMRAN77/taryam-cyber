@@ -647,6 +647,7 @@ dialog select option{background:#0f1219;color:var(--text)}
 @media (max-width:860px){
   header{padding:8px 10px;flex-wrap:wrap;row-gap:6px}
   header h1{font-size:13px;flex:1 1 auto;overflow:hidden}
+  .hdr-start{flex:1 1 auto;overflow:hidden;gap:8px}
   header h1 .subtitle{display:none}
   header .btn{padding:7px 9px;min-width:34px;height:34px;justify-content:center}
   header .btn span:not(.must-show):not(#headerClockTime){display:none}
@@ -1019,6 +1020,12 @@ dialog::backdrop{background:rgba(0,0,0,.75)}
 body.resizing{cursor:col-resize;user-select:none}
 body.resizing iframe{pointer-events:none}
 
+/* Header panel toggles (projects / operations panel) */
+.hdr-start{display:flex;align-items:center;gap:10px;min-width:0}
+.panel-toggle svg{width:17px;height:17px}
+.panel-toggle[aria-expanded="true"]{color:var(--primary);border-color:rgba(0,255,156,.35)}
+html[dir="ltr"] .panel-toggle svg{transform:scaleX(-1)}
+
 /* Projects sidebar */
 .side-kicker{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 0;font:600 10.5px var(--font-mono);letter-spacing:.16em;color:var(--text-3);direction:ltr}
 .side-kicker span{color:var(--primary)}
@@ -1150,6 +1157,8 @@ html.mobile-ui #messages:empty ~ .chat-hint{display:none}
 
 <!-- Header -->
 <header>
+  <div class="hdr-start">
+  <button class="hdr-btn icon panel-toggle" id="btnToggleSide" type="button" title="إظهار / إخفاء المشاريع" aria-controls="sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
   <h1>
     <span class="brand"><img src="icons/icon-192.png" alt="logo" onerror="this.parentNode.innerHTML='<svg width=\'20\' height=\'20\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'#fff\' stroke-width=\'2.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><path d=\'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\'/></svg>'"></span>
     <span class="titles">
@@ -1158,6 +1167,7 @@ html.mobile-ui #messages:empty ~ .chat-hint{display:none}
     </span>
     <span class="sys-chip" id="sysChip"><i></i><b id="sysChipText">ONLINE</b></span>
   </h1>
+  </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center">
     <button class="hdr-btn" id="btnCmdK" title="Command Palette (Ctrl+K)">
       <svg><use href="#i-search"/></svg>
@@ -1178,6 +1188,7 @@ html.mobile-ui #messages:empty ~ .chat-hint{display:none}
         <button class="btn" id="btnInstall"><svg><use href="#i-install"/></svg> <span data-i18n="install">تثبيت التطبيق</span></button>
       </div>
     </div>
+    <button class="hdr-btn icon panel-toggle" id="btnTogglePanel" type="button" title="إظهار / إخفاء مركز العمليات" aria-controls="workarea"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
   </div>
 </header>
 
@@ -3200,6 +3211,7 @@ function setupResizer(res, panel, {min, max, key, snap = 140, after = false, fal
   res.addEventListener('pointerup', up);
   res.addEventListener('pointercancel', up);
   res.addEventListener('dblclick', toggle);
+  return { toggle, isOpen: () => panel.getBoundingClientRect().width > 1 };
   res.addEventListener('keydown', e => {
     const step = (e.key === 'ArrowLeft' ? 1 : e.key === 'ArrowRight' ? -1 : 0) * (document.documentElement.dir === 'rtl' ? 1 : -1) * (after ? -1 : 1);
     if(e.key === 'Enter'){ e.preventDefault(); toggle(); return; }
@@ -3213,8 +3225,17 @@ function setupResizer(res, panel, {min, max, key, snap = 140, after = false, fal
 }
 // The chat keeps at least 320px; the operations panel may take the rest or nothing.
 const socPanelMax = () => Math.max(0, $('main').getBoundingClientRect().width - $('#sidebar').getBoundingClientRect().width - 330);
-setupResizer($('#resizer2'), $('#workarea'), {min:300, max:socPanelMax, key:'panelWidthSoc', after:true, fallback:560});
-setupResizer($('#resizer1'), $('#sidebar'), {min:200, max:420, key:'panelWidthSidebar', snap:120, fallback:260});
+const panelSizer = setupResizer($('#resizer2'), $('#workarea'), {min:300, max:socPanelMax, key:'panelWidthSoc', after:true, fallback:560});
+const sideSizer = setupResizer($('#resizer1'), $('#sidebar'), {min:200, max:420, key:'panelWidthSidebar', snap:120, fallback:260});
+// Header buttons show / hide the same panels: on wide screens they collapse in place,
+// on phones (no drag bars) they open the panel as a drawer.
+function bindPanelToggle(btn, sizer, panel){
+  const sync = () => btn.setAttribute('aria-expanded', String(window.innerWidth <= 860 ? panel.classList.contains('open') : sizer.isOpen()));
+  btn.onclick = () => { if(window.innerWidth <= 860) openDrawer(panel); else sizer.toggle(); sync(); };
+  sync();
+}
+bindPanelToggle($('#btnToggleSide'), sideSizer, $('#sidebar'));
+bindPanelToggle($('#btnTogglePanel'), panelSizer, $('#workarea'));
 
 /* ═══ Command Palette ═══ */
 const CMD_ITEMS = [

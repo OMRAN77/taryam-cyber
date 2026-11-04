@@ -199,3 +199,35 @@ test('desktop drag bars push either side panel all the way in, and a double-clic
   await page.click('#btnGuestMode');
   assert.strictEqual(await width('#sidebar'), 0);
 });
+
+test('header panel buttons: collapse / restore on desktop, open the drawer on a phone', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const width = (page, sel) => page.$eval(sel, (e) => Math.round(e.getBoundingClientRect().width));
+  const desk = await browser.newPage({ viewport: { width: 1366, height: 820 } });
+  desk.setDefaultTimeout(5000);
+  await desk.goto(server.url + '/');
+  await desk.click('#btnGuestMode');
+  assert.strictEqual(await desk.getAttribute('#btnToggleSide', 'aria-expanded'), 'true');
+  await desk.click('#btnToggleSide');
+  assert.strictEqual(await width(desk, '#sidebar'), 0, 'projects hidden');
+  assert.strictEqual(await desk.getAttribute('#btnToggleSide', 'aria-expanded'), 'false');
+  await desk.click('#btnToggleSide');
+  assert.ok(await width(desk, '#sidebar') >= 200, 'projects back');
+  await desk.click('#btnTogglePanel');
+  assert.strictEqual(await width(desk, '#workarea'), 0, 'operations panel hidden');
+  await desk.click('#btnTogglePanel');
+  assert.ok(await width(desk, '#workarea') >= 300, 'operations panel back');
+
+  const phone = await browser.newPage({ viewport: { width: 553, height: 760 } });
+  phone.setDefaultTimeout(5000);
+  await phone.goto(server.url + '/');
+  await phone.click('#btnGuestMode');
+  await phone.click('#btnToggleSide');
+  await phone.waitForFunction(() => document.querySelector('#sidebar').classList.contains('open'));
+  await phone.evaluate(() => closeDrawers());
+  await phone.click('#btnTogglePanel');
+  await phone.waitForFunction(() => document.querySelector('#workarea').classList.contains('open'));
+  assert.strictEqual(await phone.$$eval('#socPanel [data-soc-tool]', (b) => b.length), 8, 'the operations panel opens as a drawer');
+});
