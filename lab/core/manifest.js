@@ -44,7 +44,11 @@ const REFERENCES = [
   { id: 'RFC 2104', title: 'HMAC', usedFor: 'HMAC-SHA256 outcomes of provably-fair rounds', when: (s) => s.results.fair && s.results.fair.scheme !== 'chain' },
   { id: 'xoshiro128** 1.1', title: 'Blackman & Vigna, scrambled linear generator', usedFor: 'Monte Carlo generator (simulation, and the P-values of the distribution tests)', when: (s) => !!(s.results.montecarlo || s.results.distTests) },
   { id: 'Stake Engine math-sdk', title: 'StakeEngine/math-sdk (MIT): docs/rgs_docs/data_format.md and utils/rgs_verification.py', usedFor: 'outcome-table (LUT) format and RGS limits; the commit is in parameters.lut.rgsProfile', when: (s) => !!s.results.lut },
+  { id: 'Stake Engine math-sdk (ways)', title: 'StakeEngine/math-sdk (MIT): src/calculations/ways.py and docs/math_docs/source_section/ways_info.md, commit 141b4e8 (2 Nov 2026)', usedFor: 'names of the ways multiplier strategies (symbol, board, global) and the reel-1 wild convention; read as documentation, none of its code is run', when: (s) => !!waysOf(s) },
 ];
+
+// The ways part of the theoretical result (P0-6), or null.
+const waysOf = (s) => (s.results.theoretical && s.results.theoretical.result && s.results.theoretical.result.model.ways) || null;
 
 const nistApplicable = (s, id) => !!(s.results.rng && s.results.rng.nist.results.some((t) => t.id === id && t.applicable));
 
@@ -77,6 +81,16 @@ export const DEVIATIONS = [
     text: 'Second level: the proportion bound (1 - alpha) - 3 sqrt(alpha (1 - alpha) / m) is applied as SP 800-22 4.2.1 states it, without rounding: with m = 100 sequences the bound is 0.96015, so at least 97 must pass. STS 2.1.2 (assess.c) truncates the bound times m to an integer and so accepts 96 of 100.',
     when: (s) => !!(s.results.rng && s.results.rng.nist.twoLevel),
   },
+  {
+    id: 'ways-board-sum', reference: 'StakeEngine/math-sdk src/calculations/ways.py (commit 141b4e8)',
+    text: 'Ways "board" multiplier strategy: the lab adds the multipliers (above 1) of each win\'s own cells, at least 1, and multiplies that win by the sum. ways.py keeps one running sum (board_mult_count) across the symbols it evaluates in a spin, so its value depends on their order; the lab does not reproduce that.',
+    when: (s) => !!(waysOf(s) && waysOf(s).multiplierStrategy === 'board'),
+  },
+  {
+    id: 'ways-wild-reel1', reference: 'StakeEngine/math-sdk src/calculations/ways.py (commit 141b4e8)',
+    text: 'Ways wild on reel 1: this model lets a wild on reel 1 start a win for every symbol (wildStartsWin true, the lab default); ways.py starts wins only for symbols shown on reel 1 (wildStartsWin false).',
+    when: (s) => !!(waysOf(s) && waysOf(s).wildStartsWin),
+  },
 ];
 
 // A provably-fair run is either the custom mode (a scheme) or an operator adapter
@@ -87,6 +101,14 @@ function fairParameters(f) {
     return { input: f.inputId, mode: 'adapter', adapter: { key: a.key ?? null, id: a.id ?? null, version: a.version ?? null }, options: f.options || null };
   }
   return { input: f.inputId, scheme: f.scheme ?? null, options: f.options || null };
+}
+
+function theoreticalParameters(th) {
+  const x = th.result, w = x.model.ways;
+  return {
+    input: th.inputId ?? null, evaluation: w ? 'ways' : 'lines', scope: x.scope || 'round',
+    ...(w ? { betCost: w.betCost, multiplierStrategy: w.multiplierStrategy, globalMultiplier: w.globalMultiplier, wildStartsWin: w.wildStartsWin, closedForm: Boolean(x.distribution && x.distribution.closedForm) } : {}),
+  };
 }
 
 // session: { inputs (from planAttachments), results, signer, attachLimit (the limit
@@ -104,6 +126,8 @@ export function buildManifest(session) {
     montecarlo: mc ? { generator: mc.generator, seed: mc.seed, spins: mc.spins, modelSha256: mc.modelSha256, resultSha256: mc.resultSha256 } : null,
     // The settings each analysis ran with, next to the inputs they apply to.
     parameters: {
+      // Theoretical RTP: the evaluation and what the figure covers (ways conventions, P0-6).
+      theoretical: th && th.result ? theoreticalParameters(th) : null,
       actual: r.actual ? { input: r.actual.inputId, options: r.actual.options || null } : null,
       rng: r.rng ? { input: r.rng.inputId, options: r.rng.options || null } : null,
       fair: r.fair ? fairParameters(r.fair) : null,

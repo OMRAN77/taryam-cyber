@@ -49,3 +49,10 @@ export const PRNG_DESCRIPTION_WEIGHTED = PRNG_DESCRIPTION + '; weighted models: 
   + ' (a reel without weights weighs every stop 1); each pick, among entries of total weight T, is the first entry whose cumulative weight exceeds u,'
   + ' where u = x mod T and x is k = max(1, ceil(bits(T-1)/32)) 32-bit draws joined most significant first,'
   + ' drawn again (all k words) while x >= 2^(32k) - (2^(32k) mod T); the picked stop shows in row 1 (the top row) and the next stops below it';
+
+// Ways models (evaluation "ways", slot-model.js) record this text: their draw order
+// adds the window height and the top reel. Every weighted pick follows the rule above
+// (for weights that are all 1 it is rng.nextBelow(count)).
+export const PRNG_DESCRIPTION_WAYS = PRNG_DESCRIPTION_WEIGHTED + '; ways models: on each reel 1..N in order, the window height (only when the reel has several, by their weights)'
+  + ' then the stop, or, for a joint (stop, height) table, one pick among its pairs of positive weight in stop order then in the order the heights are listed;'
+  + ' the window shows that many stops from the picked one; after reel N the top reel\'s stop (if there is a top reel), which with the next stops adds one cell to each covered reel in order';
