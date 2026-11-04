@@ -9,6 +9,7 @@ import { parseFairCsv, verifyHmacRounds, verifyHashChain, sha256Hex, hmacSha256,
 import { prngFromSeed, PRNG_DESCRIPTION } from './core/prng.js';
 import { simulate } from './core/montecarlo.js';
 import { sampler, slotSampler, simulatePlayers } from './core/casino.js';
+import { verifyReportPdf } from './core/report-sign.js';
 
 const decode = (bytes) => new TextDecoder().decode(bytes);
 const encode = (text) => new TextEncoder().encode(text);
@@ -111,6 +112,9 @@ const TASKS = {
     for (let i = 1; i < length; i++) chain.unshift(await sha256Hex(chain[0]));
     return encode(chain.join('\n') + '\n');
   },
+
+  // ---- signed reports: check a report PDF (signatures, attached files) ----
+  verifyReport: ({ bytes, trusted, originals }) => verifyReportPdf(bytes, { trustedFingerprint: trusted, originals: originals || [] }),
 };
 
 self.onmessage = async (e) => {

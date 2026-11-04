@@ -186,3 +186,15 @@ td.na { color: var(--muted); }
 .table-view summary { cursor: pointer; color: var(--primary-2); font-size: 13.5px; margin: 10px 0 8px; }
 .help ul { margin: 0; padding-inline-start: 20px; }
 .help li + li { margin-top: 6px; }
+
+/* signed reports: signing key box and the "Verify a report" tab */
+.key-box .hash { margin-top: 6px; font-size: 13.5px; letter-spacing: 0.03em; }
+.key-box p { margin: 8px 0 0; }
+.key-box .verdict { margin-top: 8px; font-weight: 600; }
+.dropzone {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 18px;
+  border: 1.5px dashed rgba(167, 139, 250, 0.45); border-radius: 12px; background: rgba(0, 0, 0, 0.18);
+}
+.dropzone.drag { border-color: var(--primary-2); background: rgba(139, 92, 246, 0.12); }
+#res-verify td.pass, #res-verify td.fail { text-align: center; }
+#res-verify .card .v { unicode-bidi: plaintext; }

@@ -1,11 +1,15 @@
 // Bilingual (Arabic / English) PDF report. Pages are laid out on canvases so the
 // browser shapes Arabic text, then embedded as JPEG pages; a final page carries the
 // identifiers and fingerprints as real, copyable text, and the input files plus a
-// machine-readable report.json are attached inside the PDF.
+// machine-readable report.json are attached inside the PDF. With a signing key,
+// report.sig (core/report-sign.js) signs report.json and every other byte of the PDF.
 import { PdfBuilder } from './core/pdf.js';
 import { canonicalJson } from './core/slot-model.js';
 import { sha256Hex } from './core/fair.js';
 import { pair, NIST_NAMES, VOLATILITY, VERDICT } from './i18n.js';
+import { planAttachments, buildManifest, reportIdFor, ATTACH_LIMIT_BYTES, REPORT_FILE, SIGNATURE_FILE } from './core/manifest.js';
+import { signaturePlaceholder, sealReportPdf } from './core/report-sign.js';
+import { formatFingerprint, ALGORITHM_INFO } from './core/sign.js';
 
 const W = 1488, H = 2105; // A4 at about 180 dpi
 const M = 92;
@@ -223,7 +227,9 @@ async function canvasToJpeg(canvas, quality = 0.9) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-// Machine-readable summary that the report fingerprint covers.
+// Machine-readable summary that the report fingerprint (and signature) covers.
+// session.signer: the signing key or null; session.inputs may carry `attachment`
+// (planAttachments: the name inside the PDF, null for hash only).
 export function reportPayload(session, createdAt) {
   const r = session.results;
   const out = {
@@ -232,6 +238,8 @@ export function reportPayload(session, createdAt) {
     meta: { title: session.meta.title || '', auditor: session.meta.auditor || '', notes: session.meta.notes || '' },
     inputs: session.inputs.map((i) => ({ id: i.id, name: i.name, kind: i.kind, size: i.size, sha256: i.sha256 })),
     results: {},
+    signer: session.signer ? { alg: session.signer.alg, keyFingerprint: session.signer.fingerprint, keyStorage: session.signer.storage, file: SIGNATURE_FILE } : null,
+    manifest: buildManifest(session),
   };
   if (r.theoretical) {
     const x = r.theoretical.result;
@@ -439,6 +447,31 @@ function mcSection(L, mc) {
   L.note('reproduce');
 }
 
+// ---- signed reports: reproducibility manifest page ----
+const REFERENCE_USE = {
+  'FIPS 180-4': 'refUseHash', 'PDF 1.4': 'refUsePdf', 'RFC 8032': 'refUseSignature', 'FIPS 186-5': 'refUseSignature',
+  'RFC 5280': 'refUseSpki', 'NIST SP 800-22 Rev. 1a': 'refUseNist', 'NIST STS 2.1.2': 'refUseSts', 'RFC 2104': 'refUseHmac', 'xoshiro128** 1.1': 'refUseMc',
+};
+const DEVIATION_TEXT = {
+  'nist-overlapping-exact': 'devOverlapping', 'nist-linear-pi0': 'devLinearPi0', 'nist-cusum-bounds': 'devCusum',
+  'nist-family-holm': 'devFamily', 'nist-proportion-bound': 'devProportion',
+};
+
+function manifestSection(L, m) {
+  L.section('manifestTitle');
+  L.kv('labVersion', m.lab.version, { mono: true });
+  L.kv('attachLimit', `${(m.attachmentLimitBytes / 1048576).toLocaleString('en-US')} MiB (${m.attachmentLimitBytes.toLocaleString('en-US')} ${pair('bytes')[1]})`);
+  if (m.model) L.kv('modelHash', m.model.sha256, { mono: true });
+  if (m.montecarlo) L.kv('seed', m.montecarlo.seed, { mono: true });
+  L.section('referencesTitle');
+  for (const ref of m.references) L.kv(null, ref.id, { labels: pair(REFERENCE_USE[ref.id] || 'refUseHash') });
+  if (m.deviations.length) {
+    L.section('deviationsTitle');
+    for (const d of m.deviations) L.note(null, DEVIATION_TEXT[d.id] ? pair(DEVIATION_TEXT[d.id]) : [d.text, d.text]);
+  }
+  L.note('manifestNote');
+}
+
 // Pretty JSON, but arrays of plain values stay on one line (reel strips, pay rows).
 function compactJson(v, indent = '') {
   if (Array.isArray(v)) {
@@ -466,18 +499,30 @@ function previewLines(input) {
 }
 
 function asciiSummary(payload, reportId, digest) {
+  const sg = payload.signer;
   const lines = [
     'TARYAM RTP Lab - verification page',
     '',
     'Report ID:      ' + reportId,
-    'Created (UTC):  ' + payload.createdAt,
+    'Created (UTC):  ' + payload.createdAt + (sg ? "  (the signer's own device clock)" : ''),
     'Report SHA-256: ' + digest,
     '                (SHA-256 of the attached file report.json)',
-    '',
-    'Inputs (attached inside this PDF):',
+    'Lab version:    ' + payload.manifest.lab.version,
   ];
+  if (sg) {
+    lines.push(
+      'Signature:      ' + ALGORITHM_INFO[sg.alg].label + ' (' + ALGORITHM_INFO[sg.alg].reference + '), attached file report.sig',
+      '                (signs report.json, and every other byte of this PDF)',
+      'Signer key:     SHA-256 of the public key (SPKI):',
+      '                ' + formatFingerprint(sg.keyFingerprint),
+      'Key storage:    ' + (sg.keyStorage === 'persistent' ? "kept in the signer's browser (private key not extractable)" : 'this session only (browser storage was unavailable); later reports use another key'),
+    );
+  }
+  lines.push('', 'Inputs:');
+  const attachedAs = new Map(payload.manifest.inputs.map((i) => [i.id, i.attachment]));
   payload.inputs.forEach((i, n) => {
-    lines.push(`  ${n + 1}. ${i.name} (${i.kind}, ${i.size} bytes)`);
+    const hashOnly = attachedAs.get(i.id) === null;
+    lines.push(`  ${n + 1}. ${i.name} (${i.kind}, ${i.size} bytes)` + (hashOnly ? ` - HASH ONLY: over ${payload.manifest.attachmentLimitBytes} bytes, not attached` : ', attached'));
     lines.push(`     SHA-256 ${i.sha256}`);
   });
   lines.push('', 'Results:');
@@ -493,7 +538,15 @@ function asciiSummary(payload, reportId, digest) {
   }
   if (r.fair) lines.push(`  Provably fair (${r.fair.scheme}): ${r.fair.ok ? 'all rounds verified' : 'FAILURES FOUND'}`);
   if (r.montecarlo) lines.push(`  Monte Carlo: ${r.montecarlo.spins} rounds, seed "${r.montecarlo.seed}", RTP ${(r.montecarlo.result.rtp * 100).toFixed(4)}%, result SHA-256 ${r.montecarlo.resultSha256}`);
-  lines.push('', 'How to verify: extract the attached files, compute their SHA-256 and compare with the', 'values above. Any change to an input or to report.json changes its fingerprint.', 'The fingerprint detects changes; it is not a digital signature of the issuer.');
+  if (sg) {
+    lines.push('', 'How to verify: open the RTP Lab\'s "Verify a report" tab and drop this PDF. It checks report.sig',
+      'and recomputes the SHA-256 of every attached file against the list in report.json. Compare the',
+      'signer key fingerprint with one the auditor publishes somewhere independent of this file.',
+      'A valid signature shows who holds the key, not that the content is correct, and the date is the',
+      "signer's own clock. This report is supporting evidence, not a certification.");
+  } else {
+    lines.push('', 'How to verify: extract the attached files, compute their SHA-256 and compare with the', 'values above. Any change to an input or to report.json changes its fingerprint.', 'The fingerprint detects changes; it is not a digital signature of the issuer.');
+  }
   const out = [];
   for (const l of lines) {
     let rest = l;
@@ -513,13 +566,17 @@ const SECTION_ORDER = ['theoretical', 'actual', 'rng', 'fair', 'montecarlo'];
 const RENDER = { theoretical: theorySection, actual: actualSection, rng: rngSection, fair: fairSection, montecarlo: mcSection };
 
 // session: { meta, inputs: [{ id, name, kind, size, sha256, bytes, mime }], results: {...} }
-export async function buildReport(session, { createCanvas, now = new Date(), onProgress = () => {} } = {}) {
+// signer: a key from core/sign.js (loadSigningKey), or null for an unsigned report.
+// Inputs larger than attachLimit are listed by SHA-256 only, not attached.
+export async function buildReport(session, { createCanvas, now = new Date(), onProgress = () => {}, signer = null, attachLimit = ATTACH_LIMIT_BYTES } = {}) {
   const createdAt = now.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  session = { ...session, inputs: planAttachments(session.inputs, { limit: attachLimit }), signer };
   const payload = reportPayload(session, createdAt);
   const json = canonicalJson(payload);
   const jsonBytes = new TextEncoder().encode(json);
   const digest = await sha256Hex(jsonBytes);
-  const reportId = 'TRL-' + createdAt.slice(0, 10).replace(/-/g, '') + '-' + digest.slice(0, 8).toUpperCase();
+  const reportId = reportIdFor(createdAt, digest);
+  const hashOnly = session.inputs.some((i) => i.attachment === null);
 
   const draw = (L) => {
     L.y += 10;
@@ -529,14 +586,26 @@ export async function buildReport(session, { createCanvas, now = new Date(), onP
     if (session.meta.auditor) L.kv('auditor', session.meta.auditor);
     if (session.meta.notes) L.note(null, [session.meta.notes, session.meta.notes]);
     L.kv('digest', digest, { mono: true });
+    if (signer) {
+      L.kv('sigAlg', `${ALGORITHM_INFO[signer.alg].label}  (${ALGORITHM_INFO[signer.alg].reference})`);
+      L.kv('keyFingerprint', formatFingerprint(signer.fingerprint), { mono: true });
+      L.kv('keyStorage', pair(signer.storage === 'persistent' ? 'keyPersistent' : 'keySession').join(' / '), { color: signer.storage === 'persistent' ? C.text : C.warn });
+      if (signer.storage !== 'persistent') L.note('sessionKeyNote');
+      L.note('signedReportNote');
+      L.note('signatureMeaning');
+    }
     L.section('inputsTitle');
     for (const i of session.inputs) {
       L.kv('file', `${i.name}  (${i.size.toLocaleString('en-US')} ${pair('bytes')[1]})`);
       L.kv('modelHash', i.sha256, { mono: true, labels: ['SHA-256', 'SHA-256'] });
+      if (i.attachment === null) L.kv('attachedState', pair('hashOnlyShort').join(' / '), { color: C.warn });
     }
+    if (hashOnly) L.note('hashOnlyNote');
     L.note('verifyHow');
-    L.note('signatureNote');
+    if (!signer) L.note('signatureNote');
     for (const key of SECTION_ORDER) if (session.results[key]) { L.newPage(); RENDER[key](L, session.results[key]); }
+    L.newPage();
+    manifestSection(L, payload.manifest);
     if (session.inputs.length) {
       L.newPage();
       L.section('appendix');
@@ -545,7 +614,7 @@ export async function buildReport(session, { createCanvas, now = new Date(), onP
         L.kv('modelHash', i.sha256, { mono: true, labels: ['SHA-256', 'SHA-256'] });
         const p = previewLines(i);
         L.mono(p.lines);
-        if (p.truncated) L.note('truncated');
+        if (p.truncated) L.note(i.attachment === null ? 'truncatedHashOnly' : 'truncated');
       }
     }
     L.end();
@@ -585,8 +654,14 @@ export async function buildReport(session, { createCanvas, now = new Date(), onP
     y -= l.startsWith('TARYAM') ? 22 : 12.5;
   }
   pdf.addPage({ lines: textPage });
-  pdf.attach('report.json', jsonBytes, { mime: 'application/json', description: 'Report data covered by the report SHA-256' });
-  for (const i of session.inputs) pdf.attach(i.name, i.bytes, { mime: i.mime || 'application/octet-stream', description: 'SHA-256 ' + i.sha256 });
+  pdf.attach(REPORT_FILE, jsonBytes, { mime: 'application/json', description: 'Report data covered by the report SHA-256' + (signer ? ' and signed in report.sig' : '') });
+  const sigId = signer ? pdf.attach(SIGNATURE_FILE, signaturePlaceholder(), { mime: 'application/json', description: 'Signature of report.json and of this PDF (TARYAM RTP Lab)' }) : null;
+  for (const i of session.inputs) if (i.attachment !== null) pdf.attach(i.attachment, i.bytes, { mime: i.mime || 'application/octet-stream', description: 'SHA-256 ' + i.sha256 });
+  const bytes = pdf.build();
+  if (signer) await sealReportPdf(bytes, pdf.dataOffset(sigId), signer, jsonBytes);
   onProgress(1);
-  return { bytes: pdf.build(), reportId, digest, json, pages: totalPages + 1, thumbnails };
+  return {
+    bytes, reportId, digest, json, pages: totalPages + 1, thumbnails,
+    signature: signer ? { alg: signer.alg, fingerprint: signer.fingerprint, storage: signer.storage } : null,
+  };
 }
