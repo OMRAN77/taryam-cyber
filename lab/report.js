@@ -270,7 +270,8 @@ export function reportPayload(session, createdAt) {
       chiSquare: r.rng.chi, serialCorrelation: r.rng.serial,
     };
   }
-  if (r.fair) {
+  if (r.fair && r.fair.mode === 'adapter') out.results.fair = pfPayload(r.fair);
+  else if (r.fair) {
     const f = r.fair.result;
     out.results.fair = { input: r.fair.inputId, scheme: r.fair.scheme, options: r.fair.options, ok: f.ok, summary: { ...f, mismatches: (f.mismatches || []).slice(0, 100), commitmentFailures: (f.commitmentFailures || []).slice(0, 100), breaks: (f.breaks || []).slice(0, 100) } };
   }
@@ -584,6 +585,7 @@ function rngSection(L, rg) {
 }
 
 function fairSection(L, fr) {
+  if (fr.mode === 'adapter') { pfSection(L, fr); return; }
   const f = fr.result;
   L.section('tabFair');
   L.kv('fairScheme', fr.scheme === 'chain' ? pair('schemeChain').join(' / ') : pair('schemeHmac').join(' / '));
@@ -605,6 +607,124 @@ function fairSection(L, fr) {
   L.badge(f.ok ? 'allVerified' : 'someFailed', f.ok ? C.pass : C.fail);
   const bad = [...f.commitmentFailures.map((m) => [m.line, 'SHA-256', m.claimed]), ...f.mismatches.map((m) => [m.line, String(m.expected), m.claimed])].slice(0, 25);
   if (bad.length) L.table([{ key: 'line', w: 0.15 }, { key: 'expected', w: 0.45, mono: true }, { key: 'claimed', w: 0.4, mono: true }], bad);
+}
+
+// ---- Provably fair v2 (adapter audit) ----
+function pfPayload(fr) {
+  const r = fr.result, a = fr.adapter;
+  return {
+    input: fr.inputId, mode: 'adapter',
+    adapter: { key: a.key, id: a.id, version: a.version, evidence: a.evidence, sourceUrl: a.sourceUrl, captureDate: a.captureDate, selfTest: a.selfTest ? { ok: a.selfTest.ok, passed: a.selfTest.passed, total: a.selfTest.total } : null },
+    options: { ...fr.options, paytable: fr.options.paytable || null },
+    verdict: r.verdict, rows: r.rows, counts: r.counts, payout: r.payout,
+    epochs: r.epochs.slice(0, 100), listed: r.listed || null, chain: r.chain, uniformity: r.uniformity, games: r.games || {},
+    issueCounts: r.issueCounts, issues: r.issues.slice(0, 100),
+    // per-row verdicts: mismatches first, then rounds not checked (with the reason)
+    problemRows: (r.problemRows || []).slice(0, 200),
+  };
+}
+
+// Short text for an issue's detail (nonce range, P-value, link count...) in `lang`.
+export function pfIssueDetail(i, lang = 'en') {
+  const d = i.detail || {};
+  const tx = (k, v) => pair(k)[lang === 'en' ? 1 : 0].replace('{0}', v);
+  if (d.from !== undefined) return tx('pfD_nonce', `${d.from}${d.to !== d.from ? '–' + d.to : ''}`);
+  if (d.nonce !== undefined) return tx('pfD_nonce', d.nonce);
+  if (d.pValue !== undefined) return 'P = ' + fmtP(d.pValue);
+  if (d.links !== undefined && d.links !== null) return tx('pfD_links', num(d.links, 0));
+  if (d.missing !== undefined) return tx('pfD_missing', d.missing);
+  if (d.rows !== undefined) return tx('pfD_rows', d.rows);
+  if (d.first !== undefined) return tx('pfD_first', d.first);
+  if (d.edge) return tx('pfEdge_' + d.edge);
+  if (d.era) return tx('pfEra_' + d.era);
+  if (d.formula) return tx('pfLimboShort_' + d.formula);
+  if (d.message) return typeof d.message === 'object' ? d.message[lang === 'en' ? 'en' : 'ar'] : String(d.message);
+  if (d.gap !== undefined) return tx('pfD_gap', d.gap);
+  if (d.clients !== undefined) return tx('pfD_clients', d.clients);
+  if (d.length !== undefined) return tx('pfD_length', d.length);
+  if (d.fromGame !== undefined) return tx('pfD_game', `${d.fromGame} → ${d.toGame}`);
+  if (d.gameId !== undefined) return tx('pfD_game', d.gameId);
+  if (d.hash) return d.hash.slice(0, 12) + '…';
+  return i.epoch ? i.epoch.slice(0, 12) + '…' : '';
+}
+
+const PF_COLOR = { PASS: C.pass, CONDITIONAL: C.warn, FAIL: C.fail, INCONCLUSIVE: C.warn, NOTHING_CHECKED: C.warn };
+const SEV_COLOR = { fail: C.fail, warn: C.warn, info: C.muted };
+function pfSection(L, fr) {
+  const r = fr.result, a = fr.adapter, v = r.verdict;
+  const both = (k) => pair(k).join(' / ');
+  const n = (x) => x.toLocaleString('en-US');
+  L.section('tabFair');
+  L.kv('pfAdapter', `${a.name[1]} · ${a.id}@${a.version}`);
+  L.kv('pfEvidence', both('pfEv_' + a.evidence), { color: a.evidence === 'verified' ? C.pass : a.evidence === 'unconfirmed' ? C.warn : C.accent });
+  L.kv('pfSource', a.sourceUrl, { mono: true });
+  L.kv('pfCaptureDate', a.captureDate);
+  if (a.selfTest) L.kv('pfSelfTest', `${a.selfTest.passed} / ${a.selfTest.total}`, { color: a.selfTest.ok ? C.pass : C.fail });
+  // the games the audit actually covered (rows per game), not only the default one
+  const played = Object.entries(r.games || {});
+  const formulaOf = (g) => (a.games && a.games[g] && a.games[g].formula ? a.games[g].formula : null);
+  if (played.length > 1) {
+    L.kv('pfGame', played.map(([g, c]) => `${g}: ${n(c)}`).join(' · '));
+    const lines = played.filter(([g]) => formulaOf(g)).map(([g]) => `${g} — ${formulaOf(g)}`);
+    if (lines.length) L.note(null, [lines.join(' ؛ '), lines.join('; ')]);
+  } else {
+    const g = played.length ? played[0][0] : r.options.game;
+    if (g) L.kv('pfGame', g + (formulaOf(g) ? ' — ' + formulaOf(g) : ''));
+  }
+  if (a.games && a.games.limbo && (!played.length || r.games.limbo)) L.kv('pfLimbo', r.options.limboFormula === 'docs' ? 'docs: 1e8 / (f × 1e8) × 0.99' : 'calculator: 2^24 / (floor(f × 2^24) + 1) × 0.99');
+  L.note('pfEvNote_' + a.evidence);
+  L.note(null, a.notes);
+  L.kv('roundsChecked', n(r.rows));
+  L.kv('pfMatched', `${n(r.counts.ok)} / ${n(r.counts.ok + r.counts.mismatch)}`, { color: r.counts.mismatch ? C.fail : C.pass });
+  if (r.counts.notChecked) L.kv('pfNotChecked', n(r.counts.notChecked));
+  if (r.counts.computed) L.kv('pfComputedOnly', n(r.counts.computed));
+  if (r.epochs.length) L.kv('pfEpochs', `${r.epochs.filter((e) => e.commitment === 'ok').length} / ${r.epochs.length}`);
+  if (r.payout.checked) L.kv('pfPayouts', `${n(r.payout.ok)} / ${n(r.payout.checked)}`, { color: r.payout.mismatch ? C.fail : C.pass });
+  if (r.chain) {
+    L.kv('pfChainLinks', n(r.chain.linksChecked));
+    L.kv('pfChainBreaks', String(r.chain.breaks), { color: r.chain.breaks ? C.fail : C.pass });
+    L.kv('pfLinksWalked', n(r.chain.linksWalked));
+    const term = r.chain.terminating;
+    if (term) {
+      L.kv('pfTerminatingRes', (term.status === 'ok' ? '✓' : '✗') + (term.links !== null && term.links !== undefined ? ` · ${n(term.links)}` : ''), { color: term.status === 'ok' ? C.pass : C.fail });
+      L.note(term.status === 'ok' ? 'pfTerm_ok' : term.status === 'mismatch' ? 'pfTerm_mismatch' : term.status === 'no-target' ? 'pfTerm_noTarget' : 'pfTerm_notReached');
+    }
+  }
+  L.kv('pfVerdictCode', String(v.exit));
+  L.badge('pfVS_' + v.code, PF_COLOR[v.code]);
+  L.note('pfV_' + v.code);
+  L.note('pfVerdictNote');
+  const issues = r.issues.slice().sort((x, y) => ({ fail: 0, warn: 1, info: 2 }[x.severity] - { fail: 0, warn: 1, info: 2 }[y.severity])).slice(0, 25);
+  if (issues.length) {
+    L.section('pfIssuesTable');
+    L.table([{ key: 'pfSeverity', w: 0.15 }, { key: 'pfDescription', w: 0.3, mono: true }, { key: 'line', w: 0.12, mono: true }, { key: 'expected', w: 0.13, mono: true }, { key: 'claimed', w: 0.13, mono: true }, { labels: ['التفاصيل', 'Detail'], w: 0.17, mono: true }],
+      issues.map((i) => [{ text: both('pfSev_' + i.severity), color: SEV_COLOR[i.severity], bold: i.severity === 'fail' }, i.code, i.line ?? (i.lines ? i.lines.slice(0, 3).join(' · ') : ''), i.expected ?? '', i.claimed ?? '', pfIssueDetail(i)]));
+    for (const code of [...new Set(issues.map((i) => i.code))]) {
+      const [ar, en] = pair('pfI_' + code);
+      L.note(null, [`${ar} (${code})`, `${code}: ${en}`]);
+    }
+  }
+  const rows = r.problemRows || [];
+  if (rows.length) {
+    L.section('pfRowsTable');
+    L.table([{ key: 'line', w: 0.1, mono: true }, { key: 'pfGame', w: 0.14, mono: true }, { key: 'pfRowStatus', w: 0.36 }, { key: 'expected', w: 0.2, mono: true }, { key: 'claimed', w: 0.2, mono: true }],
+      rows.slice(0, 25).map((p) => [p.line, p.game || '—', p.status === 'mismatch' ? { text: both('pfRow_mismatch'), color: C.fail, bold: true } : { text: both('pfR_' + p.reason), color: C.muted }, p.computed ?? '—', p.claimed ?? '']));
+    if (rows.length > 25) L.note(null, [`${pair('pfRowsShown')[0]}: 25 / ${n(r.counts.mismatch + r.counts.notChecked)}`, `${pair('pfRowsShown')[1]}: 25 / ${n(r.counts.mismatch + r.counts.notChecked)}`]);
+  }
+  if (r.epochs.length) {
+    L.section('pfEpochTable');
+    L.table([{ key: 'pfCommitment', w: 0.22 }, { labels: ['SHA-256', 'SHA-256'], w: 0.24, mono: true }, { key: 'roundsChecked', w: 0.1, mono: true }, { key: 'pfNonces', w: 0.16, mono: true }, { key: 'pfForward', w: 0.28 }],
+      r.epochs.slice(0, 20).map((e) => [both('pfCm_' + e.commitment), e.hash.slice(0, 20) + '…', e.rows, e.nonceMin === null ? '—' : `${e.nonceMin}–${e.nonceMax}`, e.forward ? both('pfFw_' + e.forward) : '—']));
+    L.note('pfCommitmentNote');
+    if (r.listed === 'newest-first') L.note('pfListedNewest');
+  }
+  if (r.uniformity.length) {
+    L.section('pfUniformity');
+    L.table([{ key: 'pfGame', w: 0.25 }, { key: 'roundsChecked', w: 0.2, mono: true }, { labels: ['χ² / df', 'χ² / df'], w: 0.2, mono: true }, { key: 'pValue', w: 0.15, mono: true }, { key: 'result', w: 0.2 }],
+      r.uniformity.map((u) => [u.game + (u.group.rows ? ` (${u.group.rows})` : ''), n(u.n), u.chi2 === null ? '—' : `${num(u.chi2, 2)} / ${u.df}`, fmtP(u.pValue),
+        u.status === 'na' ? { text: both('pfInsufficient'), color: C.muted } : u.status === 'pass' ? { text: both('pfNotRejected'), color: C.pass } : statusCell(u.status)]));
+    L.note('pfUniformityNote');
+  }
 }
 
 function mcSection(L, mc) {
@@ -853,7 +973,13 @@ function asciiSummary(payload, reportId, digest) {
     lines.push(`  RNG: NIST SP 800-22 passed ${app.filter((t) => (t.status || (t.pass ? 'pass' : 'fail')) === 'pass').length} of ${app.length} applicable tests` + (r.rng.twoLevel ? ` (two-level, ${r.rng.twoLevel.sequences} sequences)` : '') + `; chi-square ${r.rng.chiSquare.status || (r.rng.chiSquare.pass ? 'pass' : 'fail')}; serial correlation ${r.rng.serialCorrelation.status || (r.rng.serialCorrelation.pass ? 'pass' : 'fail')}`);
     if (fam) lines.push(`  Family verdict (Holm over ${fam.pValueCount} P-values, alpha ${fam.alpha}): ${fam.pass ? 'no gross statistical defect detected' : 'statistical defect detected'}; ${fam.belowAlpha} below alpha, ~${fam.expectedBelowAlpha.toFixed(1)} expected by chance`);
   }
-  if (r.fair) lines.push(`  Provably fair (${r.fair.scheme}): ${r.fair.ok ? 'all rounds verified' : 'FAILURES FOUND'}`);
+  if (r.fair && r.fair.mode === 'adapter') {
+    const f = r.fair;
+    lines.push(`  Provably fair: adapter ${f.adapter.key} (evidence: ${f.adapter.evidence}; self-test ${f.adapter.selfTest ? f.adapter.selfTest.passed + '/' + f.adapter.selfTest.total : 'n/a'}), verdict ${f.verdict.code} (code ${f.verdict.exit}); ${f.counts.ok} of ${f.counts.ok + f.counts.mismatch} recomputed results match, ${f.counts.notChecked} not checked` + (f.payout.checked ? `; payouts ${f.payout.ok}/${f.payout.checked}` : '') + (f.chain && f.chain.terminating ? `; terminating hash ${f.chain.terminating.status}` : ''));
+    const issues = Object.entries(f.issueCounts).filter(([c]) => f.verdict.fails.includes(c) || f.verdict.warns.includes(c));
+    if (issues.length) lines.push('  Issues: ' + issues.map(([c, n]) => `${c} x${n}`).join(', '));
+    lines.push('  Not a certification: provably fair covers outcome derivation only, not RTP, settlement or paytables.');
+  } else if (r.fair) lines.push(`  Provably fair (${r.fair.scheme}): ${r.fair.ok ? 'all rounds verified' : 'FAILURES FOUND'}`);
   if (r.montecarlo) lines.push(`  Monte Carlo: ${r.montecarlo.spins} rounds, seed "${r.montecarlo.seed}", RTP ${(r.montecarlo.result.rtp * 100).toFixed(4)}%, result SHA-256 ${r.montecarlo.resultSha256}`);
   if (r.lut) lutAscii(lines, r.lut);
   if (sg) {
