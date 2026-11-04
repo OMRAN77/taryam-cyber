@@ -93,6 +93,32 @@
       <div class="actions"><button type="button" class="primary" id="run-actual" data-t="run"></button><progress id="prog-actual" max="1" value="0" hidden></progress></div>
       <div class="error" id="err-actual" hidden></div>
       <div class="results" id="res-actual"></div>
+
+      <section class="dist" id="dist" aria-labelledby="dist-title">
+        <h2 class="dist-title" id="dist-title" data-t="distTitle"></h2>
+        <p class="muted small" data-t="distIntro"></p>
+        <div class="toolbar">
+          <label class="check"><input type="checkbox" id="d-useTheory" checked><span data-t="distUseTheory"></span></label>
+          <label class="file-btn"><input type="file" id="pmfFile" accept=".csv,text/csv" multiple><span data-t="distUpload"></span></label>
+          <button type="button" id="sample-dist" data-t="distSample"></button>
+          <button type="button" id="clear-pmf" class="ghost" data-t="distClear" hidden></button>
+        </div>
+        <div class="muted small" id="dist-candidates"></div>
+        <div class="grid three">
+          <label><span data-t="distReference"></span><select id="d-ref"></select></label>
+          <label><span data-t="distMaxWin"></span><input id="d-maxWin" dir="ltr" inputmode="decimal" autocomplete="off"></label>
+          <label><span data-t="distAlpha"></span>
+            <select id="d-alpha"><option value="0.05">0.05</option><option value="0.01" selected>0.01</option><option value="0.001">0.001</option></select>
+          </label>
+          <label><span data-t="distGap"></span><input id="d-gap" value="2" dir="ltr" inputmode="decimal" autocomplete="off"></label>
+          <label><span data-t="distMode"></span><input id="d-mode" dir="ltr" autocomplete="off" spellcheck="false"></label>
+          <label><span data-t="seed"></span><input id="d-seed" value="taryam-audit" dir="ltr" spellcheck="false"></label>
+        </div>
+        <p class="muted small" data-t="distNote"></p>
+        <div class="actions"><button type="button" class="primary" id="run-dist" data-t="distRun"></button><progress id="prog-dist" max="1" value="0" hidden></progress></div>
+        <div class="error" id="err-dist" hidden></div>
+        <div class="results" id="res-dist"></div>
+      </section>
     </section>
 
     <section class="panel" id="panel-rng" role="tabpanel" hidden>

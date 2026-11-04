@@ -157,6 +157,7 @@ async function runTheory() {
     session.results.theoretical = { inputId: 'model', modelSha256, result, raw };
     delete session.results.montecarlo;
     renderTheory();
+    renderDistCandidates();
   });
 }
 
@@ -276,6 +277,212 @@ function renderActual() {
     box.append(el('p', { class: 'muted' }, tr('mergedRows') + ': ' + parts.join(' · ')));
   }
   if (ac.skipped) box.append(el('p', { class: 'muted' }, tr('skippedRows') + ': ' + ac.skipped + ' (' + tr('line') + ' ' + a.skippedSample.map((s) => s.line).join(', ') + ')'));
+}
+
+// ---------- distribution tests (core/audit-stats.js) ----------
+// Uploaded distribution CSVs: { inputId, label }. The theoretical tab's model joins
+// them as the first candidate when its box is ticked.
+let distFiles = [];
+const optNum = (s) => (String(s).trim() === '' ? null : Number(String(s).trim().replace(',', '.')));
+function distCandidates() {
+  const th = session.results.theoretical;
+  const list = [];
+  if ($('#d-useTheory').checked && th) list.push({ kind: 'exact', label: th.raw.name || 'model', inputId: 'model', th });
+  for (const f of distFiles) list.push({ kind: 'csv', label: f.label, inputId: f.inputId });
+  return list;
+}
+function renderDistCandidates() {
+  const list = distCandidates();
+  const box = $('#dist-candidates');
+  box.textContent = list.length ? tr('distLoaded') + ': ' + list.map((c, i) => `${i + 1}. ${c.label}`).join(' · ') : tr('distNone');
+  $('#clear-pmf').hidden = !distFiles.length;
+  const sel = $('#d-ref'), keep = sel.value;
+  sel.replaceChildren(...list.map((c, i) => el('option', { value: String(i) }, `${i + 1}. ${c.label}`)));
+  if (keep && Number(keep) < list.length) sel.value = keep;
+}
+
+async function runDist() {
+  await withTask('dist', async (progress) => {
+    const input = session.inputs.get('playlog');
+    if (!input) throw { ar: tr('noFile'), en: t('noFile', 'en') };
+    const list = distCandidates();
+    if (!list.length) throw { ar: t('distNoPmf', 'ar'), en: t('distNoPmf', 'en') };
+    if (list.length > 5) throw { ar: t('distTooMany', 'ar'), en: t('distTooMany', 'en') };
+    const candidates = list.map((c) => {
+      if (c.kind === 'csv') return { kind: 'csv', label: c.label, bytes: session.inputs.get(c.inputId).bytes };
+      const d = c.th.result.distribution;
+      if (!d || !d.pmf) throw { ar: t('distNoModelPmf', 'ar'), en: t('distNoModelPmf', 'en') };
+      return { kind: 'exact', label: c.label, pmf: d.pmf };
+    });
+    const th = list.find((c) => c.kind === 'exact');
+    const thd = th && th.th.result.distribution;
+    let sigma = optNum($('#a-sigma').value);
+    if (sigma === null && thd) sigma = thd.sd;
+    let maxWin = optNum($('#d-maxWin').value);
+    if (maxWin === null && thd && !thd.maxWin.unbounded) maxWin = thd.maxWin.withFeature ?? thd.maxWin.base;
+    const declared = optNum($('#a-declared').value);
+    const gap = optNum($('#d-gap').value);
+    const options = {
+      refIndex: Number($('#d-ref').value) || 0, alpha: Number($('#d-alpha').value), seed: $('#d-seed').value,
+      declaredRtp: declared === null ? null : declared / 100, sigma, maxWin, gap: gap > 0 ? gap / 100 : 0.02, mode: $('#d-mode').value.trim(),
+    };
+    const result = await runTask('distTests', { bytes: input.bytes, candidates, options }, progress);
+    session.results.distTests = { inputId: 'playlog', inputIds: list.map((c) => c.inputId), candidates: list.map((c) => ({ label: c.label, kind: c.kind, inputId: c.inputId })), options, result };
+    renderDist();
+  });
+}
+
+const rounds = (v) => (v === null || v === undefined ? '—' : !Number.isFinite(v) ? '∞' : Math.ceil(v).toLocaleString('en-US'));
+const times = (x) => fmt(x, 4) + '×';
+function binLabel(b) {
+  const range = b.lo === null ? null : b.lo === b.hi ? times(b.lo) : `${fmt(b.lo, 4)} – ${times(b.hi)}`;
+  return [range, b.triggered ? tr('distTriggered') : null].filter(Boolean).join(' + ');
+}
+// Minimum detectable effect as a card: "±0.60%", "w = 0.0089 · relative change in
+// the share of rounds with no win".
+function mdeCard(g) {
+  const m = g.mde;
+  const b = g.bins[m.bin];
+  const zeroBin = b && b.lo === 0 && b.hi === 0 && !b.triggered;
+  if (m.relativeChange === null) return { k: 'distMde', v: `w = ${fmt(m.w, 4)}` };
+  return { k: 'distMde', v: '±' + pct(m.relativeChange, 2), s: `w = ${fmt(m.w, 4)} · ${tr('distMdeBin')} ${tr(zeroBin ? 'distNoWinShare' : 'distLargestBin')}` };
+}
+
+const svgNs = 'http://www.w3.org/2000/svg';
+function svg(tag, attrs = {}, text = null) {
+  const n = document.createElementNS(svgNs, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  if (text !== null) n.textContent = text;
+  return n;
+}
+// log10 of the bettor's capital over the rounds, with the 1/alpha line.
+function eChart(b) {
+  const W = 640, H = 210, L = 46, R = 10, T = 10, B = 28;
+  const pts = b.trajectory;
+  const n = Math.max(1, pts[pts.length - 1][0]);
+  const thr = b.threshold / Math.LN10;
+  const ys = pts.map((p) => p[1] / Math.LN10);
+  const lo = Math.min(-1, ...ys), hi = Math.max(thr + 0.5, ...ys);
+  const X = (r) => L + ((W - L - R) * r) / n, Y = (v) => T + ((H - T - B) * (hi - v)) / (hi - lo);
+  const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart echart', role: 'img', 'aria-label': tr('distChartTitle') });
+  for (const [v, cls] of [[0, 'ezero'], [thr, 'ethr']]) {
+    s.append(svg('line', { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: cls }));
+    s.append(svg('text', { x: L - 6, y: Y(v) + 4, 'text-anchor': 'end' }, fmt(v, 2)));
+  }
+  s.append(svg('polyline', { points: pts.map((p, i) => `${X(p[0]).toFixed(1)},${Y(ys[i]).toFixed(1)}`).join(' '), class: 'eline' }));
+  s.append(svg('text', { x: L, y: H - 8 }, '0'));
+  s.append(svg('text', { x: W - R, y: H - 8, 'text-anchor': 'end' }, n.toLocaleString('en-US')));
+  return el('figure', { class: 'echart-wrap' }, s, el('figcaption', { class: 'muted small' }, tr('distChartTitle')));
+}
+
+function renderDist() {
+  const box = $('#res-dist');
+  box.replaceChildren();
+  const dt = session.results.distTests;
+  if (!dt) return;
+  const r = dt.result, f = r.fit;
+  const ref = r.candidates[r.refIndex];
+  const vcls = { consistent: 'pass', mismatch: 'fail', impossible: 'fail', insufficient: 'warn' };
+  box.append(el('div', { class: 'verdict ' + vcls[f.verdict], id: 'dist-verdict' }, tr('verdict') + ': ' + tr('distV_' + f.verdict)));
+  if (f.verdict === 'consistent') box.append(el('p', { class: 'muted' }, tr('distPassNote')));
+  if (f.verdict === 'mismatch') box.append(el('p', { class: 'muted' }, tr('distMismatchNote')));
+  if (f.verdict === 'impossible') box.append(el('p', { class: 'muted' }, tr('distImpossibleNote')));
+  if (f.unavailable) box.append(el('div', { class: 'verdict warn' }, tr('distNeedTrigger')));
+  if (r.mixedModes) box.append(el('div', { class: 'verdict warn' }, tr('distMixedModes') + ' (' + r.modes.join(', ') + ')'));
+  const g = f.gof;
+  box.append(cards([
+    { k: 'roundsChecked', v: r.rounds.toLocaleString('en-US'), s: r.mode ? tr('modeName') + ': ' + r.mode : null },
+    { k: 'distReference', v: ref.label, s: tr(ref.scope === 'round' ? 'distScopeRound' : 'distScopeBase') },
+    g && g.applicable && { k: 'distMcP', v: fmtP(g.pValue), s: `G ${fmt(g.G, 2)} · df ${g.df} · ${g.replicates.toLocaleString('en-US')} MC`, cls: f.tests.find((x) => x.id === 'gof').rejected ? 'bad' : 'good' },
+    g && g.applicable && mdeCard(g),
+    f.offSupport && f.offSupport.count > 0 && { k: 'distOff', v: f.offSupport.count.toLocaleString('en-US'), cls: 'bad', s: f.offSupport.examples.map((e) => `#${e.round}: ${times(e.x)}`).join(' · ') },
+  ]));
+
+  // The family of tests.
+  const inFamily = (id, index) => f.tests.find((x) => x.id === id && (index === undefined || x.index === index));
+  const status = (t) => (!t ? { v: tr('distTooRare'), cls: 'na' } : t.rejected ? { v: tr('distReject'), cls: 'fail' } : { v: tr('distKeep'), cls: 'pass' });
+  // Columns: test | observed | expected | P | status (no words inside the number cells).
+  const mono = (v) => ({ v, cls: 'mono' });
+  const rate = (x, d) => [mono(`${pct(x.rate, d)} [${pct(x.ci[0], d)} – ${pct(x.ci[1], d)}]`), mono(pct(x.expected, d)), mono(fmtP(x.pValue))];
+  const rows = [];
+  if (g && g.applicable) rows.push([tr('distGof'), mono(`G ${fmt(g.G, 2)} · χ² ${fmt(g.X2, 2)}`), mono(`df ${g.df}`), mono(`${fmtP(g.pValue)} · χ² ${fmtP(g.pValueX2)}`), status(inFamily('gof'))]);
+  if (f.hit) rows.push([tr('distHit'), ...rate(f.hit, 3), status(inFamily('hit'))]);
+  if (f.trigger) rows.push([tr('distTrigger'), ...rate(f.trigger, 4), status(inFamily('trigger'))]);
+  (f.tails || []).forEach((t, i) => rows.push([`${tr('distTailRow')} ${times(t.threshold)}`, mono(t.observed.toLocaleString('en-US')), mono(fmt(t.expected, 2)), mono(fmtP(t.pValue)), status(inFamily('tail', i))]));
+  if (rows.length) box.append(sub('distTests'), table(['test', 'distObserved', 'distExpected', 'pValue', 'result'], rows));
+  if (f.tails && f.tails.length) box.append(el('p', { class: 'muted small' }, tr('distTailNote')));
+  if (f.hit) box.append(el('p', { class: 'muted small' }, `${tr('distMdeRate')} (${tr('distHit')}): ${pct(f.hit.mde.absolute, 3)}` + (f.trigger ? ` · (${tr('distTrigger')}): ${pct(f.trigger.mde.absolute, 4)}` : '')));
+
+  if (f.topPrize) {
+    const tp = f.topPrize;
+    box.append(sub('distTop'), cards([
+      { k: 'distTop', v: times(tp.x), s: tp.paidSpinOnly ? tr('distTopBase') : null },
+      { k: 'distTopProb', v: tp.probability.toExponential(3), s: tr('oneIn') + ' ' + fmt(tp.oneIn, 0) + ' ' + tr('rounds') },
+      { k: 'distTopExpected', v: fmt(tp.expected, 3), s: tr('distTopSeen') + ': ' + tp.observed.toLocaleString('en-US') },
+      { k: 'distTopNever', v: pct(tp.pNeverSeen, 2) },
+      tp.ruleOfThree !== null && { k: 'distRuleOfThree', v: tp.ruleOfThree.toExponential(3), s: '≈ 3 / ' + r.rounds.toLocaleString('en-US') },
+      tp.rtpShare !== null && { k: 'distTopShare', v: pct(tp.rtpShare, 2) },
+      { k: 'distTopFor95', v: rounds(tp.roundsFor95) },
+    ]));
+  }
+  if (f.unseen) box.append(el('p', { class: 'muted' }, `${tr('distUnseen')}: ${pct(f.unseen.rtpAbove, 3)} (${tr('distMaxObserved')}: ${times(f.unseen.maxObserved)})`));
+  if (g && g.applicable) {
+    const d = el('details', { class: 'table-view' }, el('summary', {}, tr('distBins') + ` (${g.bins.length})`),
+      table(['range', 'distObserved', 'distExpected', 'probability'], g.bins.map((b) => [{ v: binLabel(b), cls: 'num' }, { v: b.observed.toLocaleString('en-US'), cls: 'num' }, { v: fmt(b.expected, 2), cls: 'num' }, { v: b.p.toExponential(4), cls: 'mono' }])));
+    box.append(d);
+  }
+
+  // Versions.
+  const v = r.versions;
+  if (v && v.error) box.append(sub('distVersions'), el('div', { class: 'verdict warn' }, pick([v.error.ar, v.error.en])));
+  else if (v) {
+    box.append(sub('distVersions'));
+    const s = v.sequential;
+    box.append(el('div', { class: 'verdict ' + (s.decision === null ? 'warn' : s.decision === v.refIndex ? 'pass' : 'fail'), id: 'dist-sprt' },
+      s.decision === null ? tr('distSprtContinue') : `${tr('distSprtDecided')} ${v.models[s.decision].label} ${tr('distAtRound')} ${s.at.toLocaleString('en-US')}`));
+    const vt = table(['distVersion', 'distPmfRtp', 'distLogLik', 'distPosterior', 'distAsn'], v.models.map((m, i) => [
+      (i === v.refIndex ? '★ ' : '') + m.label, { v: r.candidates[i].scope === 'round' ? pct(r.candidates[i].mean, 3) : '—', cls: 'num' },
+      { v: Number.isFinite(m.logLik) ? fmt(m.logLik, 2) : '−∞', cls: 'num' }, { v: pct(m.posterior, 2), cls: 'num' }, { v: rounds(m.asn), cls: 'num' },
+    ]));
+    vt.id = 'dist-versions';
+    box.append(vt);
+    box.append(table(['distVersion', 'distKl', 'distPairAsn'], v.pairs.map((p) => [p.label, { v: `${p.klRefAlt.toExponential(3)} / ${p.klAltRef.toExponential(3)}`, cls: 'mono' }, { v: `${rounds(p.asnRef)} / ${rounds(p.asnAlt)}`, cls: 'num' }])));
+    const wald = v.pairs.length === 1 && v.pairs[0].sprt;
+    if (wald) box.append(el('p', { class: 'muted' }, `${tr('distWald')}: ` + (wald.decision === 'continue' ? tr('distSprtContinue') : `${tr(wald.decision === 'reference' ? 'distWaldRef' : 'distWaldAlt')} ${tr('distAtRound')} ${wald.at.toLocaleString('en-US')}`)));
+    if (v.unmatched) box.append(el('p', { class: 'muted' }, tr('distUnmatched') + ': ' + v.unmatched.toLocaleString('en-US')));
+    box.append(el('p', { class: 'muted small' }, tr('distSprtNote')));
+  }
+
+  // Betting e-process.
+  const b = r.betting;
+  box.append(sub('distBetting'));
+  if (b.needs) box.append(el('div', { class: 'verdict warn', id: 'dist-bet' }, tr(b.needs === 'maxWin' ? 'distNeedsMax' : 'distNeedsDeclared')));
+  else if (b.error) box.append(el('div', { class: 'verdict warn', id: 'dist-bet' }, pick([b.error.ar, b.error.en])));
+  else {
+    box.append(el('div', { class: 'verdict ' + (b.rejected ? 'fail' : 'pass'), id: 'dist-bet' }, tr(b.rejected ? 'distBetReject' : 'distBetKeep')));
+    box.append(cards([
+      { k: 'declaredRtp', v: pct(b.mu0, 3), s: 'M = ' + times(b.M) },
+      { k: 'distEValue', v: fmt(b.eValue, 4), s: '1/α = ' + fmt(1 / b.alpha, 0) },
+      { k: 'distMaxE', v: fmt(b.maxEValue, 4), cls: b.rejected ? 'bad' : '' },
+      { k: 'distAnytimeP', v: fmtP(b.pValue) },
+      { k: 'distUpper', v: b.upperBound === null ? `> ${pct(b.gridTop, 0)}` : (b.belowGrid ? '≤ ' : '') + pct(b.upperBound, 1), s: `${((1 - b.alpha) * 100).toFixed(1)}%` },
+      b.crossedAt && { k: 'distCrossed', v: b.crossedAt.toLocaleString('en-US') },
+    ]));
+    box.append(eChart(b));
+  }
+  box.append(el('p', { class: 'muted small' }, tr('distBetNote')));
+
+  // Planner.
+  const pl = r.planner;
+  box.append(sub('distPlanner'));
+  box.append(table(['distPlanMethod', 'distPlanNeeds', 'distPlanRounds'], pl.rows.map((x) => [
+    tr('plan_' + x.id) + (x.version ? ' ' + x.version : ''), tr('planNeeds_' + x.needs), { v: (x.approx && x.rounds !== null ? '≈ ' : '') + rounds(x.rounds), cls: 'num' },
+  ])));
+  box.append(el('p', { class: 'muted small' }, tr('distPlanGrid') + ` (${tr('distGap')}: ${fmt(pl.gap * 100, 2)})`));
+  box.append(table(['σ', 'distPlanMean', ...pl.maxWins.map((m) => ['M = ' + m.toLocaleString('en-US') + '×', 'M = ' + m.toLocaleString('en-US') + '×'])], pl.grid.map((gr) => [
+    { v: fmt(gr.sigma, 3), cls: 'num' }, { v: rounds(gr.meanTest), cls: 'num' }, ...gr.eProcess.map((e) => ({ v: rounds(e.rounds), cls: 'num' })),
+  ])));
+  box.append(el('p', { class: 'muted small' }, tr('distPlanNote') + ' ' + tr('distSeedNote') + ` (${r.seed})`));
 }
 
 // ---------- RNG tests ----------
@@ -438,7 +645,7 @@ function renderMc() {
 }
 
 // ---------- report ----------
-const SECTION_KEYS = { theoretical: 'tabTheory', actual: 'tabActual', rng: 'tabRng', fair: 'tabFair', montecarlo: 'tabMc' };
+const SECTION_KEYS = { theoretical: 'tabTheory', actual: 'tabActual', distTests: 'distTitle', rng: 'tabRng', fair: 'tabFair', montecarlo: 'tabMc' };
 function renderReportSections() {
   const names = Object.keys(SECTION_KEYS).filter((k) => session.results[k]).map((k) => tr(SECTION_KEYS[k]));
   $('#rep-sections').textContent = names.length ? names.join(' · ') : tr('sectionsNone');
@@ -447,7 +654,7 @@ function renderReportSections() {
 
 async function runReport() {
   await withTask('report', async (progress) => {
-    const used = new Set(Object.values(session.results).map((r) => r.inputId).filter(Boolean));
+    const used = new Set(Object.values(session.results).flatMap((r) => [r.inputId, ...(r.inputIds || [])]).filter(Boolean));
     if (session.results.montecarlo) used.add('model');
     const report = await buildReport({
       meta: { title: $('#rep-title').value.trim(), auditor: $('#rep-auditor').value.trim(), notes: $('#rep-notes').value.trim() },
@@ -476,6 +683,7 @@ function renderReport() {
 
 function renderAll() {
   renderTheory(); renderActual(); renderRng(); renderFair(); renderMc(); renderMcModel(); renderReportSections(); renderReport();
+  renderDistCandidates(); renderDist();
   syncFairFields();
 }
 
@@ -517,6 +725,44 @@ function init() {
     $('#a-declared').value = '95.5175';
   }));
   $('#run-actual').addEventListener('click', runActual);
+
+  $('#d-useTheory').addEventListener('change', renderDistCandidates);
+  $('#pmfFile').addEventListener('change', async (e) => {
+    const files = [...e.target.files];
+    if (!files.length) return;
+    for (const id of [...session.inputs.keys()]) if (id.startsWith('pmf-')) session.inputs.delete(id);
+    distFiles = [];
+    for (const [i, file] of files.entries()) {
+      await registerInput('pmf-' + i, file.name, 'csv', new Uint8Array(await file.arrayBuffer()), file.type || 'text/csv');
+      distFiles.push({ inputId: 'pmf-' + i, label: file.name.replace(/\.csv$/i, '') });
+    }
+    e.target.value = '';
+    renderDistCandidates();
+  });
+  $('#clear-pmf').addEventListener('click', () => {
+    for (const id of [...session.inputs.keys()]) if (id.startsWith('pmf-')) session.inputs.delete(id);
+    distFiles = [];
+    renderDistCandidates();
+  });
+  $('#sample-dist').addEventListener('click', () => withTask('dist', async () => {
+    const ex = await runTask('sampleVersions', { rounds: 200000, seed: 'sample-versions' });
+    for (const id of [...session.inputs.keys()]) if (id.startsWith('pmf-')) session.inputs.delete(id);
+    distFiles = [];
+    for (const [i, v] of ex.versions.entries()) {
+      const name = `example-version-${Math.round(v.rtp * 100)}.csv`;
+      await registerInput('pmf-' + i, name, 'csv', v.csv, 'text/csv');
+      distFiles.push({ inputId: 'pmf-' + i, label: `RTP ${Math.round(v.rtp * 100)}%` });
+    }
+    await registerInput('playlog', 'sample-playlog-3-versions.csv', 'csv', ex.log, 'text/csv');
+    fileNames.actual = 'sample-playlog-3-versions.csv · ' + ex.log.length.toLocaleString('en-US') + ' ' + tr('bytes');
+    $('#name-actual').textContent = fileNames.actual;
+    $('#a-declared').value = '96';
+    $('#d-maxWin').value = String(ex.maxWin);
+    $('#d-useTheory').checked = false;
+    renderDistCandidates();
+    $('#d-ref').value = '0';
+  }));
+  $('#run-dist').addEventListener('click', runDist);
 
   $('#rngFile').addEventListener('change', async (e) => { if (e.target.files[0]) await loadFileInput('rng', 'rng', e.target.files[0], 'data'); });
   $('#sample-rng').addEventListener('click', () => withTask('rng', async () => {
