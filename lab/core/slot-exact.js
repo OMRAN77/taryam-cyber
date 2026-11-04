@@ -24,6 +24,7 @@
 // free-spin closed forms apply to the mixed single-spin moments.
 import { Fraction } from './fraction.js';
 import { ModelError } from './slot-model.js';
+import { waysSource, waysEntries, waysMomentSummary, waysModelInfo } from './ways-exact.js';
 
 const BUCKETS = [0, 1, 2, 5, 10, 20, 50, 100, 500];
 const SAFE = BigInt(Number.MAX_SAFE_INTEGER);
@@ -352,14 +353,17 @@ export function spinPmf(model, entries, total) {
 // distribution is too large, the RTP part is still returned with distribution: null.
 export function analyzeExact(model, opts = {}) {
   const fs = model.freeSpins;
-  const scale = model.scale, L = model.lines.length, totalBet = model.totalBetUnits;
+  // Ways models (ways-exact.js) give the same parts as the line engine: per-symbol
+  // outcomes (L = 1 evaluation per spin), the scatter distribution and spin entries.
+  const ways = model.evaluation === 'ways';
+  const scale = model.scale, L = ways ? 1 : model.lines.length, totalBet = model.totalBetUnits;
   // Models built without reel sets (older callers) have one unweighted set.
   const baseSets = model.reelSets || [{ weight: 1n, reels: model.reels, weights: null }];
   const fsSets = fs ? fs.reelSets || (fs.sameReels ? baseSets : [{ weight: 1n, reels: fs.reels, weights: null }]) : null;
 
   // Exact RTP from the per-line tables and the scatter convolution. Counts are
   // weights over a cycle of `total` (the number of combinations when unweighted).
-  const base = sourcePar(model, baseSets);
+  const base = ways ? waysSource(model, model.ways.base, { triggerAt: fs ? fs.trigger : null }) : sourcePar(model, baseSets);
   const total = base.total;
   const par = base.par; // combos summed over every line
   const lineSum = par.reduce((a, o) => a + o.combos * BigInt(o.pay), 0n); // all lines, units
@@ -370,7 +374,7 @@ export function analyzeExact(model, opts = {}) {
   let fsInfo = null;
   let fsEV = new Fraction(0n); // expected free-spin win per trigger, units
   let fsSpinEV = null, pRetrig = new Fraction(0n);
-  const fsSrc = fs ? (fs.sameReels ? base : sourcePar(model, fsSets)) : null;
+  const fsSrc = fs ? (fs.sameReels ? base : ways ? waysSource(model, model.ways.fs, { triggerAt: fs.retrigger ? fs.trigger : null, hits: false }) : sourcePar(model, fsSets)) : null;
   const fsTotal = fs ? fsSrc.total : 1n;
   if (fs) {
     const fLine = fsSrc.par.reduce((a, o) => a + o.combos * BigInt(o.pay), 0n);
@@ -401,13 +405,13 @@ export function analyzeExact(model, opts = {}) {
     const s = symbols.get(name);
     const v = o.combos * BigInt(o.pay);
     s.sum += v;
-    const bc = s.byCount.get(o.count) || { count: o.count, combos: 0n, pay: o.pay / scale, sum: 0n };
-    bc.combos += o.combos; bc.sum += v;
+    const bc = s.byCount.get(o.count) || { count: o.count, combos: 0n, pay: o.pay / scale, sum: 0n, hits: 0n };
+    bc.combos += o.combos; bc.sum += v; bc.hits += o.hits || 0n;
     s.byCount.set(o.count, bc);
     if (o.wildAssisted) wildAssisted += v;
   }
   // Sums cover every line; a line's own bet is 1/L of the total bet.
-  const allLinesTotal = total * BigInt(scale) * BigInt(L);
+  const allLinesTotal = total * BigInt(totalBet); // = total * scale * L for line games
   const symbolTable = [...symbols.values()].map((s) => ({
     symbol: s.symbol, isWild: s.isWild,
     rtp: frac(new Fraction(s.sum, allLinesTotal)),
@@ -415,15 +419,20 @@ export function analyzeExact(model, opts = {}) {
       // Average over the lines (an exact fraction when weighted lines differ).
       count: b.count, pay: b.pay, combosPerLine: new Fraction(b.combos, BigInt(L)).toString(),
       probabilityPerLine: frac(new Fraction(b.combos, total * BigInt(L))), rtp: frac(new Fraction(b.sum, allLinesTotal)),
+      // Ways: the probability that the symbol runs exactly `count` reels, and the ways
+      // (with multipliers) it then pays on average; combosPerLine is their product.
+      ...(ways ? { probabilityPerLine: frac(new Fraction(b.hits, total)), averageWays: frac(new Fraction(b.combos, b.hits)) } : {}),
     })),
   })).sort((a, b) => b.rtp.value - a.rtp.value);
   const scatterTable = model.scatter >= 0 ? sd.map((c, k) => ({ count: k, combos: String(c), probability: frac(new Fraction(c, total)), pay: (model.scatterPays[k] || 0) / totalBet, triggers: Boolean(fs && k >= fs.trigger) })).filter((r) => r.combos !== '0') : [];
 
+  const waysInfo = ways ? waysModelInfo(model) : null;
   const result = {
     model: {
-      name: model.name, reels: model.nReels, rows: model.rows, lines: L, stops: model.reels.map((s) => s.length), symbols: model.symbols.length,
-      // Stop combinations enumerated (over every reel set).
-      combinations: baseSets.reduce((a, set) => a + set.reels.reduce((c, s) => c * BigInt(s.length), 1n), 0n).toString(),
+      name: model.name, reels: model.nReels, rows: model.rows, lines: ways ? null : L, stops: model.reels.map((s) => s.length), symbols: model.symbols.length,
+      // Stop combinations enumerated (over every reel set); ways: (height, stop) per reel and top stop.
+      combinations: ways ? waysInfo.base.combinations : baseSets.reduce((a, set) => a + set.reels.reduce((c, s) => c * BigInt(s.length), 1n), 0n).toString(),
+      ...(ways ? { evaluation: 'ways', ways: waysInfo } : {}),
       weighted: Boolean(model.weighted),
       ...(model.weighted ? {
         totalWeight: total.toString(), reelSets: setsInfo(baseSets),
@@ -438,18 +447,26 @@ export function analyzeExact(model, opts = {}) {
     symbols: symbolTable, scatter: scatterTable, freeSpins: fsInfo,
     distribution: null, distributionError: null,
   };
+  // A cascading game is computed for its first drop only (no removal and refill).
+  if (model.cascades) result.scope = 'firstDrop';
+  // The exact mean of the paid spin's own win (its first drop, without free spins): a
+  // control variate for simulations of the round (montecarlo.js controlVariate).
+  if (ways || model.cascades) result.controlVariate = { x: 'paidSpin', mean: frac(evLines.add(evScatter).div(totalBet)) };
 
   // Exact distribution: hit frequency, variance, max win.
   try {
     const progress = opts.onProgress || (() => {});
-    const baseEntries = sourceDistribution(model, baseSets, base.mix, opts, (p) => progress(fs && !fs.sameReels ? p / 2 : p));
+    const baseEntries = ways ? waysEntries(model, model.ways.base, { ...opts, cap: scatterCap(model), onProgress: (p) => progress(fs && !fs.sameReels ? p / 2 : p) })
+      : sourceDistribution(model, baseSets, base.mix, opts, (p) => progress(fs && !fs.sameReels ? p / 2 : p));
     const b = spinMoments(model, baseEntries, true);
+    if (ways && !(b.s2 === base.moments.s2 && (base.moments.hits === null || b.hits === base.moments.hits))) throw new Error('internal check failed: ways closed form != distribution');
     const check = new Fraction(b.s1, total).add(evFs);
     if (!check.equals(ev)) throw new Error('internal check failed: distribution EV != per-line EV');
     let ew2 = new Fraction(b.s2, total);
     let maxWin = { base: b.maxAll / totalBet, withFeature: b.maxAll / totalBet, unbounded: false };
     if (fs) {
-      const fsEntries = fs.sameReels ? baseEntries : sourceDistribution(model, fsSets, fsSrc.mix, opts, (p) => progress(0.5 + p / 2));
+      const fsEntries = fs.sameReels ? baseEntries : ways ? waysEntries(model, model.ways.fs, { ...opts, cap: scatterCap(model), onProgress: (p) => progress(0.5 + p / 2) })
+        : sourceDistribution(model, fsSets, fsSrc.mix, opts, (p) => progress(0.5 + p / 2));
       const x = spinMoments(model, fsEntries, fs.retrigger);
       const m = fs.multiplier, F = BigInt(fs.spins);
       const EX = new Fraction(x.s1, fsTotal).mul(m);
@@ -494,5 +511,21 @@ export function analyzeExact(model, opts = {}) {
     if (!(e instanceof ModelError)) throw e;
     result.distributionError = { ar: e.ar, en: e.en };
   }
+  // Ways game too large for the full distribution: hit frequency and variance stay
+  // exact from the closed-form moments; the distribution itself is left to Monte Carlo.
+  if (ways && !result.distribution) {
+    const x = fs && (fs.sameReels ? { ...base.moments, sJ: fs.retrigger ? base.moments.sJ : 0n, sXJ: fs.retrigger ? base.moments.sXJ : 0n } : fsSrc.moments);
+    const m = waysMomentSummary(model, base.moments, x, total, fsTotal, ev);
+    const sdev = Math.sqrt(m.variance.toNumber());
+    result.distribution = {
+      hitFrequency: m.hits && frac(m.hits), variance: frac(m.variance), sd: sdev,
+      volatilityIndex90: 1.645 * sdev, volatilityIndex95: 1.96 * sdev,
+      volatilityClass: sdev < 4 ? 'low' : sdev < 8 ? 'medium' : sdev < 15 ? 'high' : 'veryHigh',
+      maxWin: null, buckets: null, states: null, pmf: null, closedForm: true,
+    };
+  }
+  // The first drop of a cascading game is not a round of the game: its distribution
+  // must not be compared with real rounds (core/audit-stats.js).
+  if (model.cascades && result.distribution) result.distribution.pmf = null;
   return result;
 }
