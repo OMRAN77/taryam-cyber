@@ -10,6 +10,23 @@ const WIN_NAMES = ['win', 'payout', 'return', 'won', 'prize', 'winamount', 'ال
 const ROUND_NAMES = ['roundid', 'round', 'gameround', 'gameid', 'spinid', 'betid', 'رقمالجولة', 'الجولة', 'جولة'];
 // Base game, bonus buy, ante... Each mode has its own RTP.
 const MODE_NAMES = ['mode', 'gamemode', 'bettype', 'feature', 'النمط', 'نوعاللعب'];
+// Did the round trigger a feature (free spins, bonus)? Read by the distribution
+// tests (audit-stats.js). A column named "feature" stays the game mode, as it was
+// before trigger columns existed (feature = 1 often marks bonus-buy rounds); only
+// next to a separate mode column is it read as this flag.
+const TRIGGER_NAMES = ['trigger', 'triggered', 'featuretriggered', 'freespinstriggered', 'bonustriggered', 'التفعيل', 'تفعيل'];
+const FLAG_FALSE = new Set(['', '0', 'false', 'no', 'n', 'f', 'none', '-', '—', 'لا', 'خطأ']);
+const FLAG_TRUE = new Set(['1', 'true', 'yes', 'y', 't', 'نعم', 'صح']);
+
+// A trigger cell: 1/0, true/false, yes/no, a number (non-zero = triggered) or a
+// feature name (triggered). The distribution CSVs read their flags with it too.
+export function flagSet(cell, readNumber) {
+  const s = String(cell ?? '').trim().toLowerCase();
+  if (FLAG_FALSE.has(s)) return false;
+  if (FLAG_TRUE.has(s)) return true;
+  const v = readNumber(s);
+  return !Number.isFinite(v) || v !== 0;
+}
 
 export const CONFIDENCE_LEVELS = [0.9, 0.95, 0.99, 0.999];
 
@@ -43,10 +60,10 @@ export function makeNumberReader(delimiter) {
 export function parsePlayLog(text) {
   const delimiter = detectDelimiter(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
   const readNumber = makeNumberReader(delimiter);
-  const bets = [], wins = [], modes = [];
+  const bets = [], wins = [], modes = [], triggers = [];
   const skipped = [];
   const merged = { freeRows: 0, sameRoundRows: 0 };
-  let betCol = 0, winCol = 1, roundCol = -1, modeCol = -1, first = true, header = null;
+  let betCol = 0, winCol = 1, roundCol = -1, modeCol = -1, trigCol = -1, first = true, header = null;
   let lastId = null;
   forEachCsvRow(text, (row, line) => {
     if (first) {
@@ -56,7 +73,12 @@ export function parsePlayLog(text) {
         betCol = findColumn(row, BET_NAMES);
         winCol = findColumn(row, WIN_NAMES);
         roundCol = findColumn(row, ROUND_NAMES);
-        modeCol = findColumn(row, MODE_NAMES);
+        trigCol = findColumn(row, TRIGGER_NAMES);
+        const featureCol = findColumn(row, ['feature']);
+        modeCol = findColumn(row.map((h, i) => (i === featureCol ? '' : h)), MODE_NAMES);
+        // "feature" alone is the mode; next to a separate mode column, the trigger flag.
+        if (featureCol >= 0 && modeCol < 0) modeCol = featureCol;
+        else if (featureCol >= 0 && trigCol < 0) trigCol = featureCol;
         if (betCol < 0 || winCol < 0) throw Object.assign(new Error('header must contain a bet column and a win column (e.g. "bet,win")'), {
           ar: 'يجب أن يحتوي العنوان على عمود للرهان وعمود للربح (مثل "bet,win")',
           en: 'The header must contain a bet column and a win column (e.g. "bet,win")',
@@ -71,24 +93,28 @@ export function parsePlayLog(text) {
     if (w < 0) { skipped.push({ line, reason: 'win must be ≥ 0' }); return; }
     const id = roundCol >= 0 ? String(row[roundCol] ?? '').trim() || null : null;
     const n = bets.length;
+    const flag = trigCol >= 0 && flagSet(row[trigCol], readNumber) ? 1 : 0;
     if (id !== null && n > 0 && id === lastId) {
       bets[n - 1] += b; wins[n - 1] += w; merged.sameRoundRows++;
+      if (flag) triggers[n - 1] = 1;
       return;
     }
     if (b === 0) {
       if (n === 0) { skipped.push({ line, reason: 'free round before any paid round' }); return; }
       wins[n - 1] += w; merged.freeRows++;
+      if (flag) triggers[n - 1] = 1;
       if (id !== null) lastId = id;
       return;
     }
-    bets.push(b); wins.push(w);
+    bets.push(b); wins.push(w); triggers.push(flag);
     if (modeCol >= 0) modes.push(String(row[modeCol] ?? '').trim() || '—');
     lastId = id;
   });
   return {
     bets: Float64Array.from(bets), wins: Float64Array.from(wins), modes: modeCol >= 0 ? modes : null,
+    triggers: trigCol >= 0 ? Uint8Array.from(triggers) : null,
     skipped, merged, header, delimiter,
-    columns: { bet: betCol, win: winCol, round: roundCol, mode: modeCol },
+    columns: { bet: betCol, win: winCol, round: roundCol, mode: modeCol, trigger: trigCol },
   };
 }
 

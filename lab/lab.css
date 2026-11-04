@@ -194,3 +194,14 @@ td.na { color: var(--muted); }
 #f-json { min-height: 320px; }
 /* The cycle's total weight is one long run of digits and commas: let it wrap on phones. */
 .weight-total { overflow-wrap: anywhere; }
+
+/* Distribution tests (observed-RTP tab, core/audit-stats.js) */
+.dist { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--border); }
+.dist > * + * { margin-top: 14px; }
+.dist-title { font-size: 17px; }
+.echart-wrap { margin: 0; }
+.echart { width: 100%; max-width: 680px; }
+.echart .eline { fill: none; stroke: var(--primary-2); stroke-width: 2; stroke-linejoin: round; }
+.echart .ethr { stroke: var(--red); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.echart .ezero { stroke: rgba(255, 255, 255, 0.18); stroke-width: 1; }
+#res-dist .card .v, #res-dist .card .s { unicode-bidi: plaintext; }

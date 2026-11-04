@@ -328,6 +328,26 @@ function spinMoments(model, entries, triggerCounts) {
   return { s1, s2, sJ, sXJ, hits, maxAll, maxNoJ, maxJ, sLine, sScat, buckets };
 }
 
+// Exact distribution of the paid spin's own win (lines + scatter) for the
+// distribution tests (audit-stats.js): sorted by win, in model units
+// (x = units / unitsPerBet), probability = count / total. With free spins, the
+// spins that trigger them are separate entries (trigger: true) whose win does not
+// include the feature, so scope is 'baseSpin'; without, it is the whole round.
+export function spinPmf(model, entries, total) {
+  const fs = model.freeSpins;
+  const counts = new Map();
+  for (const e of entries) {
+    const key = (e.lineWin + model.scatterPays[e.scat]) * 2 + (fs && e.scat >= fs.trigger ? 1 : 0);
+    counts.set(key, (counts.get(key) || 0n) + BigInt(e.count));
+  }
+  return {
+    scope: fs ? 'baseSpin' : 'round', unitsPerBet: model.totalBetUnits, total: total.toString(),
+    entries: [...counts].sort((a, b) => a[0] - b[0]).map(([key, c]) => ({
+      units: Math.floor(key / 2), x: Math.floor(key / 2) / model.totalBetUnits, trigger: key % 2 === 1, count: c.toString(),
+    })),
+  };
+}
+
 // Full exact analysis. Throws ModelError only for invalid input; if the joint
 // distribution is too large, the RTP part is still returned with distribution: null.
 export function analyzeExact(model, opts = {}) {
@@ -467,6 +487,8 @@ export function analyzeExact(model, opts = {}) {
         probability: frac(new Fraction(c, total)),
       })),
       states: baseEntries.length,
+      // Built from the weighted entries, so counts are stop weights over the cycle.
+      pmf: spinPmf(model, baseEntries, total),
     };
   } catch (e) {
     if (!(e instanceof ModelError)) throw e;

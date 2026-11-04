@@ -6,9 +6,10 @@ import { parsePlayLog, analyzePlayLog } from './core/actual.js';
 import { parseRngInput, chiSquareUniform, serialCorrelation } from './core/rng-basic.js';
 import { runNist, runNistMulti, assessFamily } from './core/nist.js';
 import { parseFairCsv, verifyHmacRounds, verifyHashChain, sha256Hex, hmacSha256, floatFromBytes, mapOutcome, toHex } from './core/fair.js';
-import { prngFromSeed } from './core/prng.js';
+import { prngFromSeed, PRNG_DESCRIPTION } from './core/prng.js';
 import { simulate, generatorDescription } from './core/montecarlo.js';
 import { sampler, slotSampler, simulatePlayers } from './core/casino.js';
+import { auditDistribution, pmfFromExact, parsePmfCsv, examplePmf, pmfCsv, samplePmfLog, EXAMPLE_MAX_WIN } from './core/audit-stats.js';
 
 const decode = (bytes) => new TextDecoder().decode(bytes);
 const encode = (text) => new TextEncoder().encode(text);
@@ -84,11 +85,11 @@ const TASKS = {
   samplePlayLog: async ({ raw, rounds, seed }, progress) => {
     const model = normalizeModel(raw);
     const rng = await prngFromSeed(seed);
-    const lines = ['bet,win'];
+    const lines = ['bet,win,trigger'];
     const step = Math.max(1, Math.floor(rounds / 50));
     for (let i = 0; i < rounds; i++) {
       const s = simulate(model, rng, 1, { progressEvery: 2 });
-      lines.push('1,' + +(s.totalWinUnits / model.totalBetUnits).toFixed(6));
+      lines.push('1,' + +(s.totalWinUnits / model.totalBetUnits).toFixed(6) + ',' + s.triggers);
       if (i % step === 0) progress(i / rounds);
     }
     return encode(lines.join('\n') + '\n');
@@ -111,6 +112,22 @@ const TASKS = {
     const chain = [toHex(crypto.getRandomValues(new Uint8Array(32)))];
     for (let i = 1; i < length; i++) chain.unshift(await sha256Hex(chain[0]));
     return encode(chain.join('\n') + '\n');
+  },
+
+  // ---- Distribution tests of a play log (core/audit-stats.js) ----
+  // candidates: [{ kind: 'exact', label, pmf } | { kind: 'csv', label, bytes }]
+  distTests: async ({ bytes, candidates, options }, progress) => {
+    const log = parsePlayLog(decode(bytes));
+    const pmfs = candidates.map((c) => (c.kind === 'exact' ? pmfFromExact(c.pmf, c.label) : parsePmfCsv(decode(c.bytes), c.label)));
+    const seed = String(options.seed ?? 'taryam-audit');
+    const result = auditDistribution(log, pmfs, options, await prngFromSeed(seed), progress);
+    return { ...result, seed, generator: PRNG_DESCRIPTION };
+  },
+
+  // Example: a synthetic game in three RTP versions, and a log drawn from the 94% one.
+  sampleVersions: async ({ rounds, seed }) => {
+    const versions = [0.96, 0.94, 0.92].map((rtp) => ({ rtp, csv: encode(pmfCsv(examplePmf(rtp))) }));
+    return { versions, log: encode(samplePmfLog(examplePmf(0.94), rounds, await prngFromSeed(seed))), maxWin: EXAMPLE_MAX_WIN };
   },
 };
 
