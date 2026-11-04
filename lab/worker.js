@@ -146,8 +146,20 @@ const TASKS = {
 
   pfAudit: ({ bytes, key, options }, progress) => auditCsv(decode(bytes), key, { ...options, disabled: PF_DISABLED }, progress),
 
-  pfSample: ({ key, rounds, plant }) => {
-    const rand = (n) => crypto.getRandomValues(new Uint8Array(n));
+  // The example's seeds come from a fixed seed text, so the same button gives the same
+  // file and the same verdict every time. With fresh random seeds an honest file is
+  // flagged by the uniformity check about 1% of the time (its alpha is 0.01), which is
+  // the check working as designed but makes a confusing example.
+  pfSample: async ({ key, rounds, plant }) => {
+    const rng = await prngFromSeed(`taryam-pf-sample:${key}:${rounds}:${plant ? 'planted' : 'clean'}`);
+    const rand = (n) => {
+      const out = new Uint8Array(n);
+      for (let i = 0; i < n; i += 4) {
+        const x = rng.nextU32();
+        for (let j = 0; j < 4 && i + j < n; j++) out[i + j] = (x >>> (24 - 8 * j)) & 0xff;
+      }
+      return out;
+    };
     const s = makeSample(key, { rounds, plant, rand, start: Date.now() - rounds * 7000 });
     return { bytes: encode(s.text), name: s.name, options: s.options, rows: s.rows };
   },
