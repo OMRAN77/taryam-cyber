@@ -401,13 +401,23 @@ test('fit family: false-alarm rate <= alpha on 200 seeded fair logs of the examp
   const pmf = parsePmfCsv(pmfCsv(entries), '96');
   let alarms = 0;
   const R = 200;
+  // Each test on its own at alpha (before Holm), counted per test and tail threshold.
+  const single = new Map();
   for (let i = 0; i < R; i++) {
     const log = drawLog(entries, 20000, seeded(300 + i), true);
     const r = auditDistribution(log, [pmf], { alpha: 0.05, replicates: 199, declaredRtp: 0.96, maxWin: 5000 }, seeded(900 + i));
     assert.ok(r.fit.gof.applicable && r.fit.trigger && r.fit.hit);
     if (r.fit.verdict !== 'consistent') alarms++;
+    for (const t of r.fit.tests) {
+      const key = t.id + (t.index ?? '');
+      single.set(key, (single.get(key) || 0) + (t.p < 0.05 ? 1 : 0));
+    }
   }
   assert.ok(alarms / R <= bound(0.05, R), `family false alarms ${alarms}/${R}`);
+  // 20,000 rounds: GOF, hit, trigger and the 10x / 100x tails are in the family (1000x and the
+  // top prize are too rare to reject).
+  assert.deepStrictEqual([...single.keys()].sort(), ['gof', 'hit', 'tail0', 'tail1', 'trigger']);
+  for (const [key, k] of single) assert.ok(k / R <= bound(0.05, R), `${key}: ${k}/${R}`);
 });
 
 test('fit family: missing top prizes, impossible wins and a paid-spin pmf without a trigger column', () => {
