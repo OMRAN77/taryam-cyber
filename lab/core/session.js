@@ -260,7 +260,9 @@ export function sessionFunnel(pmf, opts) {
   let start = null;
   if (opts.budget !== null && opts.budget !== undefined && String(opts.budget).trim() !== '') {
     let bud;
-    try { bud = Fraction.of(String(opts.budget).trim()); } catch (e) { bud = null; }
+    // a decimal ("150.5") or a fraction ("1505/2": the budget divided by the bet, exact)
+    const t = String(opts.budget).trim();
+    try { bud = t.includes('/') ? new Fraction(...t.split('/').map((x) => BigInt(x.trim()))) : Fraction.of(t); } catch (e) { bud = null; }
     if (!bud || !(bud.cmp(0) > 0)) throw fail('the budget must be a positive number', 'يجب أن تكون الميزانية عددًا موجبًا');
     const f = bud.mul(B); // budget in steps of 1/b bet, rounded down (exact for "runs out")
     const steps = f.num / f.den;

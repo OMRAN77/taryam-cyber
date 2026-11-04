@@ -192,6 +192,14 @@ test('distribution tests use the whole-round pmf; a log drawn from the game is n
   assert.strictEqual(out.scope, 'round');
   assert.strictEqual(out.fit.offSupport.count, 0);
   assert.strictEqual(out.fit.verdict, 'consistent');
+  // Retriggers without a cap: no largest win, so the pmf's last cell (above the noise
+  // floor) is neither a top prize nor a bound M for the e-process (it needs M).
+  assert.deepStrictEqual([ref.maxWin, ref.truncated], [null, true]);
+  assert.strictEqual(out.fit.topPrize, undefined);
+  assert.strictEqual(out.betting.needs, 'maxWin');
+  // European roulette: an exact pmf whose largest win, 2 bets, is the true bound.
+  const red = pmfFromExact(RED.result.round.pmf, 'red');
+  assert.deepStrictEqual([red.maxWin, red.truncated], [2, false]);
   // The paid-spin pmf (the fallback) still works, with the trigger column.
   const base = pmfFromExact(r.distribution.pmf, 'base');
   assert.strictEqual(base.scope, 'baseSpin');

@@ -258,12 +258,17 @@ export function makePmf({ label = 'pmf', scope = 'round', source = 'csv', entrie
 // exact counts over all combinations; or by round-dist.js (round.pmf, scope 'round':
 // the whole round, free spins included), whose entries carry a probability p (from
 // the transform for rounds with the feature, under its noise floor left out).
+// The round pmf also states the game's true largest win (maxX; null when retriggers
+// make it unbounded) and whether cells were left out (truncated): then its last cell is
+// not a top prize, and only the true largest win may bound the e-process.
 export function pmfFromExact(exact, label = 'model') {
   const total = exact.total ? BigInt(exact.total) : null;
-  return makePmf({
+  const pmf = makePmf({
     label, scope: exact.scope, source: 'model',
     entries: exact.entries.map((e) => ({ x: e.x, p: typeof e.p === 'number' ? e.p : new Fraction(BigInt(e.count), total).toNumber(), trigger: e.trigger })),
   });
+  if ('maxX' in exact) Object.assign(pmf, { maxWin: exact.maxX, truncated: Boolean(exact.truncated) });
+  return pmf;
 }
 
 // CSV with a multiplier column and a probability column ("a/b" fractions are read
@@ -879,11 +884,13 @@ export function auditDistribution(log, pmfs, options = {}, rng, onProgress = () 
       return { threshold: T, probability: q, expected: n * q, observed: k, pValue: binomCdf(k, n, q), powered: minP < alpha / 2 };
     };
     const top = own.reduce((a, e) => Math.max(a, e.x), 0);
-    // Fixed thresholds well below the top prize (one close to it would repeat it).
+    // Fixed thresholds well below the top prize (one close to it would repeat it). A
+    // truncated pmf (cells under its noise floor left out) has no top prize to test.
     const thresholds = TAIL_THRESHOLDS.filter((T) => T <= top / 2);
-    if (top > 0) thresholds.push(top);
+    const hasTop = top > 0 && !ref.truncated;
+    if (hasTop) thresholds.push(top);
     fit.tails = thresholds.map(tailAt);
-    if (top > 0) {
+    if (hasTop) {
       const last = fit.tails[fit.tails.length - 1];
       const pTop = last.probability, seen = last.observed;
       fit.topPrize = {
@@ -988,7 +995,8 @@ export function auditDistribution(log, pmfs, options = {}, rng, onProgress = () 
     mu0, mu0Source: refRtp ? 'reference' : mu0 ? 'declared' : null,
     declaredDiffers: refRtp && declaredRtp > 0 && Math.abs(declaredRtp - refRtp) > 1e-6 ? declaredRtp : null,
   };
-  const M = maxWin > 0 ? maxWin : ref.scope === 'round' ? ref.maxX : null;
+  // The pmf's own bound only when it is the game's true largest win (see pmfFromExact).
+  const M = maxWin > 0 ? maxWin : ref.scope === 'round' ? (ref.maxWin !== undefined ? ref.maxWin : ref.maxX) : null;
   const mSource = maxWin > 0 ? maxWinSource : 'pmf';
   if (!(mu0 > 0)) out.betting = { needs: 'declared', ...why };
   else if (!(M > 0)) out.betting = { needs: 'maxWin', ...why };

@@ -577,7 +577,7 @@ function exactRound(ctx, exact) {
     checks, triggerProbability: 0,
     maxWin: { bounded: true, x: toBets(ctx, maxX), ...prob(tailFrac(BigInt(maxX))) },
     thresholds, quantiles, mgf: [],
-    pmf: { scope: 'round', exact: true, unitsPerBet: pb.toNumber(), unitBets: new Fraction(1n).div(pb).toString(), total: T.toString(), droppedMass: 0, noiseFloor: 0, entries },
+    pmf: { scope: 'round', exact: true, unitsPerBet: pb.toNumber(), unitBets: new Fraction(1n).div(pb).toString(), total: T.toString(), droppedMass: 0, noiseFloor: 0, maxX: toBets(ctx, maxX), truncated: false, entries },
   };
 }
 
@@ -785,7 +785,12 @@ export function roundDistribution(model, spins, exact, { onProgress = () => {}, 
     // Chernoff table (theta per lattice step) for bounds beyond the grid.
     mgf: table.map((r) => ({ theta: r.theta, logT: r.logT, logM: r.logM })),
     caps: capped ? { maxSpins: fs.maxSpins ?? null, maxRetriggers: fs.maxRetriggers ?? null } : null,
-    pmf: { scope: 'round', exact: false, unitsPerBet: pb.toNumber(), unitBets: new Fraction(1n).div(pb).toString(), total: T.toString(), droppedMass: dropped, noiseFloor: floor, entries },
+    // maxX: the round's true largest win (null: none, retriggers are uncapped); truncated:
+    // cells under the noise floor are left out, so the last entry is not the top prize.
+    pmf: {
+      scope: 'round', exact: false, unitsPerBet: pb.toNumber(), unitBets: new Fraction(1n).div(pb).toString(), total: T.toString(),
+      droppedMass: dropped, noiseFloor: floor, maxX: bounded ? toBets(ctx, roundMax) : null, truncated: dropped > 0 || (bounded && roundMax >= N), entries,
+    },
   };
 }
 
@@ -819,8 +824,9 @@ export function attachRoundDistribution(result, model, spins, opts = {}) {
 export function capStats(round, M, rtp) {
   rtp = parseFraction(rtp);
   const pb = parseFraction(round.unit.perBet);
-  const cap = Fraction.of(M);
-  if (!(cap.cmp(0) > 0)) throw fail('the max-win cap must be a positive number', 'يجب أن يكون سقف الربح عددًا موجبًا');
+  let cap = null;
+  try { cap = Fraction.of(typeof M === 'string' ? M.trim().replace(',', '.') : M); } catch (e) { /* reported below */ }
+  if (!cap || !(cap.cmp(0) > 0)) throw fail('the max-win cap must be a positive number', 'يجب أن يكون سقف الربح عددًا موجبًا');
   const Mx = cap.mul(pb); // lattice steps, maybe fractional
   const pmf = round.pmf;
   if (round.exact) {
