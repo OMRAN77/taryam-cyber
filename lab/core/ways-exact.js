@@ -626,7 +626,8 @@ export function waysModelInfo(model) {
   const w = model.ways;
   return {
     evaluation: 'ways', betCost: w.betCost, multiplierStrategy: w.strategy, globalMultiplier: w.globalMultiplier,
-    wildStartsWin: w.wildStartsWin, cascades: Boolean(model.cascades),
+    // hasWild false: the model has no wild, so wildStartsWin changes nothing.
+    wildStartsWin: w.wildStartsWin, hasWild: model.wild >= 0, cascades: Boolean(model.cascades),
     multiplierSymbols: model.symbols.map((name, id) => ({ name, id })).filter(({ id }) => w.cellMult[id] > 1 || w.cellBase[id] !== id)
       .map(({ name, id }) => ({ symbol: name, countsAs: model.symbols[w.cellBase[id]], multiplier: w.cellMult[id] })),
     base: sourceInfo(w.base),

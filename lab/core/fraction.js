@@ -68,6 +68,25 @@ export class Fraction {
 
   toPercent(digits = 4) { return this.mul(100).toDecimal(digits); }
 
+  // Scientific notation in Number#toExponential's form ("7.277e-224"), rounded half
+  // away from zero to `digits` places from the fraction itself, so it also holds far
+  // outside a double's range (where toNumber() gives 0 or Infinity).
+  toExponential(digits = 3) {
+    if (this.num === 0n) return (0).toExponential(digits);
+    const neg = this.num < 0n;
+    const n = neg ? -this.num : this.num, d = this.den;
+    // n / d lies in (10^(e-1), 10^(e+1)) for e = digits(n) - digits(d): e or e - 1.
+    let e = n.toString().length - d.toString().length;
+    const atLeast = (k) => (k >= 0 ? n >= d * 10n ** BigInt(k) : n * 10n ** BigInt(-k) >= d);
+    if (!atLeast(e)) e -= 1;
+    const k = digits - e;
+    const [a, b] = k >= 0 ? [n * 10n ** BigInt(k), d] : [n, d * 10n ** BigInt(-k)];
+    let m = (2n * a + b) / (2n * b);
+    if (m >= 10n ** BigInt(digits + 1)) { m /= 10n; e += 1; } // 9.9996 -> 1.000e+1
+    const s = m.toString();
+    return (neg ? '-' : '') + s[0] + (digits ? '.' + s.slice(1) : '') + 'e' + (e < 0 ? '-' : '+') + Math.abs(e);
+  }
+
   toString() { return this.den === 1n ? this.num.toString() : this.num + '/' + this.den; }
 
   toJSON() { return { num: this.num.toString(), den: this.den.toString() }; }

@@ -559,7 +559,7 @@ function exactRound(ctx, exact) {
   }
   const tailFrac = (xmin) => { let n = 0n; for (const x of xs) if (BigInt(x) >= xmin) n += cells.get(x); return new Fraction(n, T); };
   const maxX = xs.length ? xs[xs.length - 1] : 0;
-  const prob = (f) => ({ value: f.toNumber(), fraction: f.toString(), method: 'exact', below: null });
+  const prob = exactProb;
   const thresholds = BIG_WINS.map((t) => {
     const xmin = ceilFrac(pb.mul(t));
     return { x: t, units: Number(xmin), ...prob(tailFrac(xmin)) };
@@ -586,6 +586,21 @@ function relErr(a, b) { return b === 0 ? Math.abs(a) : Math.abs(a - b) / Math.ab
 // The smallest upper bound shown: a Chernoff bound that underflows (a top win of a
 // long capped feature) is still below it, so "< 1e-300" stays true.
 export const MIN_BOUND = 1e-300;
+// An exact probability { value, fraction, method: 'exact', below: null }. A positive
+// fraction under MIN_BOUND (a top win of a long bounded feature) has no faithful
+// double (toNumber() gives 0 or a subnormal, and 1 / value Infinity): its value is
+// null and it carries sci (P) and oneInSci (1 / P), rounded from the fraction itself,
+// so a possible win is never shown as 0.
+export function exactProb(f) {
+  const value = f.toNumber();
+  const out = { value, fraction: f.toString(), method: 'exact', below: null };
+  if (f.cmp(0) > 0 && !(value >= MIN_BOUND)) {
+    Object.assign(out, { value: null, sci: f.toExponential(3), oneInSci: new Fraction(f.den, f.num).toExponential(2) });
+  }
+  return out;
+}
+// The probability fields of a threshold, top win or tail (also sci / oneInSci).
+const probOf = (t) => ({ value: t.value, fraction: t.fraction, method: t.method, below: t.below, ...(t.sci ? { sci: t.sci, oneInSci: t.oneInSci } : {}) });
 // P(W >= x) from its exact part exV (rounds without the feature), the transform's
 // tail sum t over every cell (when x is on the grid) and the Chernoff bound p0 of the
 // trigger rounds: the transform's value when it is at or above the noise floor; else
@@ -744,7 +759,7 @@ export function roundDistribution(model, spins, exact, { onProgress = () => {}, 
   const probAt = (xmin, exactTrig = null) => {
     const ex = exactTail(BigInt(xmin));
     if (bounded && xmin > roundMax) return { value: 0, fraction: '0', method: 'exact', below: null };
-    if (exactTrig) { const f = ex.add(exactTrig); return { value: f.toNumber(), fraction: f.toString(), method: 'exact', below: null }; }
+    if (exactTrig) return exactProb(ex.add(exactTrig));
     return floorRule(ex.toNumber(), fftTail(xmin), xmin < N, floor, tailBounds(table, xmin, 'logT').p0);
   };
   const xmins = BIG_WINS.map((t) => Number(ceilFrac(pb.mul(t))));
@@ -859,13 +874,13 @@ export function attachRoundDistribution(result, model, spins, opts = {}) {
 // and the Chernoff bound.
 export function roundTail(round, xmin) {
   const known = [...round.thresholds, round.maxWin].find((t) => t && t.units === xmin && t.method);
-  if (known) return { value: known.value, fraction: known.fraction, method: known.method, below: known.below };
+  if (known) return probOf(known);
   if (round.maxWin.bounded && xmin > round.maxWin.units) return { value: 0, fraction: '0', method: 'exact', below: null };
   const pmf = round.pmf;
   let n = 0n;
   for (const e of pmf.entries) if (e.count !== undefined && e.units >= xmin) n += BigInt(e.count);
   const ex = new Fraction(n, BigInt(pmf.total));
-  if (round.exact) return { value: ex.toNumber(), fraction: ex.toString(), method: 'exact', below: null };
+  if (round.exact) return exactProb(ex);
   const N = round.grid.size;
   return floorRule(ex.toNumber(), xmin < N ? round.tailSums[Math.max(0, xmin)] : 0, xmin < N, round.floor, tailBounds(round.mgf, xmin, 'logT').p0);
 }
@@ -896,7 +911,7 @@ export function capStats(round, M, rtp) {
       M: cap.toNumber(), exact: true, aboveMax,
       rtpCapped: { value: capped.toNumber(), fraction: capped.toString() },
       lost: { value: rtp.sub(capped).toNumber(), fraction: rtp.sub(capped).toString() },
-      reach: { value: pReach.toNumber(), fraction: pReach.toString(), method: 'exact', below: null },
+      reach: exactProb(pReach),
     };
   }
   const reach = roundTail(round, Number(ceilFrac(Mx)));
@@ -935,13 +950,14 @@ export function topAward(round, cap) {
   const mw = round.maxWin;
   if (cap && !cap.aboveMax) return { x: cap.M, fromCap: true, prob: cap.reach, checks: topAwardChecks(cap.reach) };
   if (!mw.bounded) return null;
-  const prob = { value: mw.value, fraction: mw.fraction, method: mw.method, below: mw.below };
+  const prob = probOf(mw);
   return { x: mw.x, fromCap: false, prob, checks: topAwardChecks(prob) };
 }
 
 // Top award odds against two published rules (both unverified here); the top award
 // comes from topAward. prob: { value, fraction, method, below }. pass: true / false,
-// or null when only a bound is known and it does not decide.
+// or null when only a bound is known and it does not decide. oneIn is a number, or
+// null with oneInSci (a string) when the probability is under MIN_BOUND.
 export function topAwardChecks(prob) {
   if (!prob) return null;
   const decide = (oneIn) => {
@@ -952,6 +968,7 @@ export function topAwardChecks(prob) {
   };
   return {
     oneIn: prob.value ? 1 / prob.value : null,
+    ...(prob.oneInSci ? { oneInSci: prob.oneInSci } : {}),
     gli19: { rule: '1 in 100,000,000', oneIn: GLI19_ONE_IN, pass: decide(GLI19_ONE_IN), unverified: true },
     // odds of 50,000,000 to 1 = probability 1 / 50,000,001
     pa: { rule: '50,000,000 to 1', oneIn: PA_ODDS_TO_ONE + 1, pass: decide(PA_ODDS_TO_ONE + 1), unverified: true },

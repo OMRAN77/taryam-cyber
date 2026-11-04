@@ -112,7 +112,10 @@ class Layout {
     const family = mono ? MONO : FONT;
     const size = mono ? 22 : 25;
     const midWidth = W - 2 * M - 2 * 420;
-    const long = this.measure(v, size, '600', family) > midWidth;
+    // The value goes on its own line when it is wider than the middle column, or when a
+    // long label would run into it (labels are drawn from the page edges inwards).
+    const vw = this.measure(v, size, '600', family);
+    const long = vw > midWidth || M + this.measure(en, 21) + 16 > (W - vw) / 2 || W - M - this.measure(ar, 23) - 16 < (W + vw) / 2;
     const lines = long ? this.wrap(v, W - 2 * M - 40, size, '600', family) : [v];
     const h = 46 + (long ? lines.length * 34 : 0);
     this.ensure(h);
@@ -324,9 +327,10 @@ function upper2(v) {
   if (m >= 100) { m = 10; e += 1; }
   return (m / 10).toFixed(1) + 'e' + e;
 }
-const roundProb = (p) => (!p ? '—' : p.method === 'bound' ? '< ' + upper2(p.below) : p.value === 0 ? '0' : p.value >= 1e-3 ? pct(p.value, 3) : p.value.toExponential(3));
+// An exact probability under 1e-300 is written from its fraction (sci / oneInSci), never as 0.
+const roundProb = (p) => (!p ? '—' : p.method === 'bound' ? '< ' + upper2(p.below) : p.sci ? p.sci : p.value === 0 ? '0' : p.value >= 1e-3 ? pct(p.value, 3) : p.value.toExponential(3));
 const roundCount = (n) => (n >= 1e9 ? n.toExponential(2) : num(n, n < 100 ? 2 : 0));
-const roundOneIn = (p) => (!p ? '—' : p.method === 'bound' ? '> ' + roundCount(1 / p.below) : p.value > 0 ? roundCount(1 / p.value) : '—');
+const roundOneIn = (p) => (!p ? '—' : p.method === 'bound' ? '> ' + roundCount(1 / p.below) : p.oneInSci ? p.oneInSci : p.value > 0 ? roundCount(1 / p.value) : '—');
 const roundSrc = (m) => pair('roundSrc_' + m)[1];
 const smallPct = (v, d = 2) => (v === 0 ? '0%' : v < 1e-4 ? (v * 100).toExponential(2) + '%' : pct(v, d));
 function capsLine(c) {
@@ -374,6 +378,8 @@ function roundSection(L, th) {
   if (!c.odds) return;
   if (!c.result.top) { L.note('roundNeedCap'); return; }
   const top = c.result.top, ch = top.checks;
+  // A cascading game: the top award and its odds are those of the first drop too.
+  if (r.scope === 'firstDrop') L.note('roundOddsFirstDrop');
   L.kv('roundTopAward', `${num(top.x, 2)}×   P = ${roundProb(top.prob)}`);
   const verdict = (pass) => (pass === true ? { text: pair('roundPass').join(' / '), color: C.pass } : pass === false ? { text: pair('roundFail').join(' / '), color: C.fail } : { text: pair('roundUndecided').join(' / '), color: C.warn });
   L.table([{ key: 'roundRule', w: 0.7 }, { key: 'result', w: 0.3 }], [[pair('roundRuleGli')[1], verdict(ch.gli19.pass)], [pair('roundRulePa')[1], verdict(ch.pa.pass)]]);
@@ -514,7 +520,7 @@ function waysSection(L, x) {
   L.note('multStrategy_' + w.multiplierStrategy);
   if (w.multiplierStrategy === 'global') L.note('globalPayNote');
   L.kv('wildReel1', 'wildStartsWin: ' + w.wildStartsWin);
-  L.note('wildReel1_' + w.wildStartsWin);
+  L.note(w.hasWild === false ? 'wildReel1_none' : 'wildReel1_' + w.wildStartsWin);
   if (w.multiplierSymbols.length) L.kv('multiplierSymbolsLabel', w.multiplierSymbols.map((m) => `${m.symbol} = ${m.countsAs} × ${m.multiplier}`).join(', '));
   if (x.controlVariate) L.kv('controlVariateLabel', x.controlVariate.mean.percent + '%');
   L.note('waysPayUnit');
@@ -1056,8 +1062,8 @@ function roundAscii(lines, r) {
   if (t && t.roundError) lines.push(`  Whole-round distribution: not available (${t.roundError.en})`);
   if (rd) {
     const worst = Math.max(...Object.values(rd.checks).map((c) => c.relativeError));
-    const head = rd.exact ? 'exact fractions' : `${rd.method === 'capsDp' ? 'FFT, cap-state sweep' : 'FFT, free-spin fixed point'}, grid ${rd.grid.size}, wrapped mass < ${upper2(rd.aliasBound)}, noise floor ${upper2(rd.floor)}; mass/mean/variance match the closed forms to ${worst.toExponential(1)}`;
-    const big = rd.thresholds.map((x) => `>= ${x.x}x ${roundProb(x)}${x.method === 'bound' ? ' (bound)' : x.value > 0 ? ` (1 in ${roundOneIn(x)})` : ''}`).join('; ');
+    const head = rd.exact ? 'exact fractions' : `${rd.method === 'capsDp' ? 'FFT, cap-state sweep' : 'FFT, free-spin fixed point'}, grid ${rd.grid.size}, wrapped mass ${rd.aliasBound ? '< ' + upper2(rd.aliasBound) : '0'}, noise floor ${upper2(rd.floor)}; mass/mean/variance match the closed forms to ${worst.toExponential(1)}`;
+    const big = rd.thresholds.map((x) => `>= ${x.x}x ${roundProb(x)}${x.method === 'bound' ? ' (bound)' : x.value > 0 || x.oneInSci ? ` (1 in ${roundOneIn(x)})` : ''}`).join('; ');
     const top = rd.maxWin.bounded ? `top win ${rd.maxWin.x}x, P ${roundProb(rd.maxWin)}` : `no top win (uncapped retriggers; largest above the floor ${rd.maxWin.largestAboveFloor}x)`;
     lines.push(`  Whole-round distribution${rd.scope === 'firstDrop' ? ' (FIRST DROP ONLY: each spin\'s first drop, not the game\'s rounds)' : ''} (${head}${rd.caps ? '; caps ' + capsLine(rd.caps) : ''}): ${big}; ${top}`);
   }
@@ -1070,7 +1076,7 @@ function roundAscii(lines, r) {
   }
   if (c && c.oddsChecks && c.top) {
     const w = (p) => (p === true ? 'meets' : p === false ? 'does not meet' : 'undecided');
-    lines.push(`  Top award ${c.top.x}x, P ${roundProb(c.top.prob)}: GLI-19 4.7.3 (1 in 100,000,000) ${w(c.top.checks.gli19.pass)}; Pennsylvania 461a.7 (50,000,000 to 1) ${w(c.top.checks.pa.pass)}. Rules unverified; not a regulatory finding.`);
+    lines.push(`  Top award ${c.top.x}x${rd && rd.scope === 'firstDrop' ? ' (FIRST DROP ONLY: from the first-drop distribution, so the verdicts do not hold for the game)' : ''}, P ${roundProb(c.top.prob)}: GLI-19 4.7.3 (1 in 100,000,000) ${w(c.top.checks.gli19.pass)}; Pennsylvania 461a.7 (50,000,000 to 1) ${w(c.top.checks.pa.pass)}. Rules unverified; not a regulatory finding.`);
   }
   const s = r.session;
   if (s) {
@@ -1182,7 +1188,7 @@ function asciiSummary(payload, reportId, digest) {
   if (r.theoretical && r.theoretical.model.ways) {
     const w = r.theoretical.model.ways, top = w.base.topReel;
     lines.push(`  Ways evaluation: ${w.base.minWays}-${w.base.maxWays} ways, bet ${w.betCost} coins, top reel ${top ? `over reels ${top.covers.join(', ')} (${top.stops} stops)` : 'none'};`
-      + ` multiplier strategy "${w.multiplierStrategy}", wild on reel 1 ${w.wildStartsWin ? 'starts every symbol' : 'starts only symbols shown on reel 1'}`
+      + ` multiplier strategy "${w.multiplierStrategy}", ${w.hasWild === false ? 'no wild in the model (wildStartsWin changes nothing)' : `wild on reel 1 ${w.wildStartsWin ? 'starts every symbol' : 'starts only symbols shown on reel 1'}`}`
       + ' (conventions named after StakeEngine/math-sdk ways.py, commit 141b4e8, 2 Nov 2026); exact for the model as entered, not a certification');
   }
   if (r.theoretical && r.theoretical.scope === 'firstDrop') {

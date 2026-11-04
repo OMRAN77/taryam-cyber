@@ -96,7 +96,8 @@ export const DEVIATIONS = [
   {
     id: 'ways-wild-reel1', reference: 'StakeEngine/math-sdk src/calculations/ways.py (commit 141b4e8)',
     text: 'Ways wild on reel 1: this model lets a wild on reel 1 start a win for every symbol (wildStartsWin true, the lab default); ways.py starts wins only for symbols shown on reel 1 (wildStartsWin false).',
-    when: (s) => !!(waysOf(s) && waysOf(s).wildStartsWin),
+    // Not for a model without a wild: there the convention changes nothing.
+    when: (s) => !!(waysOf(s) && waysOf(s).wildStartsWin && waysOf(s).hasWild !== false),
   },
 ];
 

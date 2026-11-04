@@ -224,7 +224,7 @@ function renderWays(box, x) {
   if (w.freeSpins) box.append(sub('fsWindows'), waysSourceCards(w.freeSpins), waysHeightsTable(w.freeSpins));
   const rules = [
     tr('multStrategy') + ': ' + tr('multStrategy_' + w.multiplierStrategy) + (w.multiplierStrategy === 'global' ? ` (${tr('globalMultLabel')}: ${w.globalMultiplier}). ${tr('globalPayNote')}` : ''),
-    tr('wildReel1') + ': ' + tr('wildReel1_' + w.wildStartsWin),
+    tr('wildReel1') + ': ' + tr(w.hasWild === false ? 'wildReel1_none' : 'wildReel1_' + w.wildStartsWin),
   ];
   if (w.multiplierSymbols.length) rules.push(tr('multiplierSymbolsLabel') + ': ' + w.multiplierSymbols.map((m) => `${m.symbol} = ${m.countsAs} × ${m.multiplier}`).join(' · '));
   box.append(el('ul', { class: 'ways-rules', id: 'ways-rules' }, rules.map((r) => el('li', {}, r))));
@@ -320,9 +320,11 @@ function upper2(v) {
   return (m / 10).toFixed(1) + 'e' + e;
 }
 // A probability { value, method: exact | fft | bound, below }: never a number under the floor.
+// An exact one under 1e-300 is written from its fraction (sci / oneInSci), never as 0.
 const probText = (p) => {
   if (!p) return '—';
   if (p.method === 'bound') return '< ' + upper2(p.below);
+  if (p.sci) return p.sci;
   if (p.value === 0) return '0';
   return p.value >= 1e-3 ? pct(p.value, 3) : p.value.toExponential(3);
 };
@@ -330,6 +332,7 @@ const bigCount = (n) => (n >= 1e9 ? n.toExponential(2) : fmt(n, n < 100 ? 2 : 0)
 const oneInText = (p) => {
   if (!p) return '—';
   if (p.method === 'bound') return '> ' + bigCount(1 / p.below);
+  if (p.oneInSci) return p.oneInSci;
   return p.value > 0 ? bigCount(1 / p.value) : '—';
 };
 const pctSmall = (v, d = 2) => (v === 0 ? '0%' : v < 1e-4 ? (v * 100).toExponential(2) + '%' : pct(v, d));
@@ -348,6 +351,12 @@ function renderRound() {
   const th = session.results.theoretical;
   const x = th && th.result;
   sec.hidden = !x || (!x.round && !x.roundError);
+  // Without a round (a closed-form ways game, or a failed round) there is no cap to
+  // compute: its controls are off (the button stays off while a cap is computing).
+  const noRound = !x || !x.round;
+  $('#r-cap').disabled = noRound;
+  $('#r-odds').disabled = noRound;
+  $('#run-round').disabled = noRound || !$('#prog-round').hidden;
   renderRoundCap();
   if (sec.hidden) return;
   if (x.roundError) {
@@ -410,13 +419,16 @@ function renderRoundCap() {
   const cell = (pass) => (pass === true ? { v: tr('roundPass'), cls: 'pass' } : pass === false ? { v: tr('roundFail'), cls: 'fail' } : { v: tr('roundUndecided'), cls: 'na' });
   const tb = table(['roundRule', 'result'], [[tr('roundRuleGli'), cell(ch.gli19.pass)], [tr('roundRulePa'), cell(ch.pa.pass)]]);
   tb.id = 'round-odds';
-  box.append(sub('roundOddsTitle'), cards([{ k: 'roundTopAward', v: fmt(res.top.x, 2) + '×', s: `${tr('probability')}: ${probText(res.top.prob)} · ${tr('roundOneInCol')}: ${oneInText(res.top.prob)}` }]), tb, el('p', { class: 'muted small' }, tr('roundOddsNote')));
+  // A cascading game: the top award and its odds are those of the first drop too.
+  const firstDrop = th.result.round && th.result.round.scope === 'firstDrop';
+  box.append(sub('roundOddsTitle'), ...(firstDrop ? [el('div', { class: 'verdict warn', id: 'round-odds-first-drop' }, tr('roundOddsFirstDrop'))] : []), cards([{ k: 'roundTopAward', v: fmt(res.top.x, 2) + '×', s: `${tr('probability')}: ${probText(res.top.prob)} · ${tr('roundOneInCol')}: ${oneInText(res.top.prob)}` }]), tb, el('p', { class: 'muted small' }, tr('roundOddsNote')));
 }
 
 async function runRoundCap() {
   await withTask('round', async () => {
     const th = session.results.theoretical;
-    if (!th || !th.result.round) throw { ar: t('roundNeedRun', 'ar'), en: t('roundNeedRun', 'en') };
+    if (!th) throw { ar: t('roundNeedRun', 'ar'), en: t('roundNeedRun', 'en') };
+    if (!th.result.round) throw { ar: t('roundCapNoRound', 'ar'), en: t('roundCapNoRound', 'en') };
     const cap = $('#r-cap').value.trim();
     // The previous cap's figures go now: next to an error they would belong to another M
     // (and would stay in the report).
@@ -476,8 +488,11 @@ async function runSession() {
 }
 
 // The funnel: bands of 90% and 50% of sessions, the median and the expected result.
+// On a phone a narrower drawing keeps the axis numbers at a readable size (the SVG is
+// scaled to the screen width, its text with it).
 function funnelChart(r, bet) {
-  const W = 640, H = 240, L = 58, R = 10, T = 12, B = 28;
+  const narrow = typeof matchMedia === 'function' && matchMedia('(max-width: 480px)').matches;
+  const W = narrow ? 360 : 640, H = narrow ? 220 : 240, L = 58, R = 10, T = 12, B = 28;
   const zero = { rounds: 0, mean: 0, percentiles: r.percentiles.map((p) => ({ q: p.q, net: 0 })) };
   const pts = [zero, ...r.funnel];
   const at = (p, q) => p.percentiles.find((x) => x.q === q).net * bet;
@@ -1447,7 +1462,7 @@ function figureText(f) {
   if (f.section === 'montecarlo') return [f.value, f.scope === 'firstDrop' ? tr('firstDropShort') : null, f.spins !== null ? `${tr('spins')}: ${n(f.spins)}` : null].filter(Boolean).join(' · ');
   if (f.section === 'theoretical') return [f.value, f.scope === 'firstDrop' ? tr('firstDropShort') : null].filter(Boolean).join(' · ');
   if (f.section === 'round') return [f.value ? `${tr('figRoundTop')}: ${f.value}` : null, f.oneIn ? `${tr('lutOneIn')} ${f.oneIn}` : null, f.scope === 'firstDrop' ? tr('firstDropShort') : null].filter(Boolean).join(' · ') || '—';
-  if (f.section === 'session') return [`${tr('figSessAhead')}: ${f.value}`, `${tr('sessRounds')}: ${n(f.rounds)}`, f.scope === 'firstDrop' ? tr('firstDropShort') : null].filter(Boolean).join(' · ');
+  if (f.section === 'session') return [`${tr('figSessAhead')}: ${f.value}`, f.method === 'mc' ? tr('sessMethod_mc') : null, `${tr('sessRounds')}: ${n(f.rounds)}`, f.scope === 'firstDrop' ? tr('firstDropShort') : null].filter(Boolean).join(' · ');
   return f.value ?? '—';
 }
 function renderVerify() {

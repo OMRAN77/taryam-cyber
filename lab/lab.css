@@ -276,3 +276,10 @@ td.warn { color: var(--amber); font-weight: 700; }
 /* The odds rules wrap, so the verdict column stays on screen on a phone. */
 #round-odds td:first-child { white-space: normal; min-width: 14ch; }
 #round-odds td:last-child { width: 1%; }
+/* Review fixes (ways + whole-round): on a phone the big-wins table fits the screen, so its
+   "once every … rounds" and source columns are seen without scrolling sideways. */
+#round-big th, #round-big td:first-child, #round-big td:last-child { white-space: normal; }
+@media (max-width: 480px) {
+  #round-big th, #round-big td { padding: 7px 6px; }
+  #round-big td.mono, #round-big td.num { font-size: 11.5px; }
+}

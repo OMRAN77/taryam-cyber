@@ -562,8 +562,20 @@ export function analyzeExact(model, opts = {}) {
   // exact from the closed-form moments; the distribution itself is left to Monte Carlo.
   if (ways && !result.distribution) {
     const x = fs && (fs.sameReels ? { ...base.moments, sJ: fs.retrigger ? base.moments.sJ : 0n, sXJ: fs.retrigger ? base.moments.sXJ : 0n } : fsSrc.moments);
-    // Free-spin caps: the feature's moments from the exact sweep over its states.
-    const c = fs && hasCaps(fs) ? cappedFeatureOrError(fs, { D: fsTotal, c1: x.sJ, sums: { sx: x.s1, sx2: x.s2, sxj: x.sXJ } }) : null;
+    // Free-spin caps: the feature's moments from the exact sweep over its states. With
+    // the sums it needs three times the memory of the RTP's sweep, so caps that passed
+    // there can fail here: the RTP is kept and the reason replaces the closed-form note.
+    let c = null;
+    try {
+      c = fs && hasCaps(fs) ? cappedFeatureOrError(fs, { D: fsTotal, c1: x.sJ, sums: { sx: x.s1, sx2: x.s2, sxj: x.sXJ } }) : null;
+    } catch (e) {
+      if (!(e instanceof ModelError)) throw e;
+      result.distributionError = {
+        ar: 'التوزيع الكامل لهذه اللعبة كبير جدًا للحساب الدقيق (عدد الحالات تجاوز الحد)، و' + e.ar + '. ما زال RTP ومساهماته دقيقة؛ أما التباين والتوزيع فمتروكان لمحاكاة مونت كارلو.',
+        en: 'The full distribution of this game is too large to compute exactly (state limit exceeded), and ' + e.en + '. RTP and its contributions are still exact; the variance and the distribution are left to Monte Carlo.',
+      };
+      return result;
+    }
     const m = waysMomentSummary(model, base.moments, x, total, fsTotal, ev, c && { EFv: c.ez.mul(fs.multiplier), EFv2: c.ez2.mul(fs.multiplier).mul(fs.multiplier) });
     const sdev = Math.sqrt(m.variance.toNumber());
     result.distribution = {

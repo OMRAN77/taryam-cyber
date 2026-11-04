@@ -112,10 +112,14 @@ function upperPct(v) {
   return (m / 10).toFixed(1) + 'e' + e + '%';
 }
 
+// A lower bound as a percentage, rounded down to four decimals.
+const lowerPct = (v) => (Math.floor(v * 1e6 + 1e-6) / 1e4).toFixed(4) + '%';
+
 // "1 in N" of a probability { value, method, below } (a bound gives "> N").
 function oneInOf(p) {
   const count = (n) => (n >= 1e9 ? n.toExponential(2) : Math.round(n).toLocaleString('en-US'));
   if (p.method === 'bound') return p.below > 0 ? '> ' + count(1 / p.below) : null;
+  if (p.oneInSci) return p.oneInSci; // exact, under 1e-300: from the fraction
   return p.value > 0 ? count(1 / p.value) : null;
 }
 
@@ -139,13 +143,15 @@ function figures(report) {
   const rd = r.theoretical && r.theoretical.roundDistribution;
   if (rd && rd.maxWin) out.push({ section: 'round', value: rd.maxWin.bounded ? rd.maxWin.x + '×' : '∞', oneIn: rd.maxWin.bounded ? oneInOf(rd.maxWin) : null, ...(rd.scope ? { scope: rd.scope } : {}) });
   // A probability under the precision floor (pAhead null) is stated by its bound; a
-  // Monte Carlo count of 0 by its 95% bound.
+  // Monte Carlo count of 0 (or of every session) by its 95% bound, and any other
+  // Monte Carlo estimate with its standard error and method 'mc', as the pages state it.
   if (r.session) {
     const s = r.session;
     const value = typeof s.pAheadBelow === 'number' && s.pAhead === null ? '< ' + upperPct(s.pAheadBelow)
       : typeof s.pAheadUpper95 === 'number' ? '< ' + upperPct(s.pAheadUpper95) + ' (95%)'
-        : typeof s.pAhead === 'number' ? pct(s.pAhead) : null;
-    if (value) out.push({ section: 'session', value, rounds: s.rounds ?? null, ...(s.scope ? { scope: s.scope } : {}) });
+        : typeof s.pAheadLower95 === 'number' ? '> ' + lowerPct(s.pAheadLower95) + ' (95%)'
+          : typeof s.pAhead === 'number' ? pct(s.pAhead) + (typeof s.pAheadSe === 'number' ? ' ± ' + pct(s.pAheadSe) : '') : null;
+    if (value) out.push({ section: 'session', value, rounds: s.rounds ?? null, ...(s.method === 'mc' ? { method: 'mc' } : {}), ...(s.scope ? { scope: s.scope } : {}) });
   }
   return out;
 }
