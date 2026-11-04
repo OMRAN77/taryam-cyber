@@ -7,43 +7,20 @@
 //     issuer, expiry, and negotiated protocol/cipher.
 // No external API key needed; lightweight per-IP daily throttling.
 const tls = require('tls');
+const http = require('http');
+const https = require('https');
+const { resolvePublic, parseTarget, BlockedTargetError, TLS_PORTS } = require('./_destination');
 
-const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
-const BLOB_BASE = 'https://blob.vercel-storage.com';
-const STORE_ID = process.env.BLOB_STORE_ID || '6tfgxvttzyoiavtu';
-const PUBLIC_BASE = 'https://' + STORE_ID + '.public.blob.vercel-storage.com/';
+// Up to 3 hops; every hop is re-checked against _destination before it is fetched.
+const MAX_REDIRECTS = 3;
 
 const DAILY_LIMIT = 40;
 const { quotaEnabled, isOwnerToken } = require('./_quota');
+const { clientIp } = require('./_client');
+const store = require('./_store');
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
-}
-function usagePath(id) {
-  return 'taryam/db/webscan_usage/' + encodeURIComponent(id) + '.json';
-}
-async function readBlobJson(path, fallback) {
-  try {
-    const res = await fetch(PUBLIC_BASE + path + '?_=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) return fallback;
-    return await res.json();
-  } catch (e) {
-    return fallback;
-  }
-}
-async function writeBlobJson(path, data) {
-  try {
-    await fetch(BLOB_BASE + '/' + path, {
-      method: 'PUT',
-      headers: {
-        Authorization: 'Bearer ' + BLOB_TOKEN,
-        'x-content-type': 'application/json',
-        'x-add-random-suffix': '0',
-        'x-cache-control-max-age': '0',
-      },
-      body: JSON.stringify(data),
-    });
-  } catch (e) {}
 }
 
 function normalizeUrl(input) {
@@ -52,14 +29,51 @@ function normalizeUrl(input) {
   return u;
 }
 
+// Fetches one hop with the connection pinned to an address that resolvePublic()
+// already accepted, so a second DNS answer cannot redirect the socket. Redirects
+// are returned to the caller instead of being followed by the HTTP client.
+async function fetchPinned(url, address, family) {
+  const transport = url.protocol === 'https:' ? https : http;
+  const opts = {
+    protocol: url.protocol,
+    host: address,
+    family,
+    port: url.port ? Number(url.port) : (url.protocol === 'https:' ? 443 : 80),
+    path: (url.pathname || '/') + (url.search || ''),
+    method: 'GET',
+    headers: { Host: url.host, 'User-Agent': 'TaryamCyber-WebScan/1.0' },
+    timeout: 8000,
+  };
+  if (url.protocol === 'https:') opts.servername = url.hostname; // SNI/cert still the real host
+  return new Promise((resolve, reject) => {
+    const req = transport.request(opts, (res) => {
+      res.resume(); // drain the body; only headers are needed
+      resolve({ status: res.statusCode, headers: res.headers });
+    });
+    req.on('timeout', () => req.destroy(new Error('Request timed out')));
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 async function scanHeaders(urlStr) {
-  const url = new URL(urlStr);
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), 8000);
-  const res = await fetch(url.toString(), { redirect: 'follow', signal: controller.signal, headers: { 'User-Agent': 'TaryamCyber-WebScan/1.0' } });
-  clearTimeout(t);
+  let url = parseTarget(urlStr).url;
+  let res = null;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const { address, family } = await resolvePublic(url.hostname);
+    res = await fetchPinned(url, address, family);
+    const location = res.headers.location;
+    if (res.status >= 300 && res.status < 400 && location) {
+      const next = new URL(location, url);
+      parseTarget(next.toString()); // validates scheme and port of the hop
+      url = next;
+      continue;
+    }
+    break;
+  }
+  if (res && res.status >= 300 && res.status < 400) throw new BlockedTargetError('Too many redirects');
   const h = {};
-  res.headers.forEach((v, k) => { h[k.toLowerCase()] = v; });
+  Object.keys(res.headers).forEach((k) => { h[k.toLowerCase()] = String(res.headers[k]); });
 
   const checks = [
     { key: 'strict-transport-security', label: 'HSTS', points: 20 },
@@ -84,12 +98,13 @@ async function scanHeaders(urlStr) {
   return { url: url.toString(), status: res.status, score, grade, details, server: h['server'] || null };
 }
 
-function scanSsl(urlStr) {
-  const url = new URL(urlStr);
-  const host = url.hostname;
-  const port = url.port ? Number(url.port) : 443;
+async function scanSsl(urlStr) {
+  const { url, hostname, port } = parseTarget(urlStr);
+  if (!TLS_PORTS.has(port)) throw new BlockedTargetError('Certificate checks run on ports 443 and 8443 only');
+  const host = hostname;
+  const { address, family } = await resolvePublic(host);
   return new Promise((resolve, reject) => {
-    const socket = tls.connect({ host, port, servername: host, timeout: 8000, rejectUnauthorized: false }, () => {
+    const socket = tls.connect({ host: address, family, port, servername: host, timeout: 8000, rejectUnauthorized: false }, () => {
       const cert = socket.getPeerCertificate();
       const proto = socket.getProtocol();
       const cipher = socket.getCipher();
@@ -139,30 +154,41 @@ module.exports = async (req, res) => {
       return;
     }
     const urlStr = normalizeUrl(body.value);
-    let parsed;
-    try { parsed = new URL(urlStr); } catch (e) {
-      res.status(400).json({ error: 'Invalid URL/domain' });
-      return;
-    }
-    if (!/^https?:$/.test(parsed.protocol)) {
-      res.status(400).json({ error: 'Only http/https supported' });
+    try {
+      parseTarget(urlStr);
+    } catch (e) {
+      res.status(400).json({ error: e instanceof BlockedTargetError ? e.message : 'Invalid URL/domain' });
       return;
     }
 
-    const id = String(body.guestId || req.headers['x-forwarded-for'] || 'anon').slice(0, 100);
+    // The counter is keyed on the caller address the platform sets, never on a body
+    // field: a client-chosen guestId is a free pass to an unlimited quota. The
+    // counter lives at an HMAC-derived, encrypted path (see _store.js) so it is not
+    // a public record that reveals who scanned what.
     const today = todayStr();
     // Daily per-tool limit; never for the owner's account or a QUOTA=off deployment (api/_quota.js).
     const limited = quotaEnabled() && !isOwnerToken(body.token);
     let usage = { date: today, count: 0 };
     if (limited) {
-      usage = await readBlobJson(usagePath(id), null);
+      const id = clientIp(req);
+      if (!id) { res.status(403).json({ error: 'Cannot determine caller address' }); return; }
+      let counterPath;
+      try {
+        counterPath = store.secretPath('webscan-usage', 'ip:' + id);
+        usage = await store.readSecret(counterPath);
+      } catch (e) {
+        res.status(503).json({ error: 'الخدمة غير مهيأة للمحاسبة (AUTH_SECRET)' });
+        return;
+      }
       if (!usage || usage.date !== today) usage = { date: today, count: 0 };
       if (usage.count >= DAILY_LIMIT) {
         res.status(429).json({ error: 'limit', message: 'وصلت للحد اليومي المسموح لهذه الأداة (' + DAILY_LIMIT + ' فحوصات/يوم). حاول غدًا.' });
         return;
       }
+      usage.count += 1;
+      // Best-effort: one uncounted scan is cheaper than failing a working request.
+      try { await store.writeSecret(counterPath, usage); } catch (e) {}
     }
-    if (limited) { usage.count += 1; await writeBlobJson(usagePath(id), usage); }
 
     if (mode === 'headers') {
       const result = await scanHeaders(urlStr);
@@ -172,6 +198,11 @@ module.exports = async (req, res) => {
       res.status(200).json({ mode, ...result, remaining: limited ? DAILY_LIMIT - usage.count : null });
     }
   } catch (e) {
+    // A refused target is the caller's problem, not a server fault.
+    if (e instanceof BlockedTargetError) {
+      res.status(400).json({ error: e.message });
+      return;
+    }
     res.status(500).json({ error: 'Scan failed: ' + (e && e.message ? e.message : String(e)) });
   }
 };
