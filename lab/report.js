@@ -376,6 +376,12 @@ function distSection(L, dt) {
   L.kv('roundsChecked', r.rounds.toLocaleString('en-US') + (r.mode ? `  (${r.mode})` : ''));
   const [la, le] = pair('distLoaded');
   r.candidates.forEach((c, i) => L.kv(null, `${i === r.refIndex ? '★ ' : ''}${c.label}` + (c.scope === 'round' ? `  (RTP ${pct(c.mean, 3)})` : ''), { labels: [`${la}: ${i + 1}`, `${le}: ${i + 1}`] }));
+  // Probabilities or weights that were divided by their total.
+  const normalized = r.candidates.filter((c) => c.normalizedFrom !== null && c.normalizedFrom !== undefined);
+  if (normalized.length) {
+    const list = normalized.map((c) => `${c.label} (${num(c.normalizedFrom, 8)})`).join(', ');
+    L.note(null, pair('distNormalized').map((s) => `${s}: ${list}`));
+  }
   L.kv('distScope', both(ref.scope === 'round' ? 'distScopeRound' : 'distScopeBase'));
   L.kv('seed', `"${r.seed}"`, { mono: true });
   const color = { consistent: C.pass, mismatch: C.fail, impossible: C.fail, insufficient: C.warn }[f.verdict];
@@ -386,10 +392,10 @@ function distSection(L, dt) {
   if (r.mixedModes) L.note('distMixedModes');
   if (f.offSupport && f.offSupport.count) L.kv('distOff', `${f.offSupport.count.toLocaleString('en-US')}: ` + f.offSupport.examples.map((e) => `#${e.round} ${x(e.x)}`).join(', '));
   const inFamily = (id, index) => f.tests.find((t) => t.id === id && (index === undefined || t.index === index));
-  const status = (t) => (!t ? { text: both('distTooRareShort'), color: C.muted } : t.rejected ? { text: both('distReject'), color: C.fail, bold: true } : { text: both('distKeep'), color: C.pass, bold: true });
+  const status = (t, out = 'distTooRareShort') => (!t ? { text: both(out), color: C.muted } : t.rejected ? { text: both('distReject'), color: C.fail, bold: true } : { text: both('distKeep'), color: C.pass, bold: true });
   const rows = [];
   const g = f.gof;
-  if (g && g.applicable) rows.push([both('distGof'), `G ${num(g.G, 2)}, df ${g.df}, P ${fmtP(g.pValue)}`, status(inFamily('gof'))]);
+  if (g && g.applicable) rows.push([both('distGof'), `G ${num(g.G, 2)}, df ${g.df}, P ${fmtP(g.pValue)}`, status(inFamily('gof'), 'distGofOut')]);
   if (f.hit) rows.push([both('distHit'), `${pct(f.hit.rate, 3)} / ${pct(f.hit.expected, 3)}, P ${fmtP(f.hit.pValue)}`, status(inFamily('hit'))]);
   if (f.trigger) rows.push([both('distTrigger'), `${pct(f.trigger.rate, 4)} / ${pct(f.trigger.expected, 4)}, P ${fmtP(f.trigger.pValue)}`, status(inFamily('trigger'))]);
   (f.tails || []).forEach((t, i) => rows.push([`P(X ≥ ${x(t.threshold)})`, `${t.observed} / ${num(t.expected, 2)}, P ${fmtP(t.pValue)}`, status(inFamily('tail', i))]));
@@ -400,17 +406,32 @@ function distSection(L, dt) {
   if (g && g.applicable) {
     L.kv('distMcP', `G ${fmtP(g.pValue)}  ·  χ² ${fmtP(g.pValueX2)}  (${g.replicates.toLocaleString('en-US')} MC)`);
     L.kv('distBinsDf', `${g.bins.length} / ${g.df}`);
-    const m = g.mde, b = g.bins[m.bin];
-    const zero = b && b.lo === 0 && b.hi === 0 && !b.triggered;
-    const share = m.relativeChange === null ? '' : `±${pct(m.relativeChange, 2)}`;
-    L.kv('distMde', `w = ${num(m.w, 4)}` + (share ? `  (${share})` : ''));
-    if (share) {
-      const [sa, se] = pair(zero ? 'distNoWinShare' : 'distLargestBin');
-      L.note(null, [`${pair('distMde')[0]}: ${share} ${pair('distMdeBin')[0]} ${sa}.`, `${pair('distMde')[1]}: ${share} ${pair('distMdeBin')[1]} ${se}.`]);
+    if (!g.inFamily) L.note('distGofFloorNote');
+    // Every minimum detectable effect is at Holm's strictest level, alpha / m.
+    const [lva, lve] = pair('distMdeLevel');
+    const m = g.mde;
+    if (m) {
+      const b = g.bins[m.bin];
+      const zero = b && b.lo === 0 && b.hi === 0 && !b.triggered;
+      const share = m.relativeChange === null ? '' : `±${pct(m.relativeChange, 2)}`;
+      L.kv('distMde', `w = ${num(m.w, 4)}` + (share ? `  (${share})` : '') + `   α/m = ${fmtP(m.alpha)}`);
+      const [sa, se] = share ? pair(zero ? 'distNoWinShare' : 'distLargestBin') : ['', ''];
+      L.note(null, [
+        `${pair('distMde')[0]}` + (share ? `: ${share} ${pair('distMdeBin')[0]} ${sa}` : '') + `، ${lva}.`,
+        `${pair('distMde')[1]}` + (share ? `: ${share} ${pair('distMdeBin')[1]} ${se}` : '') + `, ${lve}.`,
+      ]);
     }
   }
   if (f.hit) L.kv('distHit', `${pct(f.hit.rate, 3)}  [${pct(f.hit.ci[0], 3)} – ${pct(f.hit.ci[1], 3)}]  ${(f.hit.confidence * 100).toFixed(1)}%`);
   if (f.trigger) L.kv('distTrigger', `${pct(f.trigger.rate, 4)}  [${pct(f.trigger.ci[0], 4)} – ${pct(f.trigger.ci[1], 4)}]`);
+  if (f.hit) {
+    const [ra, re] = pair('distMdeRate'), [ha, he] = pair('distHit'), [ta, te] = pair('distTrigger'), [va, ve] = pair('distMdeLevel');
+    const hit = pct(f.hit.mde.absolute, 3), trig = f.trigger ? pct(f.trigger.mde.absolute, 4) : null, level = fmtP(f.hit.mde.alpha);
+    L.note(null, [
+      `${ra}: ${ha} ${hit}` + (trig ? `، ${ta} ${trig}` : '') + ` (${va}: ${level}).`,
+      `${re}: ${he.toLowerCase()} ${hit}` + (trig ? `, ${te.toLowerCase()} ${trig}` : '') + ` (${ve}: ${level}).`,
+    ]);
+  }
   if (f.topPrize) {
     const tp = f.topPrize;
     L.kv('distTop', `${x(tp.x)}  (1 / ${num(tp.oneIn, 0)})`);
@@ -423,8 +444,11 @@ function distSection(L, dt) {
     L.kv('distTopFor95', rounds(tp.roundsFor95));
   }
   if (f.total) {
-    L.kv('distTotalShort', `≈ ${fmtP(f.total.pLower)}   (${num(f.total.sum, 2)} / ${num(f.total.expected, 2)})`);
-    L.note('distTotalNote');
+    const tt = f.total;
+    const est = tt.count === 0 ? `< ${fmtP(1 / tt.replicates)}` : tt.count === tt.replicates ? `> ${fmtP(1 - 1 / tt.replicates)}` : `≈ ${fmtP(tt.estimate)} ± ${fmtP(tt.se)}`;
+    L.kv('distTotalShort', `${est}   (${num(tt.sum, 2)} / ${num(tt.expected, 2)})`);
+    const draws = pair('distDraws');
+    L.note(null, pair('distTotalNote').map((s, i) => `${s} (${draws[i]}: ${tt.replicates.toLocaleString('en-US')}).`));
   }
   if (f.unseen) L.kv('distUnseenShort', `${pct(f.unseen.rtpAbove, 3)}  (max ${x(f.unseen.maxObserved)})`);
 
@@ -457,7 +481,8 @@ function distSection(L, dt) {
   if (b.needs) L.note(b.needs === 'maxWin' ? 'distNeedsMax' : 'distNeedsDeclared');
   else if (b.error) L.note(null, [b.error.ar, b.error.en]);
   else {
-    L.kv('declaredRtp', `${pct(b.mu0, 3)}   M = ${x(b.M)}`);
+    L.kv(b.mu0Source === 'reference' ? 'distRefRtp' : 'declaredRtp', pct(b.mu0, 3));
+    L.kv(null, `${x(b.M)}   (${both('distSrc_' + b.maxWinSource)})`, { labels: ['M', 'M'] });
     L.kv('distEValue', num(b.eValue, 4));
     L.kv('distMaxE', `${num(b.maxEValue, 4)}   (1/α = ${num(1 / b.alpha, 0)})`);
     L.kv('distAnytimeP', fmtP(b.pValue));
@@ -466,11 +491,13 @@ function distSection(L, dt) {
     L.badge(b.rejected ? 'distBetBadgeReject' : 'distBetBadgeKeep', b.rejected ? C.fail : C.pass);
     L.note(b.rejected ? 'distBetReject' : 'distBetKeep');
   }
+  if (b.declaredDiffers) L.note(null, pair('distDeclaredDiffers').map((s) => `${s}: ${pct(b.declaredDiffers, 3)} ≠ ${pct(b.mu0, 3)}`));
   L.note('distBetNote');
 
   const pl = r.planner;
   L.section('distPlanner');
   L.kv('distGap', num(pl.gap * 100, 2));
+  if (pl.sigma) L.kv(null, `${num(pl.sigma, 3)}   (${both('distSrc_' + pl.sigmaSource)})`, { labels: ['σ', 'σ'] });
   const short = (id) => { const [a, e] = pair('planShort_' + id); return a === e ? a : `${a} / ${e}`; };
   L.table([{ key: 'distPlanMethod', w: 0.5 }, { key: 'distVersion', w: 0.2 }, { key: 'distPlanRounds', w: 0.3, mono: true }],
     pl.rows.map((p) => [short(p.id), p.version || '—', (p.approx && p.rounds !== null ? '≈ ' : '') + rounds(p.rounds)]));
@@ -611,14 +638,16 @@ function asciiSummary(payload, reportId, digest) {
   if (r.distTests) {
     const d = r.distTests, f = d.fit, g = f.gof;
     lines.push(`  Distribution tests (reference "${d.distributions[d.refIndex].label}", ${d.rounds} rounds, alpha ${d.alpha}, seed "${d.seed}"): ${f.verdict}`
-      + (g && g.applicable ? `; G-test P = ${g.pValue.toPrecision(4)} (Monte Carlo), minimum detectable w = ${g.mde.w.toPrecision(3)}` : '')
+      + (g && g.applicable ? `; G-test P = ${g.pValue.toPrecision(4)} (Monte Carlo, ${g.replicates} replicates`
+        + (g.inFamily ? `), minimum detectable w = ${g.mde.w.toPrecision(3)} at alpha/m = ${g.mde.alpha.toPrecision(3)}` : '; cannot reach alpha/m, kept out of the verdict)') : '')
       + (f.hit ? `; hit ${(f.hit.rate * 100).toFixed(3)}% vs ${(f.hit.expected * 100).toFixed(3)}%` : '')
       + (f.trigger ? `; trigger ${(f.trigger.rate * 100).toFixed(4)}% vs ${(f.trigger.expected * 100).toFixed(4)}%` : '')
-      + (f.total ? `; P(total <= observed) ~ ${f.total.pLower.toPrecision(3)} (saddlepoint)` : ''));
+      + (f.total ? `; P(total <= observed) ~ ${f.total.estimate.toPrecision(3)} +/- ${f.total.se.toPrecision(2)} (Monte Carlo, ${f.total.replicates} draws)` : ''));
     const v = d.versions;
     if (v && v.models) lines.push(`  Versions: posterior ${v.models.map((m) => `${m.label} ${(m.posterior * 100).toFixed(1)}%`).join(', ')}; SPRT ${v.sequential.decision === null ? 'undecided' : `chose ${v.models[v.sequential.decision].label} at round ${v.sequential.at}`}`);
     const b = d.betting;
-    if (b && b.eValue !== undefined) lines.push(`  RTP below ${(b.mu0 * 100).toFixed(2)}%? Betting e-process (M = ${b.M}x): ${b.rejected ? 'REJECTED' : 'not rejected'}, max e-value ${b.maxEValue.toPrecision(4)}, anytime P = ${b.pValue.toPrecision(4)}`);
+    if (b && b.eValue !== undefined) lines.push(`  RTP below ${(b.mu0 * 100).toFixed(2)}% (${b.mu0Source === 'reference' ? 'the reference version' : 'the declared field'})? Betting e-process (M = ${b.M}x, from ${b.maxWinSource}): ${b.rejected ? 'REJECTED' : 'not rejected'}, max e-value ${b.maxEValue.toPrecision(4)}, anytime P = ${b.pValue.toPrecision(4)}`);
+    if (b && b.declaredDiffers) lines.push(`  Note: the declared RTP field (${(b.declaredDiffers * 100).toFixed(3)}%) differs from the reference version's RTP (${(b.mu0 * 100).toFixed(3)}%); the e-process tests the latter`);
   }
   if (r.rng) {
     const app = r.rng.nist.filter((t) => t.applicable);

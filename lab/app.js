@@ -339,13 +339,14 @@ function binLabel(b) {
   return [range, b.triggered ? tr('distTriggered') : null].filter(Boolean).join(' + ');
 }
 // Minimum detectable effect as a card: "±0.60%", "w = 0.0089 · relative change in
-// the share of rounds with no win".
+// the share of rounds with no win · at Holm's strictest level (α ÷ m): 0.001667".
+const mdeLevel = (m) => `${tr('distMdeLevel')}: ${fmtP(m.alpha)}`;
 function mdeCard(g) {
   const m = g.mde;
   const b = g.bins[m.bin];
   const zeroBin = b && b.lo === 0 && b.hi === 0 && !b.triggered;
-  if (m.relativeChange === null) return { k: 'distMde', v: `w = ${fmt(m.w, 4)}` };
-  return { k: 'distMde', v: '±' + pct(m.relativeChange, 2), s: `w = ${fmt(m.w, 4)} · ${tr('distMdeBin')} ${tr(zeroBin ? 'distNoWinShare' : 'distLargestBin')}` };
+  if (m.relativeChange === null) return { k: 'distMde', v: `w = ${fmt(m.w, 4)}`, s: mdeLevel(m) };
+  return { k: 'distMde', v: '±' + pct(m.relativeChange, 2), s: `w = ${fmt(m.w, 4)} · ${tr('distMdeBin')} ${tr(zeroBin ? 'distNoWinShare' : 'distLargestBin')} · ${mdeLevel(m)}` };
 }
 
 const svgNs = 'http://www.w3.org/2000/svg';
@@ -390,29 +391,38 @@ function renderDist() {
   if (f.unavailable) box.append(el('div', { class: 'verdict warn' }, tr('distNeedTrigger')));
   if (r.mixedModes) box.append(el('div', { class: 'verdict warn' }, tr('distMixedModes') + ' (' + r.modes.join(', ') + ')'));
   const g = f.gof;
+  const inFamily = (id, index) => f.tests.find((x) => x.id === id && (index === undefined || x.index === index));
+  const gt = inFamily('gof');
   box.append(cards([
     { k: 'roundsChecked', v: r.rounds.toLocaleString('en-US'), s: r.mode ? tr('modeName') + ': ' + r.mode : null },
     { k: 'distReference', v: ref.label, s: tr(ref.scope === 'round' ? 'distScopeRound' : 'distScopeBase') },
-    g && g.applicable && { k: 'distMcP', v: fmtP(g.pValue), s: `G ${fmt(g.G, 2)} · df ${g.df} · ${g.replicates.toLocaleString('en-US')} MC`, cls: f.tests.find((x) => x.id === 'gof').rejected ? 'bad' : 'good' },
-    g && g.applicable && mdeCard(g),
+    g && g.applicable && { k: 'distMcP', v: fmtP(g.pValue), s: `G ${fmt(g.G, 2)} · df ${g.df} · ${g.replicates.toLocaleString('en-US')} MC`, cls: !gt ? '' : gt.rejected ? 'bad' : 'good' },
+    g && g.applicable && g.mde && mdeCard(g),
     f.offSupport && f.offSupport.count > 0 && { k: 'distOff', v: f.offSupport.count.toLocaleString('en-US'), cls: 'bad', s: f.offSupport.examples.map((e) => `#${e.round}: ${times(e.x)}`).join(' · ') },
   ]));
+  if (g && g.applicable && !g.inFamily) box.append(el('p', { class: 'muted small', id: 'dist-gof-floor' }, tr('distGofFloorNote')));
+  const normalized = r.candidates.filter((c) => c.normalizedFrom !== null);
+  if (normalized.length) box.append(el('p', { class: 'muted small', id: 'dist-normalized' }, tr('distNormalized') + ': ' + normalized.map((c) => `${c.label} (${tr('distSum')}: ${fmt(c.normalizedFrom, 8)})`).join(' · ')));
 
   // The family of tests.
-  const inFamily = (id, index) => f.tests.find((x) => x.id === id && (index === undefined || x.index === index));
-  const status = (t) => (!t ? { v: tr('distTooRare'), cls: 'na' } : t.rejected ? { v: tr('distReject'), cls: 'fail' } : { v: tr('distKeep'), cls: 'pass' });
+  const status = (t, out = 'distTooRare') => (!t ? { v: tr(out), cls: 'na' } : t.rejected ? { v: tr('distReject'), cls: 'fail' } : { v: tr('distKeep'), cls: 'pass' });
   // Columns: test | observed | expected | P | status (no words inside the number cells).
   const mono = (v) => ({ v, cls: 'mono' });
   const rate = (x, d) => [mono(`${pct(x.rate, d)} [${pct(x.ci[0], d)} – ${pct(x.ci[1], d)}]`), mono(pct(x.expected, d)), mono(fmtP(x.pValue))];
   const rows = [];
-  if (g && g.applicable) rows.push([tr('distGof'), mono(`G ${fmt(g.G, 2)} · χ² ${fmt(g.X2, 2)}`), mono(`df ${g.df}`), mono(`${fmtP(g.pValue)} · χ² ${fmtP(g.pValueX2)}`), status(inFamily('gof'))]);
+  if (g && g.applicable) rows.push([tr('distGof'), mono(`G ${fmt(g.G, 2)} · χ² ${fmt(g.X2, 2)}`), mono(`df ${g.df}`), mono(`${fmtP(g.pValue)} · χ² ${fmtP(g.pValueX2)}`), status(gt, 'distGofOut')]);
   if (f.hit) rows.push([tr('distHit'), ...rate(f.hit, 3), status(inFamily('hit'))]);
   if (f.trigger) rows.push([tr('distTrigger'), ...rate(f.trigger, 4), status(inFamily('trigger'))]);
   (f.tails || []).forEach((t, i) => rows.push([`${tr('distTailRow')} ${times(t.threshold)}`, mono(t.observed.toLocaleString('en-US')), mono(fmt(t.expected, 2)), mono(fmtP(t.pValue)), status(inFamily('tail', i))]));
   if (rows.length) box.append(sub('distTests'), table(['test', 'distObserved', 'distExpected', 'pValue', 'result'], rows));
   if (f.tails && f.tails.length) box.append(el('p', { class: 'muted small' }, tr('distTailNote')));
-  if (f.total) box.append(el('p', { class: 'muted', id: 'dist-total' }, `${tr('distTotal')}: ≈ ${fmtP(f.total.pLower)} (${tr('distObserved')} ${fmt(f.total.sum, 2)} · ${tr('distExpected')} ${fmt(f.total.expected, 2)}). ${tr('distTotalNote')}`));
-  if (f.hit) box.append(el('p', { class: 'muted small' }, `${tr('distMdeRate')} (${tr('distHit')}): ${pct(f.hit.mde.absolute, 3)}` + (f.trigger ? ` · (${tr('distTrigger')}): ${pct(f.trigger.mde.absolute, 4)}` : '')));
+  if (f.total) {
+    const tt = f.total;
+    // No draw at or below the total (or every draw): only a bound is known.
+    const est = tt.count === 0 ? `< ${fmtP(1 / tt.replicates)}` : tt.count === tt.replicates ? `> ${fmtP(1 - 1 / tt.replicates)}` : `≈ ${fmtP(tt.estimate)} ± ${fmtP(tt.se)}`;
+    box.append(el('p', { class: 'muted', id: 'dist-total' }, `${tr('distTotal')}: ${est} (${tr('distObserved')} ${fmt(tt.sum, 2)} · ${tr('distExpected')} ${fmt(tt.expected, 2)}). ${tr('distTotalNote')} (${tr('distDraws')}: ${tt.replicates.toLocaleString('en-US')}).`));
+  }
+  if (f.hit) box.append(el('p', { class: 'muted small' }, `${tr('distMdeRate')} (${tr('distHit')}): ${pct(f.hit.mde.absolute, 3)}` + (f.trigger ? ` · (${tr('distTrigger')}): ${pct(f.trigger.mde.absolute, 4)}` : '') + ` · ${mdeLevel(f.hit.mde)}`));
 
   if (f.topPrize) {
     const tp = f.topPrize;
@@ -458,11 +468,11 @@ function renderDist() {
   const b = r.betting;
   box.append(sub('distBetting'));
   if (b.needs) box.append(el('div', { class: 'verdict warn', id: 'dist-bet' }, tr(b.needs === 'maxWin' ? 'distNeedsMax' : 'distNeedsDeclared')));
-  else if (b.error) box.append(el('div', { class: 'verdict warn', id: 'dist-bet' }, pick([b.error.ar, b.error.en])));
+  else if (b.error) box.append(el('div', { class: 'verdict warn', id: 'dist-bet' }, pick([b.error.ar, b.error.en]) + (b.maxWinSource ? ` (M: ${tr('distSrc_' + b.maxWinSource)})` : '')));
   else {
     box.append(el('div', { class: 'verdict ' + (b.rejected ? 'fail' : 'pass'), id: 'dist-bet' }, tr(b.rejected ? 'distBetReject' : 'distBetKeep')));
     box.append(cards([
-      { k: 'declaredRtp', v: pct(b.mu0, 3), s: 'M = ' + times(b.M) },
+      { k: b.mu0Source === 'reference' ? 'distRefRtp' : 'declaredRtp', v: pct(b.mu0, 3), s: `M = ${times(b.M)} (${tr('distSrc_' + b.maxWinSource)})` },
       { k: 'distEValue', v: fmt(b.eValue, 4), s: '1/α = ' + fmt(1 / b.alpha, 0) },
       { k: 'distMaxE', v: fmt(b.maxEValue, 4), cls: b.rejected ? 'bad' : '' },
       { k: 'distAnytimeP', v: fmtP(b.pValue) },
@@ -471,6 +481,7 @@ function renderDist() {
     ]));
     box.append(eChart(b));
   }
+  if (b.declaredDiffers) box.append(el('p', { class: 'verdict warn', id: 'dist-declared-differs' }, `${tr('distDeclaredDiffers')}: ${pct(b.declaredDiffers, 3)} ≠ ${pct(b.mu0, 3)}`));
   box.append(el('p', { class: 'muted small' }, tr('distBetNote')));
 
   // Planner.
@@ -479,7 +490,7 @@ function renderDist() {
   box.append(table(['distPlanMethod', 'distPlanNeeds', 'distPlanRounds'], pl.rows.map((x) => [
     tr('plan_' + x.id) + (x.version ? ' ' + x.version : ''), tr('planNeeds_' + x.needs), { v: (x.approx && x.rounds !== null ? '≈ ' : '') + rounds(x.rounds), cls: 'num' },
   ])));
-  box.append(el('p', { class: 'muted small' }, tr('distPlanGrid') + ` (${tr('distGap')}: ${fmt(pl.gap * 100, 2)})`));
+  box.append(el('p', { class: 'muted small', id: 'dist-plan-grid' }, tr('distPlanGrid') + ` (${tr('distGap')}: ${fmt(pl.gap * 100, 2)}` + (pl.sigma ? ` · σ: ${fmt(pl.sigma, 3)} ${tr('distSrc_' + pl.sigmaSource)}` : '') + ')'));
   box.append(table(['σ', 'distPlanMean', ...pl.maxWins.map((m) => ['M = ' + m.toLocaleString('en-US') + '×', 'M = ' + m.toLocaleString('en-US') + '×'])], pl.grid.map((gr) => [
     { v: fmt(gr.sigma, 3), cls: 'num' }, { v: rounds(gr.meanTest), cls: 'num' }, ...gr.eProcess.map((e) => ({ v: rounds(e.rounds), cls: 'num' })),
   ])));

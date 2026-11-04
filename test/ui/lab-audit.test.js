@@ -59,8 +59,11 @@ test('RTP lab: distribution tests, version identification, e-process and report'
   assert.ok(await page.$('#dist-bet.pass'), 'e-process: not shown to be below');
   assert.ok(await page.$('#res-dist svg.echart polyline'), 'capital chart');
   assert.match(res, /M = 5,000×/);
-  // Whole-round pmf on a 0.1 lattice: the saddlepoint P-value of the total is shown, labelled.
-  assert.match(await page.textContent('#dist-total'), /saddlepoint/);
+  // The chance of a total this low: a Monte Carlo estimate with its standard error, labelled.
+  assert.match(await page.textContent('#dist-total'), /≈ [0-9.]+ ± [0-9.]+ .*مونت كارلو.*السحوبات: 9,999/);
+  // Minimum detectable effects are stated at Holm's strictest level, and the G-test can reach it.
+  assert.match(res, /عند أشد مستوى في طريقة Holm/);
+  assert.ok(!(await page.$('#dist-gof-floor')));
   // English.
   await page.click('#langToggle');
   assert.match(await page.textContent('#res-dist'), /Not rejected at this power/);

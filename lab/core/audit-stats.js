@@ -2,8 +2,9 @@
 // distribution (pmf) of a game's win per round, in units of the bet.
 //
 //  * Goodness of fit: G-test and Pearson chi-square over the pmf's outcomes, with
-//    P-values from seeded multinomial Monte Carlo (valid at any sample size), and
-//    the minimum detectable effect at the data's size.
+//    P-values from seeded multinomial Monte Carlo (valid at any sample size; enough
+//    replicates to reach Holm's alpha / m), and the minimum detectable effect at the
+//    data's size and that level.
 //  * Hit and feature-trigger frequency: exact binomial tests with Clopper-Pearson
 //    intervals; big wins seen less often than the pmf says (exact binomial tails);
 //    the chance the top prize never appeared, and the rule of three.
@@ -13,12 +14,14 @@
 //    for any variance once the win per round is bounded by M, with an anytime-valid
 //    upper confidence bound (running intersection of a confidence sequence).
 //  * A planner: rounds each method needs, as a function of sigma and M.
+//  * For information: the chance of a total (sum of win / bet) this low, by seeded
+//    Monte Carlo with its standard error.
 //
 // Passing never certifies anything: it means "not rejected with this many rounds",
 // and every result carries the smallest effect the data could have detected.
-import { lgamma, chiSquareP, normalQuantile, normalCdf } from './specfun.js';
+import { lgamma, chiSquareP, normalQuantile } from './specfun.js';
 import { forEachCsvRow, findColumn, detectDelimiter } from './csv.js';
-import { makeNumberReader } from './actual.js';
+import { makeNumberReader, flagSet } from './actual.js';
 import { Fraction } from './fraction.js';
 
 export const MAX_CANDIDATES = 5;
@@ -214,8 +217,12 @@ export function noncentralityForPower(df, alpha, power) {
 // ---------- pmf ----------
 
 const X_NAMES = ['multiplier', 'mult', 'x', 'win', 'value', 'payout', 'المضاعف', 'مضاعف', 'الربح'];
-const P_NAMES = ['probability', 'prob', 'p', 'weight', 'count', 'frequency', 'combinations', 'الاحتمال', 'احتمال', 'الوزن', 'العدد', 'التكرار'];
+// Probabilities must add up to 1; weights and counts are divided by their total.
+const PROB_NAMES = ['probability', 'prob', 'p', 'الاحتمال', 'احتمال'];
+const WEIGHT_NAMES = ['weight', 'count', 'frequency', 'combinations', 'الوزن', 'العدد', 'التكرار'];
 const T_NAMES = ['trigger', 'triggered', 'feature', 'bonus', 'التفعيل', 'تفعيل', 'الميزة', 'ميزة'];
+// How far a probability column may add up from 1 (rounding of the printed values).
+export const PROBABILITY_SUM_TOLERANCE = 1e-6;
 
 // Sorts and merges entries, normalizes the probabilities, and computes a summary.
 // scope 'round': x is the whole round's win. scope 'baseSpin': x is the paid spin's
@@ -256,27 +263,35 @@ export function pmfFromExact(exact, label = 'model') {
   });
 }
 
-// CSV with a multiplier column and a probability column (or weights / counts, which
-// are normalized; "a/b" fractions are read exactly), optionally a trigger flag.
+// CSV with a multiplier column and a probability column ("a/b" fractions are read
+// exactly), or a weight / count column, which is divided by its total; optionally a
+// trigger flag, read like the play log's. Without a header the columns are
+// multiplier, probability[, trigger]. A probability column must add up to 1: a
+// missing or mistyped row would otherwise change the distribution (and its RTP)
+// without a word. Every error names the file.
 export function parsePmfCsv(text, label = 'pmf') {
+  const where = (en, ar) => fail(`distribution file "${label}": ${en}`, `ملف التوزيع "${label}": ${ar}`);
   const delimiter = detectDelimiter(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
   const readNumber = makeNumberReader(delimiter);
   const readP = (cell) => {
     const m = /^\s*([0-9.eE+-]+)\s*\/\s*([0-9.eE+-]+)\s*$/.exec(String(cell ?? ''));
     return m ? Number(m[1]) / Number(m[2]) : readNumber(cell);
   };
-  let xCol = 0, pCol = 1, tCol = -1, first = true;
+  let xCol = 0, pCol = 1, tCol = -1, first = true, weights = false;
   const entries = [];
   forEachCsvRow(text, (row, line) => {
     if (first) {
       first = false;
-      if (row.some((c) => c.trim() !== '' && !Number.isFinite(readP(c)))) {
+      // A header: the first row's multiplier or probability is not a number (a
+      // trigger cell such as "true" says nothing either way).
+      if (!(Number.isFinite(readNumber(row[0])) && Number.isFinite(readP(row[1])))) {
         xCol = findColumn(row, X_NAMES);
-        pCol = findColumn(row, P_NAMES);
+        pCol = findColumn(row, PROB_NAMES);
+        if (pCol < 0) { pCol = findColumn(row, WEIGHT_NAMES); weights = pCol >= 0; }
         tCol = findColumn(row, T_NAMES);
         if (xCol < 0 || pCol < 0) {
-          throw fail('the distribution CSV needs a multiplier column and a probability column (e.g. "multiplier,probability")',
-            'يحتاج ملف التوزيع عمودًا للمضاعف وعمودًا للاحتمال (مثل "multiplier,probability")');
+          throw where('it needs a multiplier column and a probability column (e.g. "multiplier,probability")',
+            'يحتاج عمودًا للمضاعف وعمودًا للاحتمال (مثل "multiplier,probability")');
         }
         return;
       }
@@ -284,13 +299,24 @@ export function parsePmfCsv(text, label = 'pmf') {
     }
     const x = readNumber(row[xCol]), p = readP(row[pCol]);
     if (!Number.isFinite(x) || x < 0 || !Number.isFinite(p) || p < 0) {
-      throw fail(`distribution CSV, line ${line}: the multiplier and the probability must be numbers ≥ 0`,
-        `ملف التوزيع، السطر ${line}: يجب أن يكون المضاعف والاحتمال أعدادًا ≥ 0`);
+      throw where(`line ${line}: the multiplier and the probability must be numbers ≥ 0`,
+        `السطر ${line}: يجب أن يكون المضاعف والاحتمال أعدادًا ≥ 0`);
     }
-    const t = tCol >= 0 ? String(row[tCol] ?? '').trim().toLowerCase() : '';
-    entries.push({ x, p, trigger: !(t === '' || t === '0' || t === 'false' || t === 'no' || t === 'لا') });
+    entries.push({ x, p, trigger: tCol >= 0 && flagSet(row[tCol], readNumber) });
   });
-  return makePmf({ label, scope: 'round', source: 'csv', entries });
+  if (!weights) {
+    const total = entries.reduce((a, e) => a + e.p, 0);
+    if (!(Math.abs(total - 1) <= PROBABILITY_SUM_TOLERANCE)) {
+      const s = +total.toPrecision(10);
+      throw where(`the probabilities add up to ${s}, not 1: a row may be missing or mistyped. If the column holds weights or counts, name it "weight" or "count" and it will be divided by its total`,
+        `مجموع الاحتمالات ${s} وليس 1: ربما ينقص سطر أو فيه خطأ. إذا كان العمود أوزانًا أو أعدادًا فسمِّه "weight" أو "count" ليُقسَم على مجموعه`);
+    }
+  }
+  try {
+    return makePmf({ label, scope: 'round', source: 'csv', entries });
+  } catch (e) {
+    throw where(e.en || e.message, e.ar || e.message);
+  }
 }
 
 // ---------- cells: outcomes every candidate pmf is compared on ----------
@@ -392,12 +418,36 @@ function gStat(obs, exp) {
   return [2 * g, x2];
 }
 
+// ---------- Monte Carlo work ----------
+
+// Rough work of one multinomial draw of n rounds over probs, in binomial-sampler
+// steps: a fixed cost per cell plus about one standard deviation's walk from the
+// mode. Measured at 13-25 ns per step in Node on this sampler.
+export function drawCost(probs, n) {
+  let c = 0;
+  for (const p of probs) c += 3 + Math.sqrt(n * p);
+  return c;
+}
+// Steps one Monte Carlo loop may take: a few seconds in a browser worker.
+export const MC_BUDGET = 2e8;
+
+// Replicates for a Monte Carlo P-value that must be able to reach `level`. Its
+// smallest value is 1 / (R + 1), and with about 20 / level replicates the test loses
+// little power against the exact one. At least `min`, and no more than the budget
+// allows (at least `min` still): the caller checks 1 / (R + 1) against the level.
+export function mcReplicates(probs, n, level, { min = 4999, budget = MC_BUDGET } = {}) {
+  const want = Math.max(min, Math.ceil(20 / level) - 1);
+  return Math.max(min, Math.min(want, Math.floor(budget / drawCost(probs, n))));
+}
+
 // counts: rounds per cell; probs: the reference candidate's cell probabilities.
-export function goodnessOfFit(counts, probs, { rng, replicates = 4999, minExpected = 5, alpha = 0.01, power = 0.8, onProgress = () => {} } = {}) {
+// alpha is the test's own level; mdeAlpha the level the minimum detectable effect is
+// computed at (Holm's first threshold alpha / m inside a family of m tests).
+export function goodnessOfFit(counts, probs, { rng, replicates = 4999, minExpected = 5, alpha = 0.01, mdeAlpha = alpha, power = 0.8, onProgress = () => {} } = {}) {
   let n = 0;
   for (const c of counts) n += c;
   const bins = poolCells(probs, n, minExpected);
-  const base = { n, minExpected, replicates, alpha, power };
+  const base = { n, minExpected, replicates, pFloor: 1 / (replicates + 1), alpha, power };
   if (bins.length < 2) return { ...base, applicable: false, reason: 'tooFewRounds', bins: [] };
   const K = bins.length, df = K - 1;
   const binP = Float64Array.from(bins, (b) => b.p);
@@ -416,9 +466,10 @@ export function goodnessOfFit(counts, probs, { rng, replicates = 4999, minExpect
     if (x2 >= X2 - tolX) geX2++;
     if ((r & 255) === 0) onProgress(r / replicates);
   }
-  // Effect the test detects with the given power: Cohen's w; and, if only the most
-  // likely bin (usually "no win") changed, the relative change of its share.
-  const lambda = noncentralityForPower(df, alpha, power);
+  // Effect the test detects with the given power at mdeAlpha (asymptotic noncentral
+  // chi-square): Cohen's w; and, if only the most likely bin (usually "no win")
+  // changed, the relative change of its share.
+  const lambda = noncentralityForPower(df, mdeAlpha, power);
   const w = Math.sqrt(lambda / n);
   let big = 0;
   for (let j = 1; j < K; j++) if (binP[j] > binP[big]) big = j;
@@ -427,15 +478,15 @@ export function goodnessOfFit(counts, probs, { rng, replicates = 4999, minExpect
     pValue: (1 + geG) / (replicates + 1), pValueX2: (1 + geX2) / (replicates + 1),
     pAsymptotic: chiSquareP(G, df), pAsymptoticX2: chiSquareP(X2, df),
     bins: bins.map((b, j) => ({ from: b.from, to: b.to, p: b.p, expected: expd[j], observed: obs[j] })),
-    mde: { lambda, w, bin: big, binShare: binP[big], relativeChange: binP[big] < 1 ? w * Math.sqrt((1 - binP[big]) / binP[big]) : null },
+    mde: { alpha: mdeAlpha, lambda, w, bin: big, binShare: binP[big], relativeChange: binP[big] < 1 ? w * Math.sqrt((1 - binP[big]) / binP[big]) : null },
   };
 }
 
 // Exact binomial test of an observed rate against p0, its Clopper-Pearson interval
-// at 1 - alpha, and the drop below p0 that this many rounds detects with `power`
-// (two-sided, normal approximation).
-export function frequencyTest(k, n, p0, { alpha = 0.01, power = 0.8 } = {}) {
-  const za = normalQuantile(1 - alpha / 2), zb = normalQuantile(power);
+// at 1 - alpha, and the drop below p0 that this many rounds detects with `power` at
+// mdeAlpha (two-sided, normal approximation).
+export function frequencyTest(k, n, p0, { alpha = 0.01, mdeAlpha = alpha, power = 0.8 } = {}) {
+  const za = normalQuantile(1 - mdeAlpha / 2), zb = normalQuantile(power);
   let d = 0;
   for (let i = 0; i < 50; i++) {
     const p1 = Math.max(0, p0 - d);
@@ -445,7 +496,7 @@ export function frequencyTest(k, n, p0, { alpha = 0.01, power = 0.8 } = {}) {
   return {
     observed: k, n, rate: k / n, expected: p0, expectedCount: n * p0,
     ci: clopperPearson(k, n, 1 - alpha), confidence: 1 - alpha, pValue,
-    mde: { absolute: Math.min(d, p0), relative: p0 > 0 ? Math.min(1, d / p0) : null },
+    mde: { alpha: mdeAlpha, absolute: Math.min(d, p0), relative: p0 > 0 ? Math.min(1, d / p0) : null },
   };
 }
 
@@ -649,49 +700,28 @@ export function bettingTest(xs, { mu0, M, alpha = 0.05, sigma = null, k0 = 1000,
 
 // ---------- how unusual is the log's total? ----------
 
-// Step of the lattice the pmf's values sit on (0.05 when every value is a multiple
-// of 0.05), or null when they do not share a decimal step.
-export function latticeStep(values) {
-  const gcd = (a, b) => { while (b) [a, b] = [b, a % b]; return a; };
-  for (let d = 0; d <= 6; d++) {
-    const s = 10 ** d;
-    const ints = values.map((x) => x * s);
-    if (ints.some((v) => Math.abs(v - Math.round(v)) > 1e-6 || Math.abs(v) > 1e12)) continue;
-    const g = ints.reduce((a, v) => gcd(a, Math.round(v)), 0);
-    return g > 0 ? g / s : null;
+// P(S <= s) for S the sum of n independent draws from the pmf (values, probs), by
+// seeded Monte Carlo over multinomial counts: an estimate whose standard error is
+// known whatever the shape of the distribution. (A Lugannani-Rice saddlepoint was
+// tried first: for a game with rare big wins it was off by tens of percent in the
+// body of the distribution and broke down next to the mean.) s should be computed
+// like the simulated totals, sum over cells of count x value, so that ties compare
+// equal. estimate = k / R with its standard error; pValue = (k + 1) / (R + 1) is a
+// valid P-value.
+export function totalLowerTail(values, probs, n, s, { rng, replicates = 9999, onProgress = () => {} } = {}) {
+  const draw = multinomialSampler(probs);
+  const sim = new Float64Array(probs.length);
+  const limit = s + 1e-9 * Math.max(1, Math.abs(s));
+  let k = 0;
+  for (let r = 0; r < replicates; r++) {
+    draw(rng, n, sim);
+    let t = 0;
+    for (let j = 0; j < sim.length; j++) t += sim[j] * values[j];
+    if (t <= limit) k++;
+    if ((r & 255) === 0) onProgress(r / replicates);
   }
-  return null;
-}
-
-// P(S <= s) for S the sum of n independent draws from a pmf on a lattice of step
-// delta (s on the lattice): Lugannani-Rice saddlepoint with Daniels' continuity
-// correction. An approximation: against exact lattice sums it is off by a few percent
-// (relative) at 1,000 rounds and about 1% at 10,000 (research, actual-rtp-stats).
-export function saddlepointLowerTail(entries, n, s, delta) {
-  const xs = entries.map((e) => e.x), lp = entries.map((e) => Math.log(e.p));
-  const target = (s + delta / 2) / n;
-  const lo0 = Math.min(...xs), hi0 = Math.max(...xs);
-  if (target <= lo0) return 0;
-  if (target >= hi0) return 1;
-  const cgf = (t) => {
-    let m = -Infinity;
-    for (let k = 0; k < xs.length; k++) m = Math.max(m, lp[k] + t * xs[k]);
-    let z = 0, z1 = 0, z2 = 0;
-    for (let k = 0; k < xs.length; k++) { const w = Math.exp(lp[k] + t * xs[k] - m); z += w; z1 += w * xs[k]; z2 += w * xs[k] * xs[k]; }
-    const k1 = z1 / z;
-    return { K: m + Math.log(z), K1: k1, K2: Math.max(0, z2 / z - k1 * k1) };
-  };
-  const mean = entries.reduce((a, e) => a + e.x * e.p, 0);
-  let lo, hi;
-  if (target < mean) { hi = 0; lo = -1; while (cgf(lo).K1 > target) lo *= 2; } else { lo = 0; hi = 1; while (cgf(hi).K1 < target) hi *= 2; }
-  for (let i = 0; i < 200; i++) { const mid = (lo + hi) / 2; if (cgf(mid).K1 < target) lo = mid; else hi = mid; }
-  const t = (lo + hi) / 2, c = cgf(t);
-  const w = Math.sign(t) * Math.sqrt(Math.max(0, 2 * n * (t * target - c.K)));
-  const u = (2 / delta) * Math.sinh((t * delta) / 2) * Math.sqrt(n * c.K2);
-  const phi = (z) => Math.exp(-z * z / 2) / Math.sqrt(2 * Math.PI);
-  // At the mean (t ~ 0) the formula is 0/0: use the normal value there.
-  if (Math.abs(w) < 1e-7 || Math.abs(u) < 1e-12) return normalCdf((s + delta / 2 - n * mean) / Math.sqrt(n * cgf(0).K2));
-  return Math.min(1, Math.max(0, normalCdf(w) + phi(w) * (1 / w - 1 / u)));
+  const estimate = k / replicates;
+  return { method: 'montecarlo', replicates, count: k, estimate, se: Math.sqrt(estimate * (1 - estimate) / replicates), pValue: (k + 1) / (replicates + 1) };
 }
 
 // ---------- planner ----------
@@ -748,7 +778,8 @@ export function planSampleSize({ mu0 = null, sigma = null, M = null, gap = 0.02,
     if (v.pTriggerRef > 0 && v.pTriggerAlt >= 0) rows.push({ id: 'triggerRate', version: v.label, needs: 'trigger', rounds: roundsRate(v.pTriggerRef, v.pTriggerAlt, alpha, power), approx: true });
     if (has(sigma) && has(v.gap)) rows.push({ id: 'meanTestVersion', version: v.label, needs: 'sigma', rounds: roundsMeanTest(sigma, v.gap, alpha, power) });
   }
-  const sList = [...new Set([...(has(sigma) ? [+sigma.toFixed(4)] : []), ...sigmas])].sort((a, b) => a - b);
+  // The grid's own sigma row is the exact sigma, so it repeats the rows table's numbers.
+  const sList = [...new Set([...(has(sigma) ? [sigma] : []), ...sigmas])].sort((a, b) => a - b);
   const mList = [...new Set([...(M > 0 ? [M] : []), ...maxWins])].filter((m) => !has(mu0) || m > mu0).sort((a, b) => a - b);
   const grid = sList.map((s) => ({
     sigma: s, meanTest: roundsMeanTest(s, gap, alpha, power),
@@ -762,18 +793,27 @@ export function planSampleSize({ mu0 = null, sigma = null, M = null, gap = 0.02,
 const TAIL_THRESHOLDS = [10, 100, 1000, 10000, 100000];
 
 // log: parsePlayLog result; pmfs: 1-5 candidates (makePmf); rng: seeded generator.
-// options: refIndex (the declared version), alpha, replicates, minExpected, mode,
-// declaredRtp, sigma, maxWin (M), gap (planner), power.
+// options: refIndex (the declared version), alpha, replicates (null: enough for the
+// family's levels, within the work budget), totalReplicates (null: 9,999 within the
+// budget), minExpected, mode, referenceRtp (the
+// reference version's RTP when its pmf does not give it: a paid-spin pmf),
+// declaredRtp (the declared field, compared with it), sigma and maxWin (M) with
+// their sources, gap (planner), power.
 export function auditDistribution(log, pmfs, options = {}, rng, onProgress = () => {}) {
   const {
-    refIndex = 0, alpha = 0.01, replicates = 4999, minExpected = 5, mode = '',
-    declaredRtp = null, sigma = null, maxWin = null, gap = 0.02, power = 0.8, beta = 0.2, bettingAlpha = alpha,
+    refIndex = 0, alpha = 0.01, replicates = null, totalReplicates = null, minExpected = 5, mode = '',
+    declaredRtp = null, referenceRtp = null, sigma = null, sigmaSource = 'input', maxWin = null, maxWinSource = 'input',
+    gap = 0.02, power = 0.8, beta = 0.2, bettingAlpha = alpha,
   } = options;
   if (!pmfs.length || pmfs.length > MAX_CANDIDATES) throw fail(`1 to ${MAX_CANDIDATES} distributions are needed`, `يلزم من 1 إلى ${MAX_CANDIDATES} توزيعات`);
   if (!(refIndex >= 0 && refIndex < pmfs.length)) throw fail('the reference distribution is not loaded', 'التوزيع المرجعي غير محمّل');
   // One mode at a time: each mode (base, bonus buy...) has its own distribution.
   let L = log;
   const modes = log.modes ? [...new Set(log.modes)] : null;
+  if (mode && !modes) {
+    throw fail(`the log has no mode column, so it cannot be limited to the mode "${mode}": clear the mode field or add a mode column`,
+      `لا يحتوي السجل على عمود للنمط، فلا يمكن حصره في النمط "${mode}": امسح حقل النمط أو أضف عمود mode`);
+  }
   if (modes && mode) {
     const keep = [];
     log.modes.forEach((m, i) => { if (m === mode) keep.push(i); });
@@ -799,35 +839,22 @@ export function auditDistribution(log, pmfs, options = {}, rng, onProgress = () 
   const fit = { tests: [] };
   out.fit = fit;
   const fitCells = needTrigger && !L.triggers ? null : buildCells([ref]);
-  let refIdx = null;
+  let counts = null, p0 = null, hits = null, triggered = null;
   if (fitCells) {
-    refIdx = classifyRounds(L, fitCells, resolution);
-    const counts = new Float64Array(fitCells.K);
-    const p0 = fitCells.probs[0];
+    const refIdx = classifyRounds(L, fitCells, resolution);
+    counts = new Float64Array(fitCells.K);
+    p0 = fitCells.probs[0];
     const off = [];
     for (let i = 0; i < n; i++) if (refIdx[i] < 0 || p0[refIdx[i]] <= 0) off.push(i); else counts[refIdx[i]]++;
     fit.offSupport = { count: off.length, examples: off.slice(0, 10).map((i) => ({ round: i + 1, x: xs[i], triggered: Boolean(L.triggers && L.triggers[i]) })) };
-    const gof = goodnessOfFit(counts, p0, { rng, replicates, minExpected, alpha, power, onProgress: stage(0, 0.45) });
-    // Bin labels: the range of win values it pools, and whether it holds "triggered".
-    const V = fitCells.values.length;
-    gof.bins = gof.bins.map((b) => {
-      const last = Math.min(b.to, V - 1);
-      return { ...b, lo: b.from < V ? fitCells.values[b.from] : null, hi: last >= b.from ? fitCells.values[last] : null, triggered: fitCells.triggerCell >= b.from && fitCells.triggerCell <= b.to };
-    });
-    fit.gof = gof;
-    if (gof.applicable) fit.tests.push({ id: 'gof', p: gof.pValue });
-    let hits = 0;
+    hits = 0;
     for (let i = 0; i < n; i++) if (xs[i] > 0 || (needTrigger && L.triggers[i])) hits++;
-    fit.hit = frequencyTest(hits, n, ref.pHit, { alpha, power });
-    fit.tests.push({ id: 'hit', p: fit.hit.pValue });
   } else {
     fit.unavailable = 'needTriggerColumn';
   }
   if (ref.hasTrigger && L.triggers) {
-    let k = 0;
-    for (let i = 0; i < n; i++) if (L.triggers[i]) k++;
-    fit.trigger = frequencyTest(k, n, ref.pTrigger, { alpha, power });
-    fit.tests.push({ id: 'trigger', p: fit.trigger.pValue });
+    triggered = 0;
+    for (let i = 0; i < n; i++) if (L.triggers[i]) triggered++;
   }
   // Big wins seen less often than the pmf says (exact binomial lower tails), and the
   // top prize. With a paid-spin pmf only rounds without the feature are counted: their
@@ -853,7 +880,6 @@ export function auditDistribution(log, pmfs, options = {}, rng, onProgress = () 
     const thresholds = TAIL_THRESHOLDS.filter((T) => T <= top / 2);
     if (top > 0) thresholds.push(top);
     fit.tails = thresholds.map(tailAt);
-    fit.tails.forEach((t, i) => { if (t.powered) fit.tests.push({ id: 'tail', index: i, p: t.pValue }); });
     if (top > 0) {
       const last = fit.tails[fit.tails.length - 1];
       const pTop = last.probability, seen = last.observed;
@@ -868,20 +894,61 @@ export function auditDistribution(log, pmfs, options = {}, rng, onProgress = () 
       };
     }
   }
-  // RTP carried by outcomes above the largest win in the log (what the log cannot show).
+
+  // The family, known before anything random runs. Holm's first threshold is
+  // alpha / m: a test that cannot reach it cannot reject on its own, so every minimum
+  // detectable effect is computed there, and the G-test gets enough Monte Carlo
+  // replicates for its smallest P-value, 1 / (R + 1), to be well below it. If the work
+  // budget does not allow that, the G-test is shown but kept out of the family.
+  const bins = fitCells ? poolCells(p0, n, minExpected) : [];
+  let m = (hits !== null ? 1 : 0) + (triggered !== null ? 1 : 0) + (fit.tails || []).filter((t) => t.powered).length;
+  let gofR = replicates ?? 4999, gofInFamily = false;
+  if (bins.length >= 2) {
+    m++;
+    if (replicates === null) gofR = mcReplicates(bins.map((b) => b.p), n, alpha / m);
+    gofInFamily = 1 / (gofR + 1) <= alpha / m;
+    if (!gofInFamily) m--;
+  }
+  const mdeAlpha = alpha / Math.max(1, m);
+  fit.family = { size: m, mdeAlpha };
+  if (fitCells) {
+    const gof = goodnessOfFit(counts, p0, { rng, replicates: gofR, minExpected, alpha, mdeAlpha, power, onProgress: stage(0, 0.4) });
+    // Bin labels: the range of win values it pools, and whether it holds "triggered".
+    const V = fitCells.values.length;
+    gof.bins = gof.bins.map((b) => {
+      const last = Math.min(b.to, V - 1);
+      return { ...b, lo: b.from < V ? fitCells.values[b.from] : null, hi: last >= b.from ? fitCells.values[last] : null, triggered: fitCells.triggerCell >= b.from && fitCells.triggerCell <= b.to };
+    });
+    gof.inFamily = gof.applicable && gofInFamily;
+    // Its P-value cannot reach alpha / m: no effect is "detectable" by it.
+    if (gof.applicable && !gofInFamily) gof.mde = null;
+    fit.gof = gof;
+    if (gof.inFamily) fit.tests.push({ id: 'gof', p: gof.pValue });
+    fit.hit = frequencyTest(hits, n, ref.pHit, { alpha, mdeAlpha, power });
+    fit.tests.push({ id: 'hit', p: fit.hit.pValue });
+  }
+  if (triggered !== null) {
+    fit.trigger = frequencyTest(triggered, n, ref.pTrigger, { alpha, mdeAlpha, power });
+    fit.tests.push({ id: 'trigger', p: fit.trigger.pValue });
+  }
+  (fit.tails || []).forEach((t, i) => { if (t.powered) fit.tests.push({ id: 'tail', index: i, p: t.pValue }); });
+
   if (ref.scope === 'round') {
+    // RTP carried by outcomes above the largest win in the log (what the log cannot show).
     let unseen = 0;
     const above = maxObs * (1 + 1e-9) + (resolution ? resolution / 2 / minBet : 0);
     for (const e of ref.entries) if (e.x > above) unseen += e.x * e.p;
     fit.unseen = { maxObserved: maxObs, rtpAbove: unseen, share: ref.mean > 0 ? unseen / ref.mean : null };
-    // How unusual the log's total (sum of win / bet) is under the pmf, lower tail.
-    // Approximate, so shown for information and kept out of the verdict.
-    const delta = latticeStep(ref.entries.map((e) => e.x));
-    if (delta) {
-      let sum = 0;
+    // How unusual the log's total (sum of win / bet) is under the pmf, lower tail:
+    // a Monte Carlo estimate with its standard error, shown for information and kept
+    // out of the verdict. The total is taken over the pmf values the rounds matched,
+    // like the simulated ones.
+    if (fit.offSupport && !fit.offSupport.count) {
+      let sum = 0, s = 0;
       for (const v of xs) sum += v;
-      const s = Math.round(sum / delta) * delta;
-      fit.total = { sum, expected: n * ref.mean, lattice: delta, pLower: saddlepointLowerTail(ref.entries, n, s, delta), method: 'saddlepoint' };
+      for (let k = 0; k < fitCells.K; k++) s += counts[k] * fitCells.values[k];
+      const R = totalReplicates ?? Math.max(999, Math.min(9999, Math.floor(MC_BUDGET / drawCost(p0, n))));
+      fit.total = { sum, expected: n * ref.mean, ...totalLowerTail(fitCells.values, p0, n, s, { rng, replicates: R, onProgress: stage(0.4, 0.5) }) };
     }
   }
   const rejected = holm(fit.tests.map((t) => t.p), alpha);
@@ -909,17 +976,24 @@ export function auditDistribution(log, pmfs, options = {}, rng, onProgress = () 
   }
   onProgress(0.5);
 
-  // 4. Betting e-process: needs mu0 (declared RTP) and M.
-  const mu0 = declaredRtp > 0 ? declaredRtp : ref.scope === 'round' ? ref.mean : null;
+  // 4. Betting e-process: "is the RTP below the reference version's?" It tests the
+  // version chosen as the declared one; the declared field is used only when that
+  // version's RTP is unknown, and a different value there is reported.
+  const refRtp = referenceRtp > 0 ? referenceRtp : ref.scope === 'round' ? ref.mean : null;
+  const mu0 = refRtp ?? (declaredRtp > 0 ? declaredRtp : null);
+  const why = {
+    mu0, mu0Source: refRtp ? 'reference' : mu0 ? 'declared' : null,
+    declaredDiffers: refRtp && declaredRtp > 0 && Math.abs(declaredRtp - refRtp) > 1e-6 ? declaredRtp : null,
+  };
   const M = maxWin > 0 ? maxWin : ref.scope === 'round' ? ref.maxX : null;
-  if (!(mu0 > 0)) out.betting = { needs: 'declared' };
-  else if (!(M > 0)) out.betting = { needs: 'maxWin', mu0 };
+  const mSource = maxWin > 0 ? maxWinSource : 'pmf';
+  if (!(mu0 > 0)) out.betting = { needs: 'declared', ...why };
+  else if (!(M > 0)) out.betting = { needs: 'maxWin', ...why };
   else {
     try {
-      out.betting = bettingTest(xs, { mu0, M, alpha: bettingAlpha, sigma, onProgress: stage(0.5, 0.98) });
-      out.betting.maxWinSource = maxWin > 0 ? 'input' : 'pmf';
+      out.betting = { ...bettingTest(xs, { mu0, M, alpha: bettingAlpha, sigma, onProgress: stage(0.5, 0.98) }), ...why, maxWinSource: mSource };
     } catch (e) {
-      out.betting = { error: { ar: e.ar || e.message, en: e.en || e.message }, mu0, M };
+      out.betting = { error: { ar: e.ar || e.message, en: e.en || e.message }, M, maxWinSource: mSource, ...why };
     }
   }
 
@@ -930,7 +1004,7 @@ export function auditDistribution(log, pmfs, options = {}, rng, onProgress = () 
     pTop: fit.topPrize ? fit.topPrize.probability : null,
     versions: out.versions && out.versions.pairs ? out.versions.pairs.map((p) => ({ label: p.label, asnAlt: p.asnAlt, klRefAlt: p.klRefAlt, klAltRef: p.klAltRef, varRef: p.varRef, varAlt: p.varAlt, pTriggerRef: p.pTriggerRef, pTriggerAlt: p.pTriggerAlt, gap: p.gap })) : [],
   });
-  out.planner.sigmaSource = sigma > 0 ? 'input' : sig ? 'pmf' : null;
+  out.planner.sigmaSource = sigma > 0 ? sigmaSource : sig ? 'pmf' : null;
   onProgress(1);
   return out;
 }

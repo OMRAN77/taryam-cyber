@@ -11,7 +11,7 @@ import {
   classifyRounds, logResolution, poolCells, goodnessOfFit, frequencyTest, holm, identifyVersion, runSprt,
   runMatrixSprt, sprtPlan, bettingTest, roundsMeanTest, roundsInterval, roundsEProcess, roundsRate,
   roundsLikelihoodRatio, roundsToSee, planSampleSize, auditDistribution, examplePmf, pmfCsv, samplePmfLog, uniform01,
-  latticeStep, saddlepointLowerTail,
+  totalLowerTail,
 } from '../../lab/core/audit-stats.js';
 import { parsePlayLog } from '../../lab/core/actual.js';
 import { Xoshiro128ss, prngFromSeed } from '../../lab/core/prng.js';
@@ -279,13 +279,40 @@ test('pmf CSV: headers, weights normalized, exact fractions, trigger column, err
   assert.throws(() => parsePmfCsv('x,p\n-1,0.5\n'), /line 2/);
 });
 
-test('play log: trigger column, a "feature" flag column, and "feature" as a mode', () => {
+test('pmf CSV: trigger flags read like the play log\'s; a header-less flag column', () => {
+  // Review finding: "-", "none", "n", "f" and "خطأ" counted as triggered, so pTrigger was 1.
+  const a = parsePmfCsv('multiplier,probability,feature\n0,0.6,none\n1,0.1,-\n2,0.1,n\n3,0.05,f\n4,0.05,خطأ\n10,0.1,freespins\n');
+  assert.deepStrictEqual(a.entries.map((e) => [e.x, e.trigger]), [[0, false], [1, false], [2, false], [3, false], [4, false], [10, true]]);
+  near(a.pTrigger, 0.1, 1e-15); // only the 10x row (a feature name counts as triggered)
+  // The same cells in a play log give the same flags.
+  const log = parsePlayLog('bet,win,trigger\n1,0,none\n1,1,-\n1,2,n\n1,3,f\n1,4,خطأ\n1,10,freespins\n');
+  assert.deepStrictEqual([...log.triggers], [0, 0, 0, 0, 0, 1]);
+  // Without a header, "true"/"false" in the third column is a flag, not a header row.
+  const b = parsePmfCsv('0,0.6,false\n2,0.3,false\n10,0.1,true\n');
+  assert.deepStrictEqual(b.entries.map((e) => [e.x, e.trigger]), [[0, false], [2, false], [10, true]]);
+  near(b.pTrigger, 0.1, 1e-15);
+});
+
+test('pmf CSV: a probability column must add up to 1; weights are normalized and said so; errors name the file', () => {
+  // Review finding: 0.5 + 0.3 + 0.1 = 0.9 was divided by 0.9 without a word (mean 0.5556, not the 0.5 the file states).
+  assert.throws(() => parsePmfCsv('multiplier,probability\n0,0.5\n1,0.3\n2,0.1\n', 'v94'),
+    (e) => /"v94"/.test(e.en) && /0\.9, not 1/.test(e.en) && /"v94"/.test(e.ar));
+  assert.throws(() => parsePmfCsv('0,0.5\n1,0.3\n', 'bare'), /0\.8, not 1/); // header-less columns are probabilities
+  // Rounding within 1e-6 is accepted (and normalized, which the page reports).
+  assert.ok(parsePmfCsv('x,p\n0,0.6000004\n1,0.4\n').normalizedFrom > 1);
+  // A weight column is meant to be divided by its total: 3 + 1 = 4.
+  const w = parsePmfCsv('multiplier,weight\n0,3\n2,1\n');
+  assert.strictEqual(w.normalizedFrom, 4);
+  near(w.mean, 0.5, 1e-15); // 2 x 1/4
+  // Header and line errors carry the file's label (several files can be uploaded at once).
+  assert.throws(() => parsePmfCsv('multiplier,probability\n0,0.5\nx,0.5\n', 'neg2'), (e) => /"neg2": line 3/.test(e.en) && /"neg2"/.test(e.ar) && /السطر 3/.test(e.ar));
+  assert.throws(() => parsePmfCsv('value,odds\n1,2\n', 'odds'), (e) => /"odds"/.test(e.en));
+});
+
+test('play log: trigger column, "feature" as the mode, and "feature" next to a mode column', () => {
   const a = parsePlayLog('round,bet,win,trigger\n1,1,0,0\n2,1,3,1\n2,0,5,\n3,1,0,no\n4,1,2,\n4,0,1,1\n');
   assert.deepStrictEqual([...a.triggers], [0, 1, 0, 1]);
   assert.deepStrictEqual([...a.wins], [0, 8, 0, 3]);
-  const b = parsePlayLog('bet,win,feature\n1,0,0\n1,2,true\n1,1,false\n');
-  assert.deepStrictEqual([...b.triggers], [0, 1, 0]);
-  assert.strictEqual(b.modes, null);
   const c = parsePlayLog('bet,win,feature\n1,0,base\n1,2,buy\n');
   assert.strictEqual(c.triggers, null);
   assert.deepStrictEqual(c.modes, ['base', 'buy']);
@@ -293,6 +320,20 @@ test('play log: trigger column, a "feature" flag column, and "feature" as a mode
   assert.deepStrictEqual([...d.triggers], [0, 1]);
   assert.deepStrictEqual(d.modes, ['base', 'base']);
   assert.strictEqual(parsePlayLog('bet,win\n1,0\n').triggers, null);
+});
+
+test('play log: a numeric "feature" column alone stays the game mode (as before trigger columns)', () => {
+  // Review finding: 400 base rounds (feature 0, bet 1) and 100 bonus-buy rounds (feature 1,
+  // bet 100) were read as a trigger flag and the per-mode RTP disappeared. Before this
+  // feature the column was a mode: modes '0' x 400 and '1' x 100, no trigger column.
+  const rows = ['bet,win,feature'];
+  for (let i = 0; i < 400; i++) rows.push(`1,${i % 2},0`);
+  for (let i = 0; i < 100; i++) rows.push(`100,${i % 3 ? 0 : 250},1`);
+  const log = parsePlayLog(rows.join('\n') + '\n');
+  assert.strictEqual(log.triggers, null);
+  assert.strictEqual(log.modes.length, 500);
+  assert.deepStrictEqual([...new Set(log.modes)], ['0', '1']);
+  assert.strictEqual(log.modes.filter((m) => m === '1').length, 100);
 });
 
 test('log resolution and matching of observed wins to pmf outcomes', () => {
@@ -388,6 +429,13 @@ test('frequency tests: exact binomial test and Clopper-Pearson coverage on seede
   // n = 10,000, p0 = .5, alpha .05 two-sided, power .8: d sqrt(n) = 1.959964 * .5 + 0.841621 sqrt(p1 q1),
   // p1 = .5 - d -> d = 0.0140061 (two fixed-point steps by hand).
   near(frequencyTest(5000, 10000, 0.5, { alpha: 0.05 }).mde.absolute, 0.0140061, 2e-6);
+  // At Holm's level alpha / m (here .01 / 4): the same fixed point iterated in Python with SciPy's
+  // norm.ppf(1 - .01/8) = 3.023341439739154 and norm.ppf(.8) gives 0.01932167019390095. The
+  // interval stays at 1 - alpha.
+  const f = frequencyTest(5000, 10000, 0.5, { alpha: 0.01, mdeAlpha: 0.01 / 4 });
+  near(f.mde.absolute, 0.01932167019390095, 1e-9);
+  assert.strictEqual(f.mde.alpha, 0.0025);
+  assert.strictEqual(f.confidence, 0.99);
 });
 
 test('Holm step-down by hand', () => {
@@ -405,7 +453,7 @@ test('fit family: false-alarm rate <= alpha on 200 seeded fair logs of the examp
   const single = new Map();
   for (let i = 0; i < R; i++) {
     const log = drawLog(entries, 20000, seeded(300 + i), true);
-    const r = auditDistribution(log, [pmf], { alpha: 0.05, replicates: 199, declaredRtp: 0.96, maxWin: 5000 }, seeded(900 + i));
+    const r = auditDistribution(log, [pmf], { alpha: 0.05, replicates: 199, totalReplicates: 99, declaredRtp: 0.96, maxWin: 5000 }, seeded(900 + i));
     assert.ok(r.fit.gof.applicable && r.fit.trigger && r.fit.hit);
     if (r.fit.verdict !== 'consistent') alarms++;
     for (const t of r.fit.tests) {
@@ -444,6 +492,50 @@ test('fit family: missing top prizes, impossible wins and a paid-spin pmf withou
   const nb = auditDistribution(drawLog(TOY96, 200, seeded(15)), [base], {}, seeded(16));
   assert.strictEqual(nb.fit.unavailable, 'needTriggerColumn');
   assert.strictEqual(nb.fit.verdict, 'insufficient');
+});
+
+test('fit family at alpha = 0.001: the G-test gets enough replicates for alpha / m, and its MDE is computed there', async () => {
+  // Review finding: with 4,999 replicates the G-test's smallest P-value (1/5000) was above
+  // Holm's alpha / m = .001 / 6, so a log that differs only in the body of the distribution
+  // was called "consistent". Log: the example 96% game with the 0.2x and 0.5x frequencies
+  // swapped (.10 <-> .08); hit rate, trigger rate and big-win tails are unchanged. Effect size
+  // by hand: w^2 = .02^2 / .1 + .02^2 / .08 = .009, n w^2 = 1,800 at 200,000 rounds, far above
+  // the noncentrality 37.04 that gives 80% power at df 12, level .001/6 (SciPy, below): the
+  // G-test must reject.
+  const ref = parsePmfCsv(pmfCsv(examplePmf(0.96)), '96');
+  const swapped = examplePmf(0.96).map((e) => (e.x === 0.2 && !e.trigger ? { ...e, p: 0.08 } : e.x === 0.5 && !e.trigger ? { ...e, p: 0.1 } : e));
+  const log = parsePlayLog(samplePmfLog(swapped, 200000, await prngFromSeed('floor')));
+  const r = auditDistribution(log, [ref], { alpha: 0.001, declaredRtp: 0.96, maxWin: 5000 }, await prngFromSeed('taryam-audit'));
+  // Family by hand: G-test, hit, trigger, and the tails 10x, 100x, 1000x (P(no 1000x win) =
+  // (1 - .54/81 x .02)^200000 = e^-26.7 < alpha / 2); the 5000x tail (e^-2.67) is too rare.
+  assert.strictEqual(r.fit.family.size, 6);
+  const g = r.fit.gof;
+  assert.ok(g.inFamily);
+  assert.ok(g.replicates >= 20 * 6 / 0.001 - 1, `replicates ${g.replicates}`);
+  assert.ok(g.pFloor <= 0.001 / 6 / 10);
+  assert.ok(r.fit.tests.find((t) => t.id === 'gof').rejected);
+  assert.strictEqual(r.fit.verdict, 'mismatch');
+  // 14 values; at 200,000 rounds the 5000x cell expects 2.7 < 5 and joins the 1000x one: 13 bins.
+  assert.strictEqual(g.df, 12);
+  // MDE at alpha / m: SciPy brentq on ncx2.sf(chi2.isf(.001/6, 12), 12, lambda) = .8 gives
+  // lambda = 37.038671342128666 (at the raw .001 it would be 31.41).
+  near(g.mde.alpha, 0.001 / 6, 1e-18);
+  near(g.mde.w, Math.sqrt(37.038671342128666 / 200000), 1e-8);
+  assert.strictEqual(r.fit.hit.mde.alpha, 0.001 / 6);
+  assert.strictEqual(r.fit.trigger.mde.alpha, 0.001 / 6);
+});
+
+test('fit family: a G-test whose Monte Carlo floor is above alpha / m is kept out, without an MDE', () => {
+  // 99 replicates: smallest P-value 1/100 = .01 > .01 / m for any m >= 2, so it can never reject on its own.
+  const pmf = makePmf({ entries: TOY96 });
+  const r = auditDistribution(drawLog(TOY96, 3000, seeded(41)), [pmf], { alpha: 0.01, replicates: 99 }, seeded(42));
+  assert.ok(r.fit.gof.applicable);
+  assert.strictEqual(r.fit.gof.inFamily, false);
+  assert.strictEqual(r.fit.gof.mde, null);
+  assert.ok(!r.fit.tests.some((t) => t.id === 'gof'));
+  // The rest of the family (hit and the 10x / 20x tails; P(no 10x win) = .987^3000) and its level.
+  assert.strictEqual(r.fit.family.size, r.fit.tests.length);
+  near(r.fit.hit.mde.alpha, 0.01 / r.fit.tests.length, 1e-18);
 });
 
 // ---------- version identification ----------
@@ -571,35 +663,69 @@ test('e-process: anytime upper bound covers the true RTP on fair runs; M is enfo
   assert.throws(() => bettingTest([0, 1], { mu0: 0.96, M: 0.5 }), (e) => Boolean(e.ar && e.en));
 });
 
-// ---------- total of the log: saddlepoint ----------
-test('saddlepoint lower tail: research values, and exact lattice sums by dynamic programming', () => {
-  assert.strictEqual(latticeStep([0, 0.2, 0.5, 1, 5000]), 0.1);
-  assert.strictEqual(latticeStep([0, 0.05, 1.25]), 0.05);
-  assert.strictEqual(latticeStep([0, 1 / 3]), null);
-  // The research's synthetic 96% game (its saddle.mjs, printed to 4 decimals): P(S_n <= s) for
-  // n = 1000, s = 500 -> 0.0917; n = 1e4, s = 7000 -> 0.0490; s = 8500 -> 0.3805; n = 1e5, s = 90000 -> 0.2070.
+// ---------- total of the log: Monte Carlo ----------
+// Exact P(S_1000 <= s) for the example 96% game: its pmf convolved 1,000 times on the 0.1
+// lattice (all values are multiples of 0.1; wins are >= 0, so totals above 2,000 are dropped).
+let exactCdf = null;
+function exactTotalCdf() {
+  if (exactCdf) return exactCdf;
   const e = makePmf({ entries: examplePmf(0.96) }).entries;
-  near(saddlepointLowerTail(e, 1000, 500, 0.1), 0.0917, 6e-5);
-  near(saddlepointLowerTail(e, 10000, 7000, 0.1), 0.0490, 6e-5);
-  near(saddlepointLowerTail(e, 10000, 8500, 0.1), 0.3805, 6e-5);
-  near(saddlepointLowerTail(e, 100000, 90000, 0.1), 0.2070, 6e-5);
-  // Exact P(S_1000 <= 500) by convolving the pmf 1,000 times on the 0.1 lattice (truncated at
-  // s, since wins are >= 0). The fact-check's own dynamic programme gave 0.08576.
   const units = e.map((x) => Math.round(x.x * 10));
-  let f = new Float64Array(5001);
+  const top = 20000;
+  let f = new Float64Array(top + 1);
   f[0] = 1;
   for (let i = 0; i < 1000; i++) {
-    const g = new Float64Array(5001);
-    units.forEach((u, k) => { for (let v = u; v <= 5000; v++) g[v] += e[k].p * f[v - u]; });
+    const g = new Float64Array(top + 1);
+    units.forEach((u, k) => { const p = e[k].p; for (let v = u; v <= top; v++) g[v] += p * f[v - u]; });
     f = g;
   }
-  const exact = f.reduce((a, b) => a + b, 0);
-  near(exact, 0.08576, 1e-5);
-  // The approximation is labelled "a few percent" at 1,000 rounds: here +6.9%.
-  rel(saddlepointLowerTail(e, 1000, 500, 0.1), exact, 0.08);
-  // Out of range: below the smallest possible total, above the largest.
-  assert.strictEqual(saddlepointLowerTail([{ x: 1, p: 0.5 }, { x: 2, p: 0.5 }], 10, 5, 1), 0);
-  assert.strictEqual(saddlepointLowerTail([{ x: 1, p: 0.5 }, { x: 2, p: 0.5 }], 10, 20, 1), 1);
+  exactCdf = new Float64Array(top + 1);
+  let acc = 0;
+  for (let v = 0; v <= top; v++) { acc += f[v]; exactCdf[v] = acc; }
+  return exactCdf;
+}
+const R_TOTAL = 9999;
+// A correct estimate stays within 4 standard errors of the exact value (plus one draw's worth).
+const closeToExact = (est, ex, R, label) => assert.ok(Math.abs(est - ex) <= 4 * Math.sqrt(ex * (1 - ex) / R) + 1 / R, `${label}: ${est} vs exact ${ex}`);
+
+test('total of the log: Monte Carlo P(S <= s) agrees with exact lattice sums in the tail, the body and at the mean', () => {
+  // Review findings: the saddlepoint was off by up to +27% (s = 800, 900) and +167% (upper tail
+  // at s = 2000) in the body of this skewed game, and jumped to 0 or 1 next to n x RTP = 960.
+  const cdf = exactTotalCdf();
+  near(cdf[5000], 0.08576, 1e-5); // the research fact-check's own dynamic programme
+  const cells = buildCells([makePmf({ entries: examplePmf(0.96) })]);
+  let prev = -1;
+  for (const s of [300, 500, 700, 800, 900, 959.9, 960, 1000, 2000]) {
+    const r = totalLowerTail(cells.values, cells.probs[0], 1000, s, { rng: seeded(77), replicates: R_TOTAL });
+    closeToExact(r.estimate, cdf[Math.round(s * 10)], R_TOTAL, `s = ${s}`);
+    // Same seed, same draws: the estimate cannot go down as s goes up.
+    assert.ok(r.estimate >= prev, `monotone at s = ${s}`);
+    prev = r.estimate;
+    near(r.se, Math.sqrt(r.estimate * (1 - r.estimate) / R_TOTAL), 1e-15);
+    near(r.pValue, (r.count + 1) / (R_TOTAL + 1), 1e-15);
+  }
+});
+
+test('total of the log near n x RTP, end to end: close to the exact value, never 0 or 1', () => {
+  // Review finding: through auditDistribution a log whose total was exactly n x RTP got
+  // "chance of a total this low" = 0 (saddle_e2e.mjs). Logs of 1,000 rounds: k rounds of 1x, the
+  // rest 0, so the total is k; exact values from the dynamic programme above.
+  const cdf = exactTotalCdf();
+  const pmf = parsePmfCsv(pmfCsv(examplePmf(0.96)), '96');
+  let prev = -1;
+  for (const k of [959, 960, 961]) {
+    const wins = new Float64Array(1000);
+    wins.fill(1, 0, k);
+    const r = auditDistribution({ bets: new Float64Array(1000).fill(1), wins, triggers: null, modes: null }, [pmf], { alpha: 0.01 }, seeded(88));
+    const t = r.fit.total;
+    assert.strictEqual(t.sum, k);
+    assert.strictEqual(t.method, 'montecarlo');
+    near(t.expected, 960, 1e-9);
+    closeToExact(t.estimate, cdf[k * 10], t.replicates, `total ${k}`);
+    assert.ok(t.estimate > 0.6 && t.estimate < 0.8, `total ${k}: ${t.estimate}`); // exact about 0.697
+    assert.ok(t.estimate >= prev);
+    prev = t.estimate;
+  }
 });
 
 // ---------- planner ----------
@@ -628,6 +754,16 @@ test('planner: closed forms and the research tables', () => {
   assert.deepStrictEqual(plan.maxWins, [1000, 5000, 50000]);
   // A larger M never needs fewer rounds.
   for (const g of plan.grid) for (let i = 1; i < g.eProcess.length; i++) assert.ok(g.eProcess[i].rounds >= g.eProcess[i - 1].rounds);
+  // Review finding: the grid's own sigma row used sigma rounded to 4 decimals, so it showed
+  // other numbers than the rows table (12,911,468 vs 12,911,495 at sigma 22.685...). Closed form:
+  // ((1.6448536 + 0.8416212) x sigma / .02)^2, the same value in both places.
+  const s = 22.68512345678;
+  const p2 = planSampleSize({ mu0: 0.96, sigma: s, M: 5000, gap: 0.02, alpha: 0.05 });
+  const row = p2.grid.find((g) => g.sigma === s);
+  assert.ok(row, 'the exact sigma is a grid row');
+  assert.strictEqual(row.meanTest, p2.rows.find((r) => r.id === 'meanTest').rounds);
+  assert.strictEqual(row.eProcess.find((e) => e.M === 5000).rounds, p2.rows.find((r) => r.id === 'eProcess').rounds);
+  near(row.meanTest, ((1.6448536269514722 + 0.8416212335729143) * s / 0.02) ** 2, 1); // SciPy norm.ppf(.95), norm.ppf(.8)
 });
 
 // ---------- whole audit ----------
@@ -649,4 +785,89 @@ test('whole audit on the three example versions: candidates, identification, e-p
   const m = auditDistribution(mixed, [makePmf({ entries: [{ x: 0, p: 0.5 }, { x: 2, p: 0.5 }] })], { mode: 'base', replicates: 9 }, seeded(2));
   assert.strictEqual(m.rounds, 2);
   assert.throws(() => auditDistribution(mixed, [makePmf({ entries: [{ x: 0, p: 1 }] })], { mode: 'ante' }, seeded(3)), (e) => Boolean(e.ar && e.en));
+});
+
+test('a mode typed for a log without a mode column is an error, not a label on unfiltered rounds', () => {
+  // Review finding: the result said mode "bonus-buy" although all 4 rounds were used.
+  const log = parsePlayLog('bet,win\n1,0\n1,2\n1,0\n1,2\n');
+  const pmf = makePmf({ entries: [{ x: 0, p: 0.5 }, { x: 2, p: 0.5 }] });
+  assert.throws(() => auditDistribution(log, [pmf], { mode: 'bonus-buy', replicates: 9 }, seeded(4)), (e) => /no mode column/.test(e.en) && /bonus-buy/.test(e.ar));
+  assert.strictEqual(auditDistribution(log, [pmf], { replicates: 9 }, seeded(4)).mode, null);
+});
+
+test('e-process tests the reference version\'s RTP; sigma and M carry their sources', async () => {
+  // Review finding: with the 94% version as reference, "below declared" still tested 96% (the
+  // declared field). examplePmf(r) has mean r by construction (the bonus rate is solved for it).
+  const pmfs = [0.96, 0.94, 0.92].map((r) => parsePmfCsv(pmfCsv(examplePmf(r)), String(r * 100)));
+  const log = parsePlayLog(samplePmfLog(examplePmf(0.94), 2000, await prngFromSeed('ref-rtp')));
+  const r = auditDistribution(log, pmfs, { refIndex: 1, alpha: 0.01, declaredRtp: 0.96, maxWin: 5000, replicates: 99 }, seeded(5));
+  near(r.betting.mu0, 0.94, 1e-12);
+  assert.strictEqual(r.betting.mu0Source, 'reference');
+  assert.strictEqual(r.betting.declaredDiffers, 0.96);
+  near(r.planner.mu0, 0.94, 1e-12);
+  // Same value in the field: nothing to report.
+  const same = auditDistribution(log, pmfs, { refIndex: 1, declaredRtp: 0.94, maxWin: 5000, replicates: 99 }, seeded(5));
+  assert.strictEqual(same.betting.declaredDiffers, null);
+  // A paid-spin reference has no round RTP of its own: the caller's referenceRtp is used.
+  const base = makePmf({ scope: 'baseSpin', entries: [{ x: 0, p: 0.7 }, { x: 1, p: 0.25 }, { x: 0, p: 0.05, trigger: true }] });
+  const bl = { bets: new Float64Array(200).fill(1), wins: new Float64Array(200), triggers: new Uint8Array(200), modes: null };
+  const b = auditDistribution(bl, [base], { referenceRtp: 0.955, declaredRtp: 0.9, maxWin: 100, sigma: 12, sigmaSource: 'model', maxWinSource: 'model', replicates: 9 }, seeded(6));
+  assert.strictEqual(b.betting.mu0, 0.955);
+  assert.strictEqual(b.betting.declaredDiffers, 0.9);
+  assert.strictEqual(b.betting.maxWinSource, 'model');
+  assert.strictEqual(b.planner.sigmaSource, 'model');
+  // Nothing passed: sigma and M are the reference pmf's own.
+  const own = auditDistribution(log, pmfs, { refIndex: 2, replicates: 99 }, seeded(7));
+  assert.strictEqual(own.planner.sigmaSource, 'pmf');
+  near(own.planner.sigma, pmfs[2].sd, 1e-15);
+  assert.strictEqual(own.betting.maxWinSource, 'pmf');
+  assert.strictEqual(own.betting.M, 5000);
+  near(own.betting.mu0, 0.92, 1e-12);
+});
+
+// ---------- the PDF report ----------
+// A canvas stand-in for node: records every string drawn; text width = 12 px a character.
+function fakeCanvas(width, height, drawn) {
+  const ctx = new Proxy({ measureText: (s) => ({ width: String(s).length * 12 }), fillText: (s) => drawn.push(String(s)) }, {
+    get: (o, k) => (k in o ? o[k] : () => {}),
+    set: (o, k, v) => { o[k] = v; return true; },
+  });
+  return { width, height, getContext: () => ctx, convertToBlob: async () => new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])]) };
+}
+
+test('report: a G-test kept out of the family, a Monte Carlo total and the reference RTP are written without errors', async () => {
+  const { buildReport } = await import('../../lab/report.js');
+  const { pair } = await import('../../lab/i18n.js');
+  // 99 replicates: the G-test's floor 1/100 is above alpha / m, so it has no MDE (null).
+  const pmfs = [0.96, 0.94].map((r) => parsePmfCsv(pmfCsv(examplePmf(r)), `RTP ${r * 100}%`));
+  const log = parsePlayLog(samplePmfLog(examplePmf(0.94), 3000, await prngFromSeed('report')));
+  const options = { refIndex: 1, alpha: 0.01, replicates: 99, totalReplicates: 99, declaredRtp: 0.96, maxWin: 5000 };
+  const result = auditDistribution(log, pmfs, options, seeded(9));
+  assert.strictEqual(result.fit.gof.inFamily, false);
+  assert.strictEqual(result.fit.gof.mde, null);
+  const bytes = new TextEncoder().encode('bet,win\n');
+  const session = {
+    meta: { title: '', auditor: '', notes: '' },
+    inputs: [{ id: 'playlog', name: 'log.csv', kind: 'csv', size: bytes.length, sha256: '0'.repeat(64), bytes, mime: 'text/csv' }],
+    results: { distTests: { inputId: 'playlog', inputIds: ['pmf-0', 'pmf-1'], candidates: pmfs.map((p, i) => ({ label: p.label, kind: 'csv', inputId: 'pmf-' + i })), options, result: { ...result, seed: 'report', generator: 'xoshiro128**' } } },
+  };
+  const drawn = [];
+  const report = await buildReport(session, { createCanvas: (w, h) => fakeCanvas(w, h, drawn), now: new Date('2026-01-01T00:00:00Z') });
+  const text = drawn.join('\n');
+  // The note that the G-test cannot reject on its own, its row "out of the verdict", no MDE row.
+  assert.ok(text.includes(pair('distGofFloorNote')[1].split(' ').slice(0, 6).join(' ')));
+  assert.ok(drawn.some((s) => s.startsWith(pair('distGofOut')[0])), 'G-test row: out of the verdict'); // the cell may wrap
+  assert.ok(!text.includes(pair('distMde')[1]));
+  // The e-process tests the reference (94%), and the declared 96% is reported as different.
+  assert.ok(text.includes(pair('distRefRtp')[1]));
+  assert.ok(text.includes('94.000%'));
+  assert.ok(drawn.some((s) => s.includes('96.000% ≠ 94.000%')));
+  // The text summary page (lines wrapped at 100 characters, joined back here): Monte Carlo
+  // total, the G-test kept out, the reference RTP.
+  const pdf = new TextDecoder('latin1').decode(report.bytes);
+  const summary = [...pdf.matchAll(/\(((?:\\.|[^\\)])*)\) Tj/g)].map((m) => m[1].replace(/\\(.)/g, '$1')).join(' ').replace(/\s+/g, ' ');
+  assert.ok(summary.includes('cannot reach alpha/m, kept out of the verdict'), summary);
+  assert.ok(/P\(total <= observed\) ~ [0-9.]+ \+\/- [0-9.]+ \(Monte Carlo, 99 draws\)/.test(summary));
+  assert.ok(summary.includes('RTP below 94.00% (the reference version)?'));
+  assert.ok(summary.includes("the declared RTP field (96.000%) differs from the reference version's RTP (94.000%)"));
 });
