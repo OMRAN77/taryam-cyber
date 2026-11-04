@@ -761,7 +761,9 @@ function normalizeWaysModel(raw) {
   return {
     name: String(raw.name || ''),
     evaluation: 'ways',
-    rows: Math.max(...baseCells), nReels, symbols, wild, scatter, scale,
+    // rows: the most cells any reel shows (base or free spins), so nReels x rows bounds
+    // the scatter count wherever slot-exact.js caps it.
+    rows: Math.max(...baseCells, ...fsCells), nReels, symbols, wild, scatter, scale,
     lines: null, waysPays,
     wildPays: new Array(nReels + 1).fill(0), scatterPays: scatterUnits,
     reels: reelSets[0].reels, reelSets,

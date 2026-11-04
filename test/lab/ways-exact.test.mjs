@@ -395,6 +395,17 @@ test('free spins with ways: own reels, heights and no top reel (no retrigger) eq
   assert.deepStrictEqual(pmfList(enginePmf(r)), b.base.dist);
 });
 
+test('free spins with taller windows: scatter counts only free spins can reach keep their own pay', () => {
+  // Base windows of 1 row (at most 4 scatters); free spins of 3 rows (up to 12). A pay for
+  // 6 or more scatters exists only in free spins.
+  const g = clone(BASE);
+  delete g.heights;
+  g.rows = 1;
+  g.scatter = { symbol: 'S', pays: [0, 1, 2, 3, 4, 50], freeSpins: { trigger: 2, spins: 2, multiplier: 1, retrigger: false, heights: [3, 3, 3, 3], reels: [['S', 'A', 'S', 'W'], ['S', 'B', 'S'], ['S', 'S', 'C', 'A'], ['S', 'A', 'S', 'B']] } };
+  const r = analyzeExact(normalizeModel(g));
+  assertMatches(r, bruteRound(g), 'tall free-spin windows');
+});
+
 test('free spins on the base reels with the same top reel (no retrigger) equal brute force', () => {
   const g = clone(BASE);
   g.topReel = { reel: ['A', 'W', 'S', 'B'], covers: [3, 4] };
@@ -617,6 +628,13 @@ test('Monte Carlo of a ways model: same seed, same run; the generator text state
   const c = simulate(normalizeModel({ ...clone(oasisCaravanWays), cascades: true }), await prngFromSeed('again'), 20000);
   assert.strictEqual(c.scope, 'firstDrop');
   assert.strictEqual(c.rtp, a.rtp, 'first drop only: the same spins');
+  // A line game that declares cascades is labelled too; without the flag nothing changes.
+  const dg = JSON.parse(fs.readFileSync(new URL('../../lab/samples/desert-gold.json', import.meta.url), 'utf8'));
+  const lc = simulate(normalizeModel({ ...dg, cascades: true }), await prngFromSeed('again'), 2000);
+  const lp = simulate(normalizeModel(dg), await prngFromSeed('again'), 2000);
+  assert.strictEqual(lc.scope, 'firstDrop');
+  assert.strictEqual(lp.scope, undefined);
+  assert.strictEqual(lc.rtp, lp.rtp);
 });
 
 test('control variate estimate checked by hand', () => {

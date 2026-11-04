@@ -173,7 +173,7 @@ export function simulate(model, rng, spins, { onProgress = () => {}, progressEve
     spins, totalWinUnits: total, rtp, sd, standardError: se, ci95: [rtp - 1.959964 * se, rtp + 1.959964 * se],
     hitFrequency: hits / spins, maxWin: maxWin / tb, triggers: stats.triggers, freeSpinsPlayed: stats.fsPlayed, cappedFeatures: stats.capped,
     buckets: buckets.map((c, i) => ({ from: i === 0 ? 0 : BUCKETS[i - 1], to: i === 0 ? 0 : i < BUCKETS.length ? BUCKETS[i] : null, probability: c / spins })),
-    ...(paid ? { scope: model.cascades ? 'firstDrop' : 'round', paidSpin: paid } : {}),
+    ...(paid ? { scope: model.cascades ? 'firstDrop' : 'round', paidSpin: paid } : model.cascades ? { scope: 'firstDrop' } : {}),
   };
 }
 
