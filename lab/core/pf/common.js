@@ -135,8 +135,6 @@ export function compareSet(values, claimed, base = 0, shift = 0) {
 
 // ---------- Stake-style game maps from floats in [0, 1) ----------
 
-export const diceTicks = (f) => Math.floor(f * 10001);
-
 // Limbo, documented formula: 1e8 / (f * 1e8) * 0.99, floored to cents.
 // Exact cents for the same float (f = u / 2^32): floor(99 * 2^32 / u).
 export function limboDocs(f) {

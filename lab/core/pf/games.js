@@ -7,7 +7,7 @@
 //   multiplier(...)           payout multiplier from a rule or a paytable, or null
 //   stats                     how the published outcomes are distributed under fair play
 import {
-  diceTicks, limboDocs, limboCalc24, drawWithout, range, cardName, parseCard, splitList,
+  limboDocs, limboCalc24, drawWithout, range, cardName, parseCard, splitList,
   compareTicks, compareMultiplier, compareInt, compareSet, floorMapProb, parseNumber, pfError,
 } from './common.js';
 
