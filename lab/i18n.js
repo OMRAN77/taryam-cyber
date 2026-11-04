@@ -853,6 +853,7 @@ const S = {
   sessRounds: ['عدد الجولات', 'Rounds'],
   sessBet: ['الرهان في كل جولة', 'Bet per round'],
   sessBudget: ['الميزانية (اختياري)', 'Budget (optional)'],
+  sessBudgetShort: ['الميزانية', 'Budget'],
   sessRun: ['احسب الجلسة', 'Compute the session'],
   sessExpectedLoss: ['الخسارة المتوقعة', 'Expected loss'],
   sessMedian: ['النتيجة الوسيطة', 'Median result'],

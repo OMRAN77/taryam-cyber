@@ -352,7 +352,7 @@ function roundSection(L, th) {
   if (!c) return;
   const k = c.result.cap;
   if (k) {
-    L.kv('roundCap', num(k.M, 4) + '×');
+    L.kv('roundCapTitle', num(k.M, 4) + '×');
     L.kv('roundCapped', k.rtpCapped.fraction && k.rtpCapped.fraction.length <= 40 ? `${pct(k.rtpCapped.value, 4)}  (${k.rtpCapped.fraction})` : pct(k.rtpCapped.value, 4), { color: C.accent });
     L.kv('roundLost', smallPct(k.lost.value, 4) + (k.lost.upper > k.lost.value && smallPct(k.lost.upper, 4) !== smallPct(k.lost.value, 4) ? ` – ${smallPct(k.lost.upper, 4)}` : ''));
     L.kv('roundReach', `${roundProb(k.reach)}   (${pair('roundOneInCol')[1]}: ${roundOneIn(k.reach)})`);
@@ -375,7 +375,7 @@ function sessionSection(L, ss) {
   L.kv('modelHash', ss.modelSha256, { mono: true });
   L.kv('sessRounds', r.rounds.toLocaleString('en-US'));
   L.kv('sessBet', ss.options.bet);
-  if (ss.options.budget) L.kv('sessBudget', ss.options.budget);
+  if (ss.options.budget) L.kv('sessBudgetShort', ss.options.budget);
   L.kv('sessMethod', pair('sessMethod_' + r.method)[1]);
   if (r.sessions) {
     L.kv('seed', ss.options.seed, { mono: true });
