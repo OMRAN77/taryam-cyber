@@ -965,6 +965,7 @@ dialog::backdrop{background:rgba(0,0,0,.75)}
 }
 /* Side panel: the security operations center in place of preview / code (labels and download hidden) */
 #workarea #tabs,#workarea #panels{display:none}
+#messages{padding-inline:max(18px,calc((100% - 820px) / 2))}
 #workarea{background:rgba(4,4,4,.55)}
 #socPanel{flex:1;overflow-y:auto;padding:26px 28px 24px}
 .soc-home{display:flex;flex-direction:column;gap:14px}
@@ -977,16 +978,18 @@ dialog::backdrop{background:rgba(0,0,0,.75)}
 .chat-hint b{font-weight:400;max-width:300px;line-height:1.7}
 
 /* Composer: a command line, one control row, icon send */
-#inputbar{inset-inline:max(14px,calc((100% - 920px) / 2));bottom:34px;gap:0;padding:0;border-radius:12px;overflow:hidden}
+#inputbar{inset-inline:max(14px,calc((100% - 720px) / 2));bottom:30px;gap:0;padding:0;border-radius:12px;overflow:hidden}
 #inputbar:focus-within{border-color:var(--primary);box-shadow:0 0 0 1px rgba(0,255,156,.35),0 0 32px rgba(0,255,156,.12),0 10px 40px rgba(0,0,0,.5)}
-.cmd-line{display:flex;align-items:flex-start;gap:10px;padding:14px 16px 6px}
-.cmd-sigil{font:700 13px/24px var(--font-mono);color:var(--primary);flex-shrink:0;direction:ltr;user-select:none;text-shadow:0 0 10px rgba(0,255,156,.5)}
-#inputbar #prompt{flex:1;min-height:24px;line-height:24px;padding:0;font-size:14.5px}
+.cmd-line{display:flex;align-items:flex-start;gap:8px;padding:10px 14px 2px}
+.cmd-sigil{font:700 12px/22px var(--font-mono);color:var(--primary);flex-shrink:0;direction:ltr;user-select:none;text-shadow:0 0 10px rgba(0,255,156,.5)}
+#inputbar #prompt{flex:1;min-height:22px;line-height:22px;padding:0;font-size:13.5px}
 #attachStrip{padding:10px 14px 0}
-#inputbar .dock-row{padding:6px 10px 10px;gap:10px}
+#inputbar .dock-row{padding:2px 8px 7px;gap:8px}
 #inputbar .dock-icons{align-items:center;gap:2px;min-width:0}
 .dock-sep{width:1px;height:18px;background:var(--border-2);margin:0 6px}
 .dock-btn{border-radius:8px}
+#inputbar .dock-btn{width:30px;height:30px}
+#inputbar .dock-btn svg{width:15px;height:15px}
 .dock-send{display:flex;align-items:center;gap:6px;flex-shrink:0}
 #chat-toggles{padding:0;gap:4px}
 .toggle-chip{border-radius:6px;padding:5px 9px;font-size:11.5px;gap:7px;background:transparent;border-color:transparent}
@@ -996,11 +999,11 @@ dialog::backdrop{background:rgba(0,0,0,.75)}
 .toggle-chip.on{background:transparent;border-color:transparent;color:var(--text)}
 .toggle-chip.on .sw{background:rgba(0,255,156,.25);border-color:var(--primary)}
 .toggle-chip.on .sw::after{inset-inline-start:11px;background:var(--primary);box-shadow:0 0 6px var(--primary)}
-#btnSend{width:40px;height:40px;padding:0;justify-content:center;border-radius:10px}
+#btnSend{width:34px;height:34px;padding:0;justify-content:center;border-radius:9px}
 #btnSend span:not(.spinner){display:none}
-#btnSend svg{width:17px;height:17px}
+#btnSend svg{width:15px;height:15px}
 #btnStop{color:var(--text-3)}
-.cmd-hint{position:absolute;bottom:12px;inset-inline:max(14px,calc((100% - 920px) / 2));font:11px var(--font-mono);color:var(--text-4);text-align:center;direction:ltr;pointer-events:none}
+.cmd-hint{position:absolute;bottom:10px;inset-inline:max(14px,calc((100% - 720px) / 2));font:11px var(--font-mono);color:var(--text-4);text-align:center;direction:ltr;pointer-events:none}
 .cmd-hint b{font-family:var(--font-ar);font-weight:400;color:var(--text-3)}
 
 /* Phones: the account menu drops from the header, no drawer */
@@ -1020,7 +1023,18 @@ dialog::backdrop{background:rgba(0,0,0,.75)}
 body.resizing{cursor:col-resize;user-select:none}
 body.resizing iframe{pointer-events:none}
 
-/* Header panel toggles (projects / operations panel) */
+/* Panel buttons: small, on the drag bars on desktop; in the header on phones (no bars) */
+.rz-btn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;width:20px;height:28px;padding:0;display:grid;place-items:center;
+  border-radius:6px;background:#0d0d0d;border:1px solid var(--border-2);color:var(--text-3);cursor:pointer;transition:color var(--transition),border-color var(--transition),box-shadow var(--transition)}
+.rz-btn svg{width:12px;height:12px}
+.rz-btn:hover,.resizer.edge .rz-btn{color:var(--primary);border-color:rgba(0,255,156,.45);box-shadow:0 0 10px rgba(0,255,156,.2)}
+html[dir="ltr"] .rz-btn svg{transform:scaleX(-1)}
+/* A collapsed panel leaves its bar at the window edge: keep the button inside the window */
+#resizer1.edge .rz-btn{left:auto;inset-inline-start:100%;transform:translateY(-50%)}
+#resizer2.edge .rz-btn{left:auto;inset-inline-end:100%;transform:translateY(-50%)}
+.resizer::after{display:none}
+.resizer:hover::after,.resizer.dragging::after,.resizer:focus-visible::after{display:block}
+.panel-toggle{display:none}
 .hdr-start{display:flex;align-items:center;gap:10px;min-width:0}
 .panel-toggle svg{width:17px;height:17px}
 .panel-toggle[aria-expanded="true"]{color:var(--primary);border-color:rgba(0,255,156,.35)}
@@ -1045,9 +1059,11 @@ html[dir="ltr"] .panel-toggle svg{transform:scaleX(-1)}
 /* Phones: the side panel is a drawer, so the operations center shows in the empty chat */
 html.mobile-ui #messages:empty ~ #socHome{display:flex;position:absolute;inset:0 0 auto 0;max-height:calc(100% - var(--dock-h, 128px) - 24px);overflow-y:auto;padding:22px 18px 10px}
 html.mobile-ui #messages:empty ~ .chat-hint{display:none}
+html.mobile-ui .panel-toggle{display:inline-flex}
 @media (max-width:860px){
   #messages:empty ~ #socHome{display:flex;position:absolute;inset:0 0 auto 0;max-height:calc(100% - var(--dock-h, 128px) - 24px);overflow-y:auto;padding:22px 18px 10px}
   #messages:empty ~ .chat-hint{display:none}
+  .panel-toggle{display:inline-flex}
   #inputbar{inset-inline:10px;bottom:12px}
   .cmd-hint{display:none}
   .soc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -1224,7 +1240,7 @@ html.mobile-ui #messages:empty ~ .chat-hint{display:none}
     </div>
   </div>
 
-  <div class="resizer" id="resizer1" role="separator" aria-orientation="vertical" tabindex="0" title="اسحب لتغيير العرض · نقرتان للإخفاء"></div>
+  <div class="resizer" id="resizer1" role="separator" aria-orientation="vertical" tabindex="0" title="اسحب لتغيير العرض"><button type="button" class="rz-btn" id="rzSide" title="إظهار / إخفاء المشاريع" aria-controls="sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button></div>
 
   <div id="chatcol">
     <div id="messages"></div>
@@ -1271,7 +1287,7 @@ html.mobile-ui #messages:empty ~ .chat-hint{display:none}
     <div class="cmd-hint" aria-hidden="true"><span>Enter</span> <b data-i18n="hintSend">للإرسال</b> · <span>Shift+Enter</span> <b data-i18n="hintNewline">سطر جديد</b></div>
   </div>
 
-  <div class="resizer" id="resizer2" role="separator" aria-orientation="vertical" tabindex="0" title="اسحب لتغيير العرض · نقرتان للإخفاء"></div>
+  <div class="resizer" id="resizer2" role="separator" aria-orientation="vertical" tabindex="0" title="اسحب لتغيير العرض"><button type="button" class="rz-btn" id="rzPanel" title="إظهار / إخفاء مركز العمليات" aria-controls="workarea"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button></div>
 
   <div id="workarea">
     <section id="socPanel" class="soc-home" aria-labelledby="socPanelTitle"></section>
@@ -3203,6 +3219,7 @@ function setupResizer(res, panel, {min, max, key, snap = 140, after = false, fal
   }
   function up(){ if(!drag) return; drag = false; res.classList.remove('dragging'); document.body.classList.remove('resizing'); store(parseInt(panel.style.width, 10) || 0); }
   res.addEventListener('pointerdown', e => {
+    if(e.target.closest('.rz-btn')) return;
     if(window.innerWidth <= 860 || document.documentElement.classList.contains('mobile-ui')) return;
     drag = true; sX = e.clientX; sW = panel.getBoundingClientRect().width;
     res.setPointerCapture(e.pointerId); res.classList.add('dragging'); document.body.classList.add('resizing');
@@ -3210,7 +3227,9 @@ function setupResizer(res, panel, {min, max, key, snap = 140, after = false, fal
   res.addEventListener('pointermove', move);
   res.addEventListener('pointerup', up);
   res.addEventListener('pointercancel', up);
-  res.addEventListener('dblclick', toggle);
+  res.addEventListener('dblclick', e => { if(!e.target.closest('.rz-btn')) toggle(); });
+  const btn = res.querySelector('.rz-btn');
+  if(btn) btn.addEventListener('click', e => { e.stopPropagation(); toggle(); });
   return { toggle, isOpen: () => panel.getBoundingClientRect().width > 1 };
   res.addEventListener('keydown', e => {
     const step = (e.key === 'ArrowLeft' ? 1 : e.key === 'ArrowRight' ? -1 : 0) * (document.documentElement.dir === 'rtl' ? 1 : -1) * (after ? -1 : 1);
@@ -3236,6 +3255,8 @@ function bindPanelToggle(btn, sizer, panel){
 }
 bindPanelToggle($('#btnToggleSide'), sideSizer, $('#sidebar'));
 bindPanelToggle($('#btnTogglePanel'), panelSizer, $('#workarea'));
+// The bar buttons report their panel's state too.
+[[$('#rzSide'), sideSizer], [$('#rzPanel'), panelSizer]].forEach(([b, z]) => { const sync = () => b.setAttribute('aria-expanded', String(z.isOpen())); b.addEventListener('click', sync); sync(); });
 
 /* ═══ Command Palette ═══ */
 const CMD_ITEMS = [

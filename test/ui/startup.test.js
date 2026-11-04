@@ -170,17 +170,18 @@ test('desktop drag bars push either side panel all the way in, and a double-clic
   await page.click('#btnGuestMode');
   const width = (sel) => page.$eval(sel, (e) => Math.round(e.getBoundingClientRect().width));
   const drag = async (sel, dx) => {
+    // Grab the bar near its top: the middle holds the show / hide button.
     const b = await (await page.$(sel)).boundingBox();
-    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.move(b.x + b.width / 2, b.y + 80);
     await page.mouse.down();
-    await page.mouse.move(b.x + b.width / 2 + dx, b.y + b.height / 2, { steps: 8 });
+    await page.mouse.move(b.x + b.width / 2 + dx, b.y + 80, { steps: 8 });
     await page.mouse.up();
   };
   // Arabic layout: projects on the right, operations panel on the left.
   assert.ok(await width('#sidebar') > 150);
   await drag('#resizer1', 400);
   assert.strictEqual(await width('#sidebar'), 0, 'projects sidebar pushed all the way in');
-  await page.dblclick('#resizer1');
+  await page.dblclick('#resizer1', { position: { x: 4, y: 80 } });
   assert.ok(await width('#sidebar') >= 200, 'double-click brings it back');
 
   const before = await width('#workarea');
@@ -188,7 +189,7 @@ test('desktop drag bars push either side panel all the way in, and a double-clic
   await drag('#resizer2', -1200);
   assert.strictEqual(await width('#workarea'), 0, 'operations panel pushed all the way in');
   assert.ok(await width('#chatcol') > 900, 'the chat takes the room');
-  await page.dblclick('#resizer2');
+  await page.dblclick('#resizer2', { position: { x: 4, y: 80 } });
   assert.ok(await width('#workarea') >= 300, 'double-click brings the panel back');
   await drag('#resizer2', 1200);
   assert.ok(await width('#chatcol') >= 320, 'the chat keeps at least 320px');
@@ -200,7 +201,7 @@ test('desktop drag bars push either side panel all the way in, and a double-clic
   assert.strictEqual(await width('#sidebar'), 0);
 });
 
-test('header panel buttons: collapse / restore on desktop, open the drawer on a phone', async (t) => {
+test('panel buttons: on the drag bars on desktop (collapse / restore), in the header on a phone (drawer)', async (t) => {
   const server = await startServer();
   const browser = await chromium.launch();
   t.after(async () => { await browser.close(); await server.close(); });
@@ -209,16 +210,25 @@ test('header panel buttons: collapse / restore on desktop, open the drawer on a 
   desk.setDefaultTimeout(5000);
   await desk.goto(server.url + '/');
   await desk.click('#btnGuestMode');
-  assert.strictEqual(await desk.getAttribute('#btnToggleSide', 'aria-expanded'), 'true');
-  await desk.click('#btnToggleSide');
+  assert.ok(!(await desk.isVisible('#btnToggleSide')) && !(await desk.isVisible('#btnTogglePanel')), 'no header copies on desktop');
+  assert.strictEqual(await desk.getAttribute('#rzSide', 'aria-expanded'), 'true');
+  await desk.click('#rzSide');
   assert.strictEqual(await width(desk, '#sidebar'), 0, 'projects hidden');
-  assert.strictEqual(await desk.getAttribute('#btnToggleSide', 'aria-expanded'), 'false');
-  await desk.click('#btnToggleSide');
+  assert.strictEqual(await desk.getAttribute('#rzSide', 'aria-expanded'), 'false');
+  await desk.click('#rzSide');
   assert.ok(await width(desk, '#sidebar') >= 200, 'projects back');
-  await desk.click('#btnTogglePanel');
+  await desk.click('#rzPanel');
   assert.strictEqual(await width(desk, '#workarea'), 0, 'operations panel hidden');
-  await desk.click('#btnTogglePanel');
+  // The bar sits at the window edge now; its button must still be inside the window.
+  const box = await (await desk.$('#rzPanel')).boundingBox();
+  assert.ok(box.x >= 0 && box.x + box.width <= 1366, 'edge button stays on screen');
+  await desk.click('#rzPanel');
   assert.ok(await width(desk, '#workarea') >= 300, 'operations panel back');
+  // The conversation and the composer sit in the middle at a readable width.
+  await desk.click('#rzPanel');
+  await desk.click('#rzSide');
+  const dock = await (await desk.$('#inputbar')).boundingBox();
+  assert.ok(dock.width <= 730 && Math.abs(dock.x + dock.width / 2 - 683) < 20, `composer centred and compact (${JSON.stringify(dock)})`);
 
   const phone = await browser.newPage({ viewport: { width: 553, height: 760 } });
   phone.setDefaultTimeout(5000);
