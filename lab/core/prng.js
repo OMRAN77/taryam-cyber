@@ -39,3 +39,9 @@ export async function prngFromSeed(seedText) {
 }
 
 export const PRNG_DESCRIPTION = 'xoshiro128** 1.1, state = first 16 bytes of SHA-256(seed) as 4 little-endian uint32; reel stops by rejection sampling';
+
+// Models with stop weights or several reel sets draw differently, so their runs record
+// this longer text; unweighted runs keep the text above and their fingerprints.
+export const PRNG_DESCRIPTION_WEIGHTED = PRNG_DESCRIPTION + '; weighted models: per spin the reel set (if several), then reels 1..N in order;'
+  + ' each pick is the entry whose cumulative weight range holds u, a uniform integer below the total weight:'
+  + ' u = one 32-bit draw by rejection when the total is at most 2^32, otherwise ceil(bits(total-1)/32) draws (most significant first) rejected above the last whole multiple of the total';

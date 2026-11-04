@@ -6,8 +6,8 @@ import { parsePlayLog, analyzePlayLog } from './core/actual.js';
 import { parseRngInput, chiSquareUniform, serialCorrelation } from './core/rng-basic.js';
 import { runNist, runNistMulti, assessFamily } from './core/nist.js';
 import { parseFairCsv, verifyHmacRounds, verifyHashChain, sha256Hex, hmacSha256, floatFromBytes, mapOutcome, toHex } from './core/fair.js';
-import { prngFromSeed, PRNG_DESCRIPTION } from './core/prng.js';
-import { simulate } from './core/montecarlo.js';
+import { prngFromSeed } from './core/prng.js';
+import { simulate, generatorDescription } from './core/montecarlo.js';
 import { sampler, slotSampler, simulatePlayers } from './core/casino.js';
 
 const decode = (bytes) => new TextDecoder().decode(bytes);
@@ -68,8 +68,9 @@ const TASKS = {
   },
 
   montecarlo: async ({ raw, seed, spins, modelSha256 }, progress) => {
-    const sim = simulate(normalizeModel(raw), await prngFromSeed(seed), spins, { onProgress: progress });
-    const run = { modelSha256, seed, spins, generator: PRNG_DESCRIPTION, result: sim };
+    const model = normalizeModel(raw);
+    const sim = simulate(model, await prngFromSeed(seed), spins, { onProgress: progress });
+    const run = { modelSha256, seed, spins, generator: generatorDescription(model), result: sim };
     return { ...run, resultSha256: await sha256Hex(canonicalJson(run)) };
   },
 

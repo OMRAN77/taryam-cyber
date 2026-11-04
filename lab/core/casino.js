@@ -80,7 +80,8 @@ export function sampler(dist) {
   };
 }
 
-// A slot model (slot-model.js) played round by round, free spins included.
+// A slot model (slot-model.js) played round by round, free spins included. Stop
+// weights and reel sets are drawn exactly and without bias by montecarlo.js.
 export function slotSampler(model) {
   const { play } = makeRoundPlayer(model);
   const tb = model.totalBetUnits;
