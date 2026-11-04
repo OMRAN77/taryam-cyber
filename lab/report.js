@@ -256,6 +256,9 @@ export function reportPayload(session, createdAt) {
     out.results.session = {
       input: ss.inputId, modelSha256: ss.modelSha256, options: ss.options, method: x.method, rounds: x.rounds,
       expectedLossBets: x.expectedLoss, meanBets: x.mean, medianBets: x.median, percentilesBets: x.percentiles, pAhead: x.pAhead, pAheadSe: x.pAheadSe ?? null,
+      // pAhead is null under the precision floor; then pAheadBelow bounds it. A Monte
+      // Carlo count of 0 (or all) gives a 95% bound instead of a standard error.
+      pAheadBelow: x.pAheadBelow ?? null, pAheadUpper95: x.pAheadUpper95 ?? null, pAheadLower95: x.pAheadLower95 ?? null, precision: x.precision ?? null,
       pEven: x.pEven, normalApproximation: x.normal, nStar: x.nStar, ruin: x.ruin, sessions: x.sessions ?? null, generator: x.generator ?? null,
       grid: x.grid ?? null, funnelBets: x.funnel, droppedMassPerRound: x.droppedMass,
     };
@@ -301,7 +304,7 @@ export function reportPayload(session, createdAt) {
 function roundPayload(th) {
   const x = th.result;
   if (!x.round) return { roundDistribution: null, roundError: x.roundError };
-  const { pmf, mgf, ...rest } = x.round;
+  const { pmf, mgf, tailSums, ...rest } = x.round;
   return {
     roundDistribution: { ...rest, pmf: { scope: pmf.scope, cells: pmf.entries.length, droppedMass: pmf.droppedMass, noiseFloor: pmf.noiseFloor, unitBets: pmf.unitBets } },
     roundError: null,
@@ -337,10 +340,12 @@ function roundSection(L, th) {
   L.kv('roundMethod', pair('roundMethod_' + r.method)[1]);
   if (r.caps) L.kv('roundCapsCard', capsLine(r.caps), { mono: true });
   if (!r.exact) {
+    // Short labels: a kv label has about 420 points on each side of the value.
     L.kv('roundGrid', r.grid.size.toLocaleString('en-US'));
-    L.kv('roundAlias', r.aliasBound ? '< ' + upper2(r.aliasBound) : '0', { mono: true });
+    L.kv(null, r.aliasBound ? '< ' + upper2(r.aliasBound) : '0', { mono: true, labels: pair('roundAliasShort') });
     L.kv('roundFloor', upper2(r.floor), { mono: true });
-    L.kv('roundChecks', Math.max(...Object.values(r.checks).map((c) => c.relativeError)).toExponential(1), { mono: true });
+    L.kv(null, Math.max(...Object.values(r.checks).map((c) => c.relativeError)).toExponential(1), { mono: true, labels: pair('roundChecksShort') });
+    L.note('roundChecksNote');
   }
   L.kv('roundTop', r.maxWin.bounded ? `${num(r.maxWin.x, 2)}×   P = ${roundProb(r.maxWin)}` : `${pair('roundUnboundedTop')[1]} (${num(r.maxWin.largestAboveFloor, 2)}×)`);
   const rows = r.thresholds.map((t) => [`≥ ${num(t.x, 0)}×`, roundProb(t), roundOneIn(t), roundSrc(t.method)]);
@@ -356,6 +361,7 @@ function roundSection(L, th) {
     L.kv('roundCapped', k.rtpCapped.fraction && k.rtpCapped.fraction.length <= 40 ? `${pct(k.rtpCapped.value, 4)}  (${k.rtpCapped.fraction})` : pct(k.rtpCapped.value, 4), { color: C.accent });
     L.kv('roundLost', smallPct(k.lost.value, 4) + (k.lost.upper > k.lost.value && smallPct(k.lost.upper, 4) !== smallPct(k.lost.value, 4) ? ` – ${smallPct(k.lost.upper, 4)}` : ''));
     L.kv('roundReach', `${roundProb(k.reach)}   (${pair('roundOneInCol')[1]}: ${roundOneIn(k.reach)})`);
+    if (k.aboveMax) L.note('roundCapAboveMax');
     L.note('roundCapNote');
   }
   if (!c.odds) return;
@@ -367,24 +373,45 @@ function roundSection(L, th) {
   L.note('roundOddsNote');
 }
 
+// A bet stored with a decimal comma by an older version reads the same.
+const betOf = (options) => Number(String(options.bet).replace(',', '.'));
+// A session probability as text: the value (± its standard error), "< bound" under the
+// precision floor, or a 95% bound when Monte Carlo saw it in no session (or in all).
+// Bounds are rounded outwards. tag: the English words that say which.
+const pctUp = (v) => (v * 100 >= 0.01 ? (Math.ceil(v * 1e4 - 1e-9) / 100).toFixed(2) + '%' : upper2(v * 100) + '%');
+const pctDown = (v) => (Math.floor(v * 1e4 + 1e-9) / 100).toFixed(2) + '%';
+function sessText(p, { below = null, se = null, upper95, lower95 } = {}, sep = ' ± ') {
+  if (p === null || p === undefined) return { text: '< ' + pctUp(below), key: 'sessBelowFloor' };
+  if (typeof upper95 === 'number') return { text: '< ' + pctUp(upper95), key: 'sessNone95' };
+  if (typeof lower95 === 'number') return { text: '> ' + pctDown(lower95), key: 'sessAll95' };
+  return { text: smallPct(p) + (se !== undefined && se !== null ? sep + smallPct(se) : ''), key: null };
+}
+const aheadOf = (x, sep) => sessText(x.pAhead, { below: x.pAheadBelow, se: x.pAheadSe, upper95: x.pAheadUpper95, lower95: x.pAheadLower95 }, sep);
+
 function sessionSection(L, ss) {
-  const r = ss.result, bet = Number(ss.options.bet);
+  const r = ss.result, bet = betOf(ss.options);
   const money = (v) => (v > 0 ? '+' : '') + num(v * bet, 2);
-  const pm = (p, e) => smallPct(p) + (e !== undefined && e !== null ? ' ± ' + smallPct(e) : '');
   L.section('sessTitle');
   L.kv('modelHash', ss.modelSha256, { mono: true });
   L.kv('sessRounds', r.rounds.toLocaleString('en-US'));
   L.kv('sessBet', ss.options.bet);
   if (ss.options.budget) L.kv('sessBudgetShort', ss.options.budget);
-  L.kv('sessMethod', pair('sessMethod_' + r.method)[1]);
+  L.kv(null, pair('sessMethod_' + r.method)[1], { labels: pair('sessMethodRange') });
+  if (r.ruin) L.kv(null, pair('sessRuinMethod_' + r.ruin.method)[1], { labels: pair('sessMethodRuin') });
   if (r.sessions) {
     L.kv('seed', ss.options.seed, { mono: true });
     L.kv('sessSessions', r.sessions.toLocaleString('en-US'));
   }
   L.kv('sessExpectedLoss', `${num(r.expectedLoss.value * bet, 2)}   (${r.rounds.toLocaleString('en-US')} × ${ss.options.bet} × (1 − RTP))`, { color: C.fail });
   L.kv('sessMedian', money(r.median));
-  L.kv('sessAhead', `${pm(r.pAhead, r.pAheadSe)}` + (r.normal ? `   (${pair('sessNormal')[1]}: ${smallPct(r.normal.pAhead)})` : ''));
-  if (r.ruin) L.kv('sessRuin', `${pm(r.ruin.p, r.ruin.se)}   (${pair('sessRuinMethod_' + r.ruin.method)[1]})`);
+  const ahead = aheadOf(r);
+  L.kv('sessAhead', ahead.text + (r.normal ? `   (${pair('sessNormal')[1]}: ${smallPct(r.normal.pAhead)})` : ''));
+  if (ahead.key) L.note(ahead.key);
+  if (r.ruin) {
+    const ruin = sessText(r.ruin.p, r.ruin);
+    L.kv(null, ruin.text, { labels: pair('sessRuinShort') });
+    if (ruin.key) L.note(ruin.key);
+  }
   if (r.nStar) L.kv('sessNStar', r.nStar.rounds.toLocaleString('en-US'));
   if (r.nStar) L.note('sessNStarNote');
   L.table([{ key: 'sessPct', w: 0.5 }, { key: 'sessNet', w: 0.5, mono: true }], r.percentiles.map((p) => [pct(p.q, 0), money(p.net)]));
@@ -978,18 +1005,26 @@ function roundAscii(lines, r) {
     lines.push(`  Whole-round distribution (${head}${rd.caps ? '; caps ' + capsLine(rd.caps) : ''}): ${big}; ${top}`);
   }
   const c = t && t.maxWinCap;
-  if (c && c.cap) lines.push(`  Max-win cap ${c.cap.M}x per round: RTP ${pct(c.cap.rtpCapped.value, 4)} (the cap removes ${smallPct(c.cap.lost.value, 4)}); P(a round reaches the cap) ${roundProb(c.cap.reach)}`);
+  if (c && c.cap) {
+    // What the cap removes, with the upper bound the cells under the noise floor allow.
+    const k = c.cap;
+    const up = typeof k.lost.upper === 'number' && smallPct(k.lost.upper, 4) !== smallPct(k.lost.value, 4) ? ` to ${smallPct(k.lost.upper, 4)}` : '';
+    lines.push(`  Max-win cap ${k.M}x per round: RTP ${pct(k.rtpCapped.value, 4)} (the cap removes ${smallPct(k.lost.value, 4)}${up}${k.aboveMax ? '; the cap is above the top possible win' : ''}); P(a round reaches the cap) ${roundProb(k.reach)}`);
+  }
   if (c && c.oddsChecks && c.top) {
     const w = (p) => (p === true ? 'meets' : p === false ? 'does not meet' : 'undecided');
     lines.push(`  Top award ${c.top.x}x, P ${roundProb(c.top.prob)}: GLI-19 4.7.3 (1 in 100,000,000) ${w(c.top.checks.gli19.pass)}; Pennsylvania 461a.7 (50,000,000 to 1) ${w(c.top.checks.pa.pass)}. Rules unverified; not a regulatory finding.`);
   }
   const s = r.session;
   if (s) {
-    const bet = Number(s.options.bet);
-    const pm = (p, e) => smallPct(p) + (e !== null && e !== undefined ? ' +/- ' + smallPct(e) : '');
-    lines.push(`  Session funnel: ${s.rounds} rounds at ${s.options.bet}${s.options.budget ? `, budget ${s.options.budget}` : ''} (${s.method === 'fft' ? 'exact, FFT' : `seeded Monte Carlo, seed "${s.options.seed}"`}): expected loss ${num(s.expectedLossBets.value * bet, 2)}, median ${num(s.medianBets * bet, 2)}, P(finish ahead) ${pm(s.pAhead, s.pAheadSe)} (normal approximation ${s.normalApproximation ? smallPct(s.normalApproximation.pAhead) : '-'})`
-      + (s.ruin ? `, P(budget runs out) ${pm(s.ruin.p, s.ruin.se)} (${s.ruin.method === 'dp' ? 'exact DP' : `Monte Carlo, seed "${s.options.seed}"`})` : '')
-      + (s.nStar ? `, N* = ${s.nStar.rounds} (normal approximation, z = 1.645)` : '') + '. Describes cost, not advice.');
+    const bet = betOf(s.options);
+    const tag = { sessBelowFloor: ' (below the precision floor)', sessNone95: ' (no simulated session; 95% bound)', sessAll95: ' (every simulated session; 95% bound)' };
+    const say = (v) => v.text + (v.key ? tag[v.key] : '');
+    const mc = `seeded Monte Carlo, seed "${s.options.seed}"`;
+    const ruin = s.ruin && sessText(s.ruin.p, s.ruin, ' +/- ');
+    lines.push(`  Session funnel: ${s.rounds} rounds at ${s.options.bet}${s.options.budget ? `, budget ${s.options.budget}` : ''} (${s.method === 'fft' ? 'FFT, no simulation' : mc}): expected loss ${num(s.expectedLossBets.value * bet, 2)}, median ${num(s.medianBets * bet, 2)}, P(finish ahead) ${say(aheadOf(s, ' +/- '))} (normal approximation ${s.normalApproximation ? smallPct(s.normalApproximation.pAhead) : '-'})`
+      + (ruin ? `, P(budget runs out) ${say(ruin)} (${s.ruin.method === 'dp' ? 'DP over the bankroll, no simulation' : mc})` : '')
+      + (s.nStar ? `, N* = ${s.nStar.rounds} (normal approximation, z = 1.645)` : '') + '. Range and P(finish ahead) assume every round is played. Describes cost, not advice.');
   }
 }
 

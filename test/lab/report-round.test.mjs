@@ -16,7 +16,7 @@ import { buildManifest, LAB_VERSION } from '../../lab/core/manifest.js';
 import { normalizeModel, canonicalJson } from '../../lab/core/slot-model.js';
 import { analyzeExact } from '../../lab/core/slot-exact.js';
 import { Fraction } from '../../lab/core/fraction.js';
-import { attachRoundDistribution, capStats, topAwardChecks } from '../../lab/core/round-dist.js';
+import { attachRoundDistribution, capStats, topAward } from '../../lab/core/round-dist.js';
 import { sessionFunnel } from '../../lab/core/session.js';
 import { prngFromSeed } from '../../lab/core/prng.js';
 
@@ -44,7 +44,7 @@ async function rouletteSession({ forceMonteCarlo = false } = {}) {
   const result = attachRoundDistribution(analyzeExact(model, { onEntries: (e) => { spins = e; } }), model, spins);
   const bytes = enc.encode(canonicalJson(raw));
   const cap = capStats(result.round, '1', result.rtp.fraction);
-  const th = { inputId: 'model', modelSha256: sha(bytes), result, raw, cap: { M: '1', odds: true, result: { cap, top: { x: cap.M, prob: cap.reach, checks: topAwardChecks(cap.reach) } } } };
+  const th = { inputId: 'model', modelSha256: sha(bytes), result, raw, cap: { M: '1', odds: true, result: { cap, top: topAward(result.round, cap) } } };
   const s = sessionFunnel(result.round.pmf, { rounds: 1000, budget: '50', rtp: result.rtp.fraction, sd: result.distribution.sd, seed: 'report-round', rng: await prngFromSeed('report-round'), forceMonteCarlo });
   return {
     meta: { title: 'Round distribution', auditor: 'test', notes: '' },
@@ -113,6 +113,71 @@ test('signed report with the round distribution and the session verifies; the Ve
     .map((m) => m[1].replace(/\\(.)/g, '$1')).join(' ').replace(/\s+/g, ' ');
   assert.match(pdfText, /Whole-round distribution \(exact fractions\)/);
   assert.match(pdfText, /Max-win cap 1x per round: RTP 48\.6486%/); // 18/37
-  assert.match(pdfText, /Session funnel: 1000 rounds at 2, budget 100 \(exact, FFT\): expected loss 54\.05/); // 2 * 1000/37
+  assert.match(pdfText, /Session funnel: 1000 rounds at 2, budget 100 \(FFT, no simulation\): expected loss 54\.05/); // 2 * 1000/37
   assert.match(pdfText, /Rules unverified; not a regulatory finding/);
+});
+
+// Review fixes: a PDF built with a recording canvas, so the drawn text can be read.
+function recordingCanvas(texts) {
+  return (w, h) => {
+    const c = stubCanvas(w, h);
+    const ctx = c.getContext();
+    return { ...c, getContext: () => ({ ...ctx, fillText: (s) => texts.push(String(s)) }) };
+  };
+}
+const textPage = (bytes) => [...Buffer.from(bytes).toString('latin1').matchAll(/\(((?:\\.|[^\\)])*)\) Tj/g)]
+  .map((m) => m[1].replace(/\\(.)/g, '$1')).join(' ').replace(/\s+/g, ' ');
+
+test('report: a decimal-comma bet, a cap above the top win, and session bounds read correctly', async () => {
+  const session = await rouletteSession();
+  const th = session.results.theoretical, x = th.result;
+  // A cap of 5x is above roulette's top win (2x): it removes nothing (by hand), and
+  // the top award for the odds rules stays 2x with P = 18/37, which meets both.
+  const cap = capStats(x.round, '5', x.rtp.fraction);
+  th.cap = { M: '5', odds: true, result: { cap, top: topAward(x.round, cap) } };
+  // A bet typed with a decimal comma by an older version ("0,5"): every money figure
+  // still reads it as 0.5 (expected loss 0.5 x 1000/37 = 13.51).
+  session.results.session.options.bet = '0,5';
+  const texts = [];
+  const r = await buildReport(session, { createCanvas: recordingCanvas(texts), signer: null, now: new Date('2026-11-04T09:00:00Z') });
+  const page = textPage(r.bytes);
+  // Median -28 bets x 0.5; P(ahead) does not depend on the bet: 18.76% (binomial).
+  assert.match(page, /expected loss 13\.51, median -14, P\(finish ahead\) 18\.76%/);
+  assert.match(page, /Max-win cap 5x per round: RTP 97\.2973% \(the cap removes 0%; the cap is above the top possible win\); P\(a round reaches the cap\) 0/);
+  assert.match(page, /Top award 2x, P 48\.649%: GLI-19 4\.7\.3 \(1 in 100,000,000\) meets; Pennsylvania 461a\.7 \(50,000,000 to 1\) meets/);
+  assert.ok(!texts.some((s) => /NaN/.test(s)), 'no NaN on the pages');
+  assert.ok(texts.includes('13.51   (1,000 × 0,5 × (1 − RTP))'), 'expected loss on the session page');
+});
+
+test('report: FFT round figures use short labels, state the cap\'s upper bound and session bounds', async () => {
+  const dg = JSON.parse(fs.readFileSync(new URL('../../lab/samples/desert-gold.json', import.meta.url), 'utf8'));
+  const model = normalizeModel(dg);
+  let spins = null;
+  const result = attachRoundDistribution(analyzeExact(model, { onEntries: (e) => { spins = e; } }), model, spins);
+  const bytes = enc.encode(canonicalJson(dg));
+  const cap = capStats(result.round, '500', result.rtp.fraction);
+  assert.ok(cap.lost.upper > cap.lost.value);
+  const th = { inputId: 'model', modelSha256: sha(bytes), result, raw: dg, cap: { M: '500', odds: false, result: { cap, top: topAward(result.round, cap) } } };
+  // A session whose P(finish ahead) is under the precision floor: European roulette is
+  // not needed; a stored result with pAhead null and its bound stands for one.
+  const s = sessionFunnel(result.round.pmf, { rounds: 100, budget: '97', rtp: result.rtp.fraction, sd: result.distribution.sd });
+  assert.strictEqual(s.ruin.p, null);
+  const session = {
+    meta: { title: 'DG', auditor: 'test', notes: '' },
+    inputs: [{ id: 'model', name: 'dg.json', kind: 'model', size: bytes.length, sha256: sha(bytes), bytes, mime: 'application/json' }],
+    results: { theoretical: th, session: { inputId: 'model', modelSha256: th.modelSha256, options: { rounds: 100, bet: '1', budget: '97', budgetInBets: '97', seed: 's' }, result: s } },
+  };
+  const p = JSON.parse(canonicalJson(reportPayload({ ...session, signer: null }, '2026-11-04T00:00:00Z')));
+  assert.ok(!('tailSums' in p.results.theoretical.roundDistribution), 'the transform tail is not copied');
+  assert.strictEqual(p.results.session.ruin.p, null);
+  const texts = [];
+  const r = await buildReport(session, { createCanvas: recordingCanvas(texts), signer: null, now: new Date('2026-11-04T09:00:00Z') });
+  // The long label ran into its value; the short one does not (the gap, the bound on
+  // the wrapped mass and the ruin chance).
+  assert.ok(texts.includes('Gap from the closed forms') && !texts.some((t) => /Largest relative gap/.test(t)));
+  assert.ok(texts.includes('Wrapped-mass bound') && texts.includes('Chance the budget runs out'));
+  const page = textPage(r.bytes);
+  // What the cap removes, up to its bound (the UI and the PDF show the same range).
+  assert.match(page, /\(the cap removes \d\.\d\de-\d+% to \d\.\d\de-\d+%\)/);
+  assert.match(page, /P\(budget runs out\) < \d\.\de-\d+% \(below the precision floor\) \(DP over the bankroll, no simulation\)/);
 });

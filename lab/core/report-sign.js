@@ -102,6 +102,16 @@ async function pdfUnchanged(bytes, sigFile, s, reportSha256) {
 
 const pct = (v) => (typeof v === 'number' ? (v * 100).toFixed(4) + '%' : '—');
 
+// An upper bound as a percentage, rounded up to two significant digits.
+function upperPct(v) {
+  const x = v * 100;
+  if (!(x > 0)) return '0%';
+  let e = Math.floor(Math.log10(x));
+  let m = Math.ceil(x / 10 ** (e - 1) - 1e-9);
+  if (m >= 100) { m = 10; e += 1; }
+  return (m / 10).toFixed(1) + 'e' + e + '%';
+}
+
 // "1 in N" of a probability { value, method, below } (a bound gives "> N").
 function oneInOf(p) {
   const count = (n) => (n >= 1e9 ? n.toExponential(2) : Math.round(n).toLocaleString('en-US'));
@@ -128,7 +138,15 @@ function figures(report) {
   // Whole-round distribution (P0-8): the top win and how often it happens; the session funnel.
   const rd = r.theoretical && r.theoretical.roundDistribution;
   if (rd && rd.maxWin) out.push({ section: 'round', value: rd.maxWin.bounded ? rd.maxWin.x + '×' : '∞', oneIn: rd.maxWin.bounded ? oneInOf(rd.maxWin) : null });
-  if (r.session && typeof r.session.pAhead === 'number') out.push({ section: 'session', value: pct(r.session.pAhead), rounds: r.session.rounds ?? null });
+  // A probability under the precision floor (pAhead null) is stated by its bound; a
+  // Monte Carlo count of 0 by its 95% bound.
+  if (r.session) {
+    const s = r.session;
+    const value = typeof s.pAheadBelow === 'number' && s.pAhead === null ? '< ' + upperPct(s.pAheadBelow)
+      : typeof s.pAheadUpper95 === 'number' ? '< ' + upperPct(s.pAheadUpper95) + ' (95%)'
+        : typeof s.pAhead === 'number' ? pct(s.pAhead) : null;
+    if (value) out.push({ section: 'session', value, rounds: s.rounds ?? null });
+  }
   return out;
 }
 

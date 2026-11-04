@@ -265,3 +265,6 @@ td.warn { color: var(--amber); font-weight: 700; }
 .fkey i.f50 { background: rgba(167, 139, 250, 0.32); }
 .fkey i.fmedian { height: 2px; background: var(--primary-2); }
 .fkey i.fmean { height: 0; border-top: 2px dashed var(--amber); }
+/* The odds rules wrap, so the verdict column stays on screen on a phone. */
+#round-odds td:first-child { white-space: normal; min-width: 14ch; }
+#round-odds td:last-child { width: 1%; }

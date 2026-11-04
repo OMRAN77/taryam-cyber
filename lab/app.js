@@ -338,12 +338,16 @@ function renderRoundCap() {
   const res = c.result;
   if (res.cap) {
     const k = res.cap;
+    // An exact result has no upper bound on what the cap removes.
+    const upTo = typeof k.lost.upper === 'number' && pctSmall(k.lost.upper, 4) !== pctSmall(k.lost.value, 4) ? `${tr('roundUpTo')} ${pctSmall(k.lost.upper, 4)}` : null;
     box.append(cards([
+      { k: 'roundCapM', v: iso(fmt(k.M, 4) + '×') },
       { k: 'roundCapped', v: (k.rtpCapped.value * 100).toFixed(4) + '%', title: k.rtpCapped.fraction, cls: 'accent' },
-      { k: 'roundLost', v: pctSmall(k.lost.value, 4), s: pctSmall(k.lost.upper, 4) !== pctSmall(k.lost.value, 4) ? `${tr('roundUpTo')} ${pctSmall(k.lost.upper, 4)}` : null },
+      { k: 'roundLost', v: pctSmall(k.lost.value, 4), s: upTo },
       { k: 'roundReach', v: probText(k.reach), s: `${tr('roundOneInCol')}: ${oneInText(k.reach)}` },
     ]));
     box.firstChild.id = 'round-cap-cards';
+    if (k.aboveMax) box.append(el('p', { class: 'muted small', id: 'round-cap-above' }, tr('roundCapAboveMax')));
     box.append(el('p', { class: 'muted small' }, tr('roundCapNote')));
   }
   if (!c.odds) return;
@@ -360,10 +364,26 @@ async function runRoundCap() {
     const th = session.results.theoretical;
     if (!th || !th.result.round) throw { ar: t('roundNeedRun', 'ar'), en: t('roundNeedRun', 'en') };
     const cap = $('#r-cap').value.trim();
+    // The previous cap's figures go now: next to an error they would belong to another M
+    // (and would stay in the report).
+    th.cap = null;
+    renderRoundCap();
     const result = await runTask('roundCap', { round: th.result.round, cap: cap || null, rtp: th.result.rtp.fraction });
     th.cap = { M: cap || null, odds: $('#r-odds').checked, result };
     renderRoundCap();
   });
+}
+
+// A session probability: the value (± its standard error), "< bound" when it is under
+// the precision floor, or a 95% bound when Monte Carlo saw it in no session (or in all),
+// with a note saying which. Bounds are rounded outwards.
+const pctUp = (v) => (v * 100 >= 0.01 ? (Math.ceil(v * 1e4 - 1e-9) / 100).toFixed(2) + '%' : upper2(v * 100) + '%');
+const pctDown = (v) => (Math.floor(v * 1e4 + 1e-9) / 100).toFixed(2) + '%';
+function sessProb(p, { below = null, se = null, upper95, lower95 } = {}) {
+  if (p === null || p === undefined) return { v: '< ' + pctUp(below), note: tr('sessBelowFloor') };
+  if (typeof upper95 === 'number') return { v: '< ' + pctUp(upper95), note: tr('sessNone95') };
+  if (typeof lower95 === 'number') return { v: '> ' + pctDown(lower95), note: tr('sessAll95') };
+  return { v: pctSmall(p) + (se !== undefined && se !== null ? ' ± ' + pctSmall(se) : ''), note: null };
 }
 
 const readPositive = (text) => {
@@ -388,7 +408,10 @@ async function runSession() {
     }
     const seed = $('#s-seed').value;
     const result = await runTask('session', { pmf: th.result.round.pmf, rtp: th.result.rtp.fraction, sd: th.result.distribution.sd, rounds, budget, seed }, progress);
-    session.results.session = { inputId: 'model', modelSha256: th.modelSha256, options: { rounds, bet: betText, budget: budgetText || null, budgetInBets: budget, seed }, result };
+    // The bet and budget as read (a decimal comma becomes a point), so every figure,
+    // the report and report.json use the same numbers.
+    const asRead = (s) => s.replace(',', '.');
+    session.results.session = { inputId: 'model', modelSha256: th.modelSha256, options: { rounds, bet: asRead(betText), budget: budgetText ? asRead(budgetText) : null, budgetInBets: budget, seed }, result };
     renderSession();
     renderReportSections();
   });
@@ -426,19 +449,22 @@ function renderSession() {
   if (!th.result.round) { box.append(el('div', { class: 'verdict warn' }, tr('sessNoRound'))); return; }
   const s = session.results.session;
   if (!s) return;
-  const r = s.result, bet = Number(s.options.bet);
+  const r = s.result, bet = Number(String(s.options.bet).replace(',', '.'));
   const money = (v) => iso((v > 0 ? '+' : '') + fmt(v * bet, 2)); // a sign stays in front in Arabic text
-  const pm = (p, e) => pctSmall(p) + (e !== undefined && e !== null ? ' ± ' + pctSmall(e) : '');
+  const ahead = sessProb(r.pAhead, { below: r.pAheadBelow, se: r.pAheadSe, upper95: r.pAheadUpper95, lower95: r.pAheadLower95 });
+  const ruin = r.ruin && sessProb(r.ruin.p, r.ruin);
   box.append(cards([
     { k: 'sessExpectedLoss', v: fmt(r.expectedLoss.value * bet, 2), s: iso(`${r.rounds.toLocaleString('en-US')} × ${s.options.bet} × (1 − ${th.result.rtp.percent}%)`), cls: 'bad' },
     { k: 'sessMedian', v: money(r.median), cls: r.median < 0 ? 'bad' : '' },
-    { k: 'sessAhead', v: pm(r.pAhead, r.pAheadSe), s: r.normal ? `${tr('sessNormal')}: ${pctSmall(r.normal.pAhead)}` : null },
-    r.ruin && { k: 'sessRuin', v: pm(r.ruin.p, r.ruin.se), s: tr('sessRuinMethod_' + r.ruin.method) },
+    { k: 'sessAhead', v: ahead.v, s: [ahead.note, r.normal ? `${tr('sessNormal')}: ${pctSmall(r.normal.pAhead)}` : null].filter(Boolean).join(' · ') || null },
+    r.ruin && { k: 'sessRuin', v: ruin.v, s: [ruin.note, tr('sessRuinMethod_' + r.ruin.method)].filter(Boolean).join(' · ') },
     r.nStar && { k: 'sessNStar', v: r.nStar.rounds.toLocaleString('en-US'), s: tr('sessNStarNote') },
   ]));
   box.firstChild.id = 'sess-cards';
-  box.append(el('p', { class: 'muted small', id: 'sess-method' }, `${tr('sessMethod')}: ${tr('sessMethod_' + r.method)}`
-    + (r.sessions ? ` · ${tr('sessSessions')}: ${r.sessions.toLocaleString('en-US')} · ${tr('seed')}: ${s.options.seed}` : '')
+  // One statement per method: the range (and the chance to finish ahead), then the budget.
+  const mc = r.sessions ? ` (${tr('sessSessions')}: ${r.sessions.toLocaleString('en-US')} · ${tr('seed')}: ${s.options.seed})` : '';
+  box.append(el('p', { class: 'muted small', id: 'sess-method' }, `${tr('sessMethodRange')}: ${tr('sessMethod_' + r.method)}` + (r.method === 'mc' ? mc : '')
+    + (r.ruin ? ` · ${tr('sessMethodRuin')}: ${tr('sessRuinMethod_' + r.ruin.method)}` + (r.ruin.method === 'mc' && r.method !== 'mc' ? mc : '') : '')
     + (r.droppedMass > 0 ? ` · ${tr('sessDropped')}: ${upper2(r.droppedMass)}` : '')));
   const tb = table(['sessPct', 'sessNet'], r.percentiles.map((p) => [{ v: pct(p.q, 0), cls: 'num' }, { v: money(p.net), cls: 'num' }]));
   tb.id = 'sess-percentiles';
@@ -601,7 +627,7 @@ const rounds = (v) => (v === null || v === undefined ? '—' : !Number.isFinite(
 const times = (x) => fmt(x, 4) + '×';
 function binLabel(b) {
   const range = b.lo === null ? null : b.lo === b.hi ? times(b.lo) : `${fmt(b.lo, 4)} – ${times(b.hi)}`;
-  return [range, b.triggered ? tr('distTriggered') : null].filter(Boolean).join(' + ');
+  return [range, b.triggered ? tr('distTriggered') : null, b.rest ? tr('distRestCell') : null].filter(Boolean).join(' + ');
 }
 // Minimum detectable effect as a card: "±0.60%", "w = 0.0089 · relative change in
 // the share of rounds with no win · at Holm's strictest level (α ÷ m): 0.001667".

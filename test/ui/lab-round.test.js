@@ -41,6 +41,7 @@ test('RTP lab: whole-round distribution, max-win cap, session funnel and free-sp
   page.setDefaultTimeout(180000);
   const errors = [], requests = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   ctx.on('request', (r) => requests.push({ method: r.method(), url: r.url() }));
   await page.goto(server.url + '/lab/index.html');
 
@@ -88,8 +89,44 @@ test('RTP lab: whole-round distribution, max-win cap, session funnel and free-sp
   assert.strictEqual(b.median, -28);
   const pcts = await rowsOf('#sess-percentiles');
   assert.deepStrictEqual(pcts.map((r) => r[1]), ['-160', '-96', '-56', '-12', '+48']); // 2 x (-80, -48, -28, -6, +24)
-  assert.match(await page.textContent('#sess-method'), /دقيق بتحويل فورييه/);
+  assert.match(await page.textContent('#sess-method'), /بتحويل فورييه، دون محاكاة/);
   assert.ok(await page.$('#sess-funnel polygon.f90'), 'funnel chart');
+
+  // ---- review fixes (roulette, numbers by hand) ----
+  // The exact 1x cap card has no "up to" (an exact value has no upper bound) and names M.
+  assert.ok(!capText.includes('حتى'), capText);
+  assert.match(capText, /السقف M/);
+  // A cap of 5x is above the top win (2x): it removes nothing, and the top award for
+  // the odds rules stays 2x with P = 18/37, which meets both.
+  await page.fill('#r-cap', '5');
+  await page.click('#run-round');
+  await page.waitForSelector('#round-cap-above');
+  assert.deepStrictEqual((await rowsOf('#round-odds')).map((r) => r[1]), ['يستوفي', 'يستوفي']);
+  assert.match(await page.textContent('#res-roundcap'), /2×/);
+  // An invalid cap: the error, and no figures of the previous cap beside it.
+  await page.fill('#r-cap', '1/2');
+  await page.click('#run-round');
+  await page.waitForFunction(() => !document.querySelector('#err-round').hidden);
+  assert.strictEqual(await page.$('#round-cap-cards'), null, 'the previous cap is gone');
+  await page.fill('#r-cap', '1');
+  await page.click('#run-round');
+  await page.waitForSelector('#round-cap-cards');
+  // A decimal-comma bet: 0,5 x 1000 x (1 - 36/37) = 13.51; no "—" and no NaN in the chart.
+  await page.fill('#s-bet', '0,5');
+  await page.click('#run-session');
+  await page.waitForFunction(() => /13\.51/.test(document.querySelector('#sess-cards')?.textContent || ''));
+  assert.ok(!(await page.textContent('#res-session')).includes('—'), 'every money figure is a number');
+  assert.deepStrictEqual((await rowsOf('#sess-percentiles')).map((r) => r[1]), ['-40', '-24', '-14', '-3', '+12']); // 0.5 x (-80, -48, -28, -6, +24)
+  assert.ok(!(await page.$eval('#sess-funnel', (s) => s.innerHTML.includes('NaN'))));
+  // Phone width: the odds verdict column is on screen without scrolling the table.
+  await page.check('#r-odds');
+  await page.click('#run-round');
+  await page.waitForSelector('#round-odds');
+  await page.setViewportSize({ width: 390, height: 900 });
+  const verdictRight = await page.$eval('#round-odds tbody tr td:last-child', (td) => { const r = td.getBoundingClientRect(); return [r.left, r.right]; });
+  assert.ok(verdictRight[0] >= 0 && verdictRight[1] <= 390, 'verdict cell inside the screen: ' + verdictRight);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.fill('#s-bet', '2');
 
   // ---- Desert Gold: free spins with retrigger (FFT) ----
   await page.click('[data-sample="desertGold"]');
