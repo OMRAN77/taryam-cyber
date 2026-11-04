@@ -82,6 +82,8 @@ test('security operations home: shown on an empty chat, its tiles open the match
   await page.goto(server.url + '/');
   await page.click('#btnGuestMode');
   assert.ok(await page.isVisible('#socHome'), 'SOC home hidden on an empty chat');
+  assert.strictEqual(await page.$eval('#socHome', (e) => getComputedStyle(e).flexDirection), 'column', 'SOC home stacks its sections');
+  assert.ok(!(await page.isVisible('#chatHint')), 'the desktop hint does not overlap the phone SOC home');
   assert.strictEqual(await page.$$eval('#socHome [data-soc-tool]', (b) => b.length), 8);
   assert.strictEqual(await page.textContent('#sysChipText'), 'ONLINE');
   await page.click('#socHome [data-soc-tool="jwt"]');
