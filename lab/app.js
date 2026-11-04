@@ -4,7 +4,7 @@
 import { t, pair, getLang, setLang, NIST_NAMES, VOLATILITY, VERDICT } from './i18n.js';
 import { modelFromForm, formFromModel, applyCsv, parseModelJson, normalizeModel, canonicalJson } from './core/slot-model.js';
 import { sha256Hex } from './core/fair.js';
-import { buildReport } from './report.js';
+import { buildReport, pfIssueDetail } from './report.js';
 import * as samples from './samples.js';
 
 const $ = (s) => document.querySelector(s);
@@ -116,6 +116,7 @@ function selectTab(name) {
   document.querySelectorAll('[role="tabpanel"]').forEach((p) => { p.hidden = p.id !== 'panel-' + name; });
   if (name === 'report') renderReportSections();
   if (name === 'mc') renderMcModel();
+  if (name === 'fair') loadPfAdapters();
 }
 const fileNames = {};
 function applyLang() {
@@ -349,12 +350,14 @@ function syncFairFields() {
   $('#hmacFields').hidden = chain;
   $('#chainFields').hidden = !chain;
   $('#sample-fair').textContent = tr(chain ? 'sampleChain' : 'sampleFair');
+  syncPfFields();
 }
 
 async function runFair() {
   await withTask('fair', async (progress) => {
     const input = session.inputs.get('fair');
     if (!input) throw { ar: tr('noFile'), en: t('noFile', 'en') };
+    if (pfMode()) { await runPf(input, progress); return; }
     const scheme = $('#p-scheme').value, options = fairOptions();
     const t0 = performance.now();
     const result = await runTask('fair', { bytes: input.bytes, scheme, options }, progress);
@@ -368,6 +371,7 @@ function renderFair() {
   box.replaceChildren();
   const fr = session.results.fair;
   if (!fr) return;
+  if (fr.mode === 'adapter') { renderPfResult(box, fr); return; }
   const f = fr.result;
   const secs = (fr.ms / 1000).toFixed(2) + ' ' + tr('seconds');
   if (fr.scheme === 'chain') {
@@ -385,6 +389,175 @@ function renderFair() {
   box.append(el('div', { class: 'verdict ' + (f.ok ? 'pass' : 'fail') }, tr(f.ok ? 'allVerified' : 'someFailed')));
   const bad = [...f.commitmentFailures.map((m) => [{ v: m.line, cls: 'num' }, 'SHA-256 ≠', { v: m.claimed, cls: 'mono' }]), ...f.mismatches.map((m) => [{ v: m.line, cls: 'num' }, { v: String(m.expected), cls: 'mono' }, { v: m.claimed, cls: 'mono' }]), ...f.invalid.map((m) => [{ v: m.line, cls: 'num' }, m.reason, ''])];
   if (bad.length) box.append(sub('mismatches'), table(['line', 'expected', 'claimed'], bad.slice(0, 100)));
+}
+
+// ---------- provably fair v2: operator adapters and batch audit ----------
+// Adapter metadata (with the Worker's self-test results) is loaded the first time
+// the tab opens; "custom" keeps the generic HMAC-template / hash-chain mode above.
+let pfAdapters = null, pfLoading = null;
+const pfMode = () => $('#p-adapter').value !== 'custom';
+const pfIds = () => [...new Set((pfAdapters || []).map((a) => a.id))];
+function loadPfAdapters() {
+  if (pfAdapters || pfLoading) return pfLoading;
+  pfLoading = runTask('pfInfo', {}).then((info) => { pfAdapters = info.adapters; syncPfFields(); }, (e) => { pfLoading = null; showError('fair', e); });
+  return pfLoading;
+}
+function currentPf() {
+  if (!pfAdapters || !pfMode()) return null;
+  const id = $('#p-adapter').value, version = $('#p-version').value;
+  return pfAdapters.find((a) => a.id === id && a.version === version) || pfAdapters.find((a) => a.id === id) || null;
+}
+function fillSelect(sel, items) {
+  const prev = sel.value;
+  sel.replaceChildren(...items.map(([value, text]) => el('option', { value }, text)));
+  if (items.some(([v]) => v === prev)) sel.value = prev;
+}
+function syncPfFields() {
+  const sel = $('#p-adapter');
+  if (pfAdapters) {
+    const prev = sel.value;
+    sel.replaceChildren(el('option', { value: 'custom' }, tr('pfCustom')), ...pfIds().map((id) => {
+      const versions = pfAdapters.filter((a) => a.id === id);
+      const off = versions.every((x) => x.selfTest && !x.selfTest.ok);
+      return el('option', { value: id }, `${pick(versions[0].name)} · ${tr('pfEv_' + versions[0].evidence)}${off ? ' · ' + tr('pfDisabled') : ''}`);
+    }));
+    sel.value = [...sel.options].some((o) => o.value === prev) ? prev : 'custom';
+  }
+  const on = pfMode();
+  $('#customFields').hidden = on;
+  $('#pfFields').hidden = !on;
+  $('#pfInfo').hidden = !on;
+  $('#pfVersionLabel').hidden = true;
+  if (!on) return;
+  $('#sample-fair').textContent = tr('pfSample');
+  if (!pfAdapters) return;
+  const versions = pfAdapters.filter((a) => a.id === sel.value);
+  fillSelect($('#p-version'), versions.map((a) => [a.version, `${a.version} · ${tr('pfEv_' + a.evidence)}`]));
+  $('#pfVersionLabel').hidden = versions.length < 2;
+  const a = currentPf();
+  const games = Object.keys(a.games || {});
+  fillSelect($('#p-game'), games.map((g) => [g, g]));
+  if (!games.includes($('#p-game').value) && a.defaultGame) $('#p-game').value = a.defaultGame;
+  $('#pfGameLabel').hidden = games.length < 2;
+  $('#pfLimboLabel').hidden = !games.includes('limbo');
+  $('#pfTilesLabel').hidden = !games.includes('mines');
+  $('#pfEraLabel').hidden = !a.eraOption;
+  if (a.eraOption) fillSelect($('#p-era'), a.eraOption.map((e) => [e, e]));
+  $('#pfExactLabel').hidden = a.kind === 'chain';
+  $('#pfChainFields').hidden = a.kind !== 'chain';
+  renderPfInfo(a);
+}
+const evBadge = (ev) => el('span', { class: 'ev ev-' + ev }, tr('pfEv_' + ev));
+function renderPfInfo(a) {
+  const box = $('#pfInfo');
+  box.replaceChildren();
+  if (!a) return;
+  const game = a.games && a.games[$('#p-game').value];
+  const enc = a.kind === 'chain' ? (a.link === 'era' ? 'pfLinkEra' : a.link === 'raw' ? 'pfLinkRaw' : 'pfLinkHex') : a.keyEncoding === 'hex' ? 'pfKeyHex' : a.keyEncoding === 'text' ? 'pfKeyText' : null;
+  box.append(
+    el('div', { class: 'pf-head' }, el('strong', {}, `${pick(a.name)} · ${a.version}`), evBadge(a.evidence)),
+    el('p', { class: 'muted small' }, tr('pfEvNote_' + a.evidence)),
+    game && game.formula ? el('div', { class: 'small' }, tr('pfFormula') + ': ', el('span', { class: 'formula' }, game.formula)) : null,
+    enc ? el('div', { class: 'small muted' }, tr(enc)) : null,
+    el('div', { class: 'small muted pf-src' }, tr('pfSource') + ': ', el('a', { href: a.sourceUrl, target: '_blank', rel: 'noopener noreferrer' }, a.sourceUrl), ' · ' + tr('pfCaptureDate') + ': ' + a.captureDate),
+    el('p', { class: 'small' }, pick(a.notes)),
+  );
+  const st = a.selfTest;
+  if (st && st.ok) box.append(el('div', { class: 'small pf-selftest' }, `${tr('pfSelfTest')}: ${tr('pfSelfTestPassed')} ${st.passed} / ${st.total}`));
+  else if (st) box.append(el('div', { class: 'verdict fail pf-selftest' }, `${tr('pfDisabled')} (${st.passed} / ${st.total}): ${st.failures.map((f) => f.name).join('; ')}`), el('p', { class: 'muted small' }, tr('pfDisabledNote')));
+}
+
+function pfOptions() {
+  let paytable = null;
+  const pt = $('#p-paytable').value.trim();
+  if (pt) { try { paytable = JSON.parse(pt); } catch (e) { throw { ar: t('pfPaytableInvalid', 'ar'), en: t('pfPaytableInvalid', 'en') }; } }
+  return {
+    game: $('#p-game').value || null, limboFormula: $('#p-limbo').value, tileBase: Number($('#p-tiles').value),
+    era: $('#pfEraLabel').hidden ? null : $('#p-era').value, exactSeeds: $('#p-exact').checked,
+    walkTerminating: $('#p-walk').checked, terminating: $('#p-terminating').value.trim() || null, paytable,
+  };
+}
+
+async function runPf(input, progress) {
+  await loadPfAdapters();
+  const a = currentPf();
+  if (!a) throw { ar: t('pfLoadFailed', 'ar'), en: t('pfLoadFailed', 'en') };
+  if (a.selfTest && !a.selfTest.ok) throw { ar: t('pfDisabledNote', 'ar'), en: t('pfDisabledNote', 'en') };
+  const options = pfOptions();
+  const t0 = performance.now();
+  const result = await runTask('pfAudit', { bytes: input.bytes, key: a.key, options }, progress);
+  session.results.fair = { mode: 'adapter', inputId: 'fair', adapter: a, options, result, ms: performance.now() - t0 };
+  renderFair();
+}
+
+async function samplePf() {
+  await loadPfAdapters();
+  const a = currentPf();
+  if (!a) throw { ar: t('pfLoadFailed', 'ar'), en: t('pfLoadFailed', 'en') };
+  const s = await runTask('pfSample', { key: a.key, rounds: a.kind === 'chain' ? 300 : 600, plant: $('#p-plant').checked });
+  await registerInput('fair', s.name, 'csv', s.bytes, 'text/csv');
+  fileNames.fair = s.name + ' · ' + s.bytes.length.toLocaleString('en-US') + ' ' + tr('bytes');
+  $('#name-fair').textContent = fileNames.fair;
+  $('#p-paytable').value = s.options.paytable ? JSON.stringify(s.options.paytable) : '';
+  $('#p-walk').checked = !!s.options.walkTerminating;
+}
+
+const PF_VERDICT_CLASS = { PASS: 'pass', CONDITIONAL: 'warn', FAIL: 'fail', INCONCLUSIVE: 'warn', NOTHING_CHECKED: 'warn' };
+const SEV_ORDER = { fail: 0, warn: 1, info: 2 };
+const SEV_CLASS = { fail: 'fail', warn: 'warn', info: 'na' };
+const sumCounts = (counts, codes) => Object.entries(counts).filter(([c]) => codes.includes(c)).reduce((s, [, n]) => s + n, 0);
+function renderPfResult(box, fr) {
+  const r = fr.result, a = fr.adapter, v = r.verdict;
+  const secs = (fr.ms / 1000).toFixed(2) + ' ' + tr('seconds');
+  const checked = r.counts.ok + r.counts.mismatch;
+  const okEpochs = r.epochs.filter((e) => e.commitment === 'ok').length;
+  const fails = sumCounts(r.issueCounts, v.fails), warns = sumCounts(r.issueCounts, v.warns);
+  const n = (x) => x.toLocaleString('en-US');
+  box.append(el('div', { class: 'verdict ' + PF_VERDICT_CLASS[v.code], id: 'pf-verdict', 'data-code': v.code }, `${tr('pfVerdict')}: ${tr('pfV_' + v.code)} · ${tr('pfVerdictCode')} ${v.exit}`));
+  const term = r.chain && r.chain.terminating;
+  box.append(cards([
+    { k: 'roundsChecked', v: n(r.rows), s: tr('verifyEnd') + ' ' + secs },
+    { k: 'pfMatched', v: `${n(r.counts.ok)} / ${n(checked)}`, cls: r.counts.mismatch ? 'bad' : checked ? 'good' : '' },
+    r.counts.notChecked ? { k: 'pfNotChecked', v: n(r.counts.notChecked) } : null,
+    r.counts.computed ? { k: 'pfComputedOnly', v: n(r.counts.computed) } : null,
+    r.epochs.length ? { k: 'pfEpochs', v: `${okEpochs} / ${r.epochs.length}`, cls: r.epochs.some((e) => e.commitment === 'mismatch') ? 'bad' : '' } : null,
+    r.payout.checked ? { k: 'pfPayouts', v: `${n(r.payout.ok)} / ${n(r.payout.checked)}`, cls: r.payout.mismatch ? 'bad' : 'good' } : null,
+    r.chain ? { k: 'pfChainLinks', v: n(r.chain.linksChecked), s: `${tr('pfChainBreaks')}: ${r.chain.breaks} · ${tr('pfLinksWalked')}: ${n(r.chain.linksWalked)}`, cls: r.chain.breaks ? 'bad' : '' } : null,
+    term ? { k: 'pfTerminatingRes', v: term.status === 'ok' ? '✓' : '✗', s: term.links !== null && term.links !== undefined ? `${tr('pfLinksWalked')}: ${n(term.links)}` : null, cls: term.status === 'ok' ? 'good' : 'bad' } : null,
+    { k: 'pfEvidence', v: tr('pfEv_' + r.adapter.evidence), s: `${a.id}@${a.version}` },
+    { k: 'pfProblems', v: String(fails), cls: fails ? 'bad' : 'good' },
+    { k: 'pfToReview', v: String(warns) },
+  ]));
+  if (term) box.append(el('div', { class: 'verdict ' + (term.status === 'ok' ? 'pass' : term.status === 'mismatch' ? 'fail' : 'warn'), id: 'pf-terminating' }, tr(term.status === 'ok' ? 'pfTerm_ok' : term.status === 'mismatch' ? 'pfTerm_mismatch' : term.status === 'no-target' ? 'pfTerm_noTarget' : 'pfTerm_notReached')));
+  box.append(el('p', { class: 'muted small' }, tr('pfVerdictNote')));
+  const issues = r.issues.slice().sort((x, y) => SEV_ORDER[x.severity] - SEV_ORDER[y.severity]);
+  if (issues.length) {
+    box.append(sub('pfIssuesTable'), table(['pfSeverity', 'pfDescription', 'line', 'expected', 'claimed', ''], issues.slice(0, 100).map((i) => [
+      { v: tr('pfSev_' + i.severity), cls: SEV_CLASS[i.severity] }, tr('pfI_' + i.code),
+      { v: i.line ?? (i.lines ? i.lines.slice(0, 4).join(' · ') : ''), cls: 'num' },
+      { v: i.expected ?? '', cls: 'mono' }, { v: i.claimed ?? '', cls: 'mono' }, { v: pfIssueDetail(i), cls: 'mono' },
+    ])));
+    box.lastChild.id = 'pf-issues';
+  }
+  if (r.epochs.length) {
+    box.append(sub('pfEpochTable'), table(['pfCommitment', ['SHA-256', 'SHA-256'], 'roundsChecked', 'pfNonces', 'pfGaps', 'pfForward', 'pfMatched'], r.epochs.slice(0, 50).map((e) => [
+      { v: tr('pfCm_' + e.commitment), cls: e.commitment === 'ok' ? 'pass' : e.commitment === 'mismatch' ? 'fail' : 'na' },
+      { v: e.hash.slice(0, 16) + '…', cls: 'mono' }, { v: e.rows, cls: 'num' },
+      { v: e.nonceMin === null ? '—' : `${e.nonceMin} – ${e.nonceMax}`, cls: 'num' }, { v: e.gaps, cls: 'num' },
+      e.forward ? { v: tr('pfFw_' + e.forward), cls: e.forward === 'break' ? 'fail' : e.forward === 'ok' ? 'pass' : 'na' } : '—',
+      { v: `${e.ok} / ${e.ok + e.mismatch}`, cls: 'num' },
+    ])), el('p', { class: 'muted small' }, tr('pfCommitmentNote')));
+  }
+  if (r.uniformity.length) {
+    box.append(sub('pfUniformity'), table(['pfGame', 'roundsChecked', ['χ² / df', 'χ² / df'], 'pValue', 'result'], r.uniformity.map((u) => [
+      u.game + (u.group.rows ? ` (${u.group.rows})` : ''), { v: n(u.n), cls: 'num' },
+      { v: u.chi2 === null ? '—' : `${fmt(u.chi2, 2)} / ${u.df}`, cls: 'mono' }, { v: fmtP(u.pValue), cls: 'mono' },
+      u.status === 'na' ? { v: tr('pfInsufficient'), cls: 'na' } : u.status === 'pass' ? { v: tr('pfNotRejected'), cls: 'pass' } : statusCell(u.status),
+    ])), el('p', { class: 'muted small' }, tr('pfUniformityNote')));
+  }
+  const reasons = Object.entries(r.counts.notCheckedBy);
+  if (reasons.length) box.append(sub('pfNotCheckedReasons'), table(['pfDescription', 'roundsChecked'], reasons.map(([k, c]) => [tr('pfR_' + k), { v: n(c), cls: 'num' }])));
+  box.append(el('p', { class: 'muted small' }, tr('pfEvNote_' + r.adapter.evidence)));
 }
 
 // ---------- Monte Carlo ----------
@@ -530,8 +703,12 @@ function init() {
   $('#run-rng').addEventListener('click', runRng);
 
   $('#p-scheme').addEventListener('change', syncFairFields);
+  $('#p-adapter').addEventListener('change', () => { $('#p-version').replaceChildren(); $('#p-game').replaceChildren(); syncPfFields(); });
+  $('#p-version').addEventListener('change', () => { $('#p-game').replaceChildren(); syncPfFields(); });
+  $('#p-game').addEventListener('change', () => renderPfInfo(currentPf()));
   $('#fairFile').addEventListener('change', async (e) => { if (e.target.files[0]) await loadFileInput('fair', 'fair', e.target.files[0], 'csv'); });
   $('#sample-fair').addEventListener('click', () => withTask('fair', async () => {
+    if (pfMode()) { await samplePf(); return; }
     const chain = $('#p-scheme').value === 'chain';
     const bytes = chain ? await runTask('sampleChain', { length: 2000 }) : await runTask('sampleFair', { rounds: 5000, options: fairOptions() });
     const name = chain ? 'sample-hash-chain.txt' : 'sample-provably-fair-5000.csv';

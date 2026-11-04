@@ -9,9 +9,17 @@ import { parseFairCsv, verifyHmacRounds, verifyHashChain, sha256Hex, hmacSha256,
 import { prngFromSeed, PRNG_DESCRIPTION } from './core/prng.js';
 import { simulate } from './core/montecarlo.js';
 import { sampler, slotSampler, simulatePlayers } from './core/casino.js';
+import { selfTest, listAdapters, disabledAdapters } from './core/pf/registry.js';
+import { auditCsv } from './core/pf/audit.js';
+import { makeSample } from './core/pf/sample.js';
 
 const decode = (bytes) => new TextDecoder().decode(bytes);
 const encode = (text) => new TextEncoder().encode(text);
+
+// Provably fair v2: every adapter's golden vectors run once when the Worker starts;
+// an adapter whose vectors fail is disabled (pfInfo reports which and why).
+const PF_SELF_TEST = selfTest();
+const PF_DISABLED = disabledAdapters(PF_SELF_TEST);
 
 // Keeps P-values and scalar statistics; drops large per-block arrays.
 function slimNist(n) {
@@ -105,6 +113,18 @@ const TASKS = {
     }
     return encode(lines.join('\n') + '\n');
   },
+
+  // ---- Provably fair v2 (adapters, batch audit) ----
+  pfInfo: () => ({ adapters: listAdapters(PF_SELF_TEST) }),
+
+  pfAudit: ({ bytes, key, options }, progress) => auditCsv(decode(bytes), key, { ...options, disabled: PF_DISABLED }, progress),
+
+  pfSample: ({ key, rounds, plant }) => {
+    const rand = (n) => crypto.getRandomValues(new Uint8Array(n));
+    const s = makeSample(key, { rounds, plant, rand, start: Date.now() - rounds * 7000 });
+    return { bytes: encode(s.text), name: s.name, options: s.options, rows: s.rows };
+  },
+  // ---- end provably fair v2 ----
 
   sampleChain: async ({ length }) => {
     const chain = [toHex(crypto.getRandomValues(new Uint8Array(32)))];

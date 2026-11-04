@@ -118,6 +118,28 @@
 
     <section class="panel" id="panel-fair" role="tabpanel" hidden>
       <div class="grid two">
+        <label><span data-t="pfAdapter"></span><select id="p-adapter"><option value="custom" data-t="pfCustom"></option></select></label>
+        <label id="pfVersionLabel" hidden><span data-t="pfVersion"></span><select id="p-version" dir="ltr"></select></label>
+      </div>
+      <div class="box pf-info" id="pfInfo" hidden></div>
+      <div id="pfFields" hidden>
+        <div class="grid three">
+          <label id="pfGameLabel"><span data-t="pfGame"></span><select id="p-game" dir="ltr"></select></label>
+          <label id="pfLimboLabel" hidden><span data-t="pfLimbo"></span><select id="p-limbo"><option value="calc24" data-t="pfLimboCalc"></option><option value="docs" data-t="pfLimboDocs"></option></select></label>
+          <label id="pfTilesLabel" hidden><span data-t="pfTiles"></span><select id="p-tiles" dir="ltr"><option value="0">0 – 24</option><option value="1">1 – 25</option></select></label>
+          <label id="pfEraLabel" hidden><span data-t="pfEra"></span><select id="p-era" dir="ltr"></select></label>
+        </div>
+        <label class="check" id="pfExactLabel"><input type="checkbox" id="p-exact"><span data-t="pfExact"></span></label>
+        <div id="pfChainFields" hidden>
+          <label class="check"><input type="checkbox" id="p-walk"><span data-t="pfWalk"></span></label>
+          <label><span data-t="pfTerminating"></span><input id="p-terminating" dir="ltr" spellcheck="false" autocomplete="off"></label>
+        </div>
+        <label><span data-t="pfPaytable"></span><textarea id="p-paytable" rows="2" dir="ltr" spellcheck="false" placeholder='{"dice": {"rtp": 0.99}, "plinko": {"8": {"low": [5.6, 2.1, 1.1, 1, 0.5, 1, 1.1, 2.1, 5.6]}}}'></textarea></label>
+        <label class="check"><input type="checkbox" id="p-plant"><span data-t="pfPlant"></span></label>
+        <p class="muted small" data-t="pfColumns"></p>
+      </div>
+      <div id="customFields">
+      <div class="grid two">
         <label><span data-t="fairScheme"></span>
           <select id="p-scheme"><option value="hmac" data-t="schemeHmac"></option><option value="chain" data-t="schemeChain"></option></select>
         </label>
@@ -136,6 +158,7 @@
       <div id="chainFields" class="grid two" hidden>
         <label><span data-t="chainOrder"></span><select id="p-order"><option value="newest" data-t="newestFirst"></option><option value="oldest" data-t="oldestFirst"></option></select></label>
         <label><span data-t="chainInput"></span><select id="p-input"><option value="hex" data-t="hexText"></option><option value="bytes" data-t="rawBytes"></option></select></label>
+      </div>
       </div>
       <div class="toolbar">
         <label class="file-btn"><input type="file" id="fairFile" accept=".csv,.txt,text/csv,text/plain"><span data-t="fairFile"></span></label>

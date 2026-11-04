@@ -186,3 +186,19 @@ td.na { color: var(--muted); }
 .table-view summary { cursor: pointer; color: var(--primary-2); font-size: 13.5px; margin: 10px 0 8px; }
 .help ul { margin: 0; padding-inline-start: 20px; }
 .help li + li { margin-top: 6px; }
+
+/* Provably fair v2: adapter card, evidence badges, audit tables */
+.pf-info > * + * { margin-top: 6px; }
+.pf-info p { margin: 0; }
+.pf-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pf-src { overflow-wrap: anywhere; }
+.pf-src a { direction: ltr; unicode-bidi: isolate; }
+.ev { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid; }
+.ev-verified { color: var(--green); border-color: rgba(52, 211, 153, 0.45); background: rgba(52, 211, 153, 0.1); }
+.ev-reference { color: var(--cyan); border-color: rgba(34, 211, 238, 0.45); background: rgba(34, 211, 238, 0.08); }
+.ev-unconfirmed { color: var(--amber); border-color: rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.08); }
+.pf-selftest { color: var(--green); }
+.pf-selftest.verdict { color: var(--red); }
+td.warn { color: var(--amber); font-weight: 700; }
+#pfFields > * + * { margin-top: 12px; }
+#res-fair td.mono { white-space: normal; overflow-wrap: anywhere; max-width: 260px; }
