@@ -88,8 +88,13 @@ export const floorMapProb = (a, b, N, bits = 32) => Number(floorMapCount(a, b, N
 
 // ---------- result parsing and comparison ----------
 
+// A comma is read as a decimal point ("1,5" = 1.5), except where it may be a
+// thousands separator: "1,234" could be 1.234 or 1234, so it is unreadable (the
+// round is "not checked") rather than silently read as a different number.
 const num = (s) => {
-  const t = String(s ?? '').replace(INVISIBLE, '').trim().replace(/x$/i, '').replace(/,/g, '.');
+  let t = String(s ?? '').replace(INVISIBLE, '').trim().replace(/x$/i, '');
+  if (/^[+-]?[1-9]\d{0,2},\d{3}$/.test(t)) return null;
+  t = t.replace(/,/g, '.');
   if (t === '' || !/^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(t)) return null;
   return Number(t);
 };
@@ -135,14 +140,27 @@ export function compareSet(values, claimed, base = 0, shift = 0) {
 
 // ---------- Stake-style game maps from floats in [0, 1) ----------
 
+// Limbo never shows less than 1.00: both formulas give raw < 1 on about 1% of
+// rounds (f > 0.99), and the result shown is max(1.00, raw floored to cents)
+// (GuidoHam/fairplay-verifier pf-core.js limbo(), checked against the stake.us
+// calculator: "never below 1.00"). KyranRana's Limbo.ts, also cited, has no such
+// bound, so a history produced with it would show 0.99: that value is accepted too
+// (`alt`), as is the exact-arithmetic value at a cent boundary.
+const LIMBO_MIN_CENTS = 100;
+function limboShown(raw, exact) {
+  const plain = Math.floor(raw * 100);
+  const cents = Math.max(LIMBO_MIN_CENTS, plain);
+  const alt = new Set([plain, exact, exact === null ? null : Math.max(LIMBO_MIN_CENTS, exact)]);
+  alt.delete(cents); alt.delete(null);
+  return { raw, cents, alt: [...alt], floored: plain < LIMBO_MIN_CENTS, centBoundary: exact !== null && exact !== plain };
+}
+
 // Limbo, documented formula: 1e8 / (f * 1e8) * 0.99, floored to cents.
 // Exact cents for the same float (f = u / 2^32): floor(99 * 2^32 / u).
 export function limboDocs(f) {
   const raw = 1e8 / (f * 1e8) * 0.99;
-  const cents = Math.floor(raw * 100);
   const u = Math.round(f * 4294967296), A = 99 * 4294967296; // A < 2^53: exact integer division
-  const exact = u === 0 ? null : (A - (A % u)) / u;
-  return { raw, cents, alt: exact !== null && exact !== cents ? [exact] : [] };
+  return limboShown(raw, u === 0 ? null : (A - (A % u)) / u);
 }
 
 // Limbo, live-calculator formula: 2^24 equiprobable buckets,
@@ -150,10 +168,8 @@ export function limboDocs(f) {
 export function limboCalc24(f) {
   const k = Math.floor(f * 16777216);
   const raw = 16777216 / (k + 1) * 0.99;
-  const cents = Math.floor(raw * 100);
   const A = 99 * 16777216; // exact integer division in doubles
-  const exact = (A - (A % (k + 1))) / (k + 1);
-  return { raw, cents, k, alt: exact !== cents ? [exact] : [], centBoundary: exact !== cents };
+  return { ...limboShown(raw, (A - (A % (k + 1))) / (k + 1)), k };
 }
 
 // Draws without replacement: idx = floor(f * remaining) into the remaining list.

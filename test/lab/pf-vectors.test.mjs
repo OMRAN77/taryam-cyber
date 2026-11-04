@@ -260,10 +260,13 @@ test('Limbo, all 2^24 calculator buckets: 44 land one cent low in doubles, 16 re
   let low = 0, top = 0, k0 = -1;
   for (let k = 0; k < 16777216; k++) {
     const L = limboCalc24(k / 16777216);
-    if (k < 4096 || (k & 1023) === 0 || L.centBoundary) {
-      const exact = Number(A / BigInt(k + 1));
-      assert.ok(L.cents === exact || L.cents === exact - 1, 'k=' + k);
-      assert.strictEqual(L.centBoundary, L.cents !== exact);
+    if (k < 4096 || (k & 1023) === 0 || k > 16777216 - 4096 || L.centBoundary) {
+      // plain: the double formula floored to cents, before the 1.00 lower bound
+      const exact = Number(A / BigInt(k + 1)), plain = Math.floor((16777216 / (k + 1)) * 0.99 * 100);
+      assert.ok(plain === exact || plain === exact - 1, 'k=' + k);
+      assert.strictEqual(L.centBoundary, plain !== exact, 'k=' + k);
+      // shown result: never below 1.00 (GuidoHam pf-core.js limbo(): max(floor(raw x 100) / 100, 1))
+      assert.strictEqual(L.cents, Math.max(100, plain), 'k=' + k);
     }
     if (L.centBoundary) { low++; if (k0 < 0) k0 = k; }
     if (L.cents >= 100000000) top++;

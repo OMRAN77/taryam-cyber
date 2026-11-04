@@ -8,6 +8,7 @@ import crypto from 'node:crypto';
 import { auditCsv, auditRounds, parsePfCsv } from '../../lab/core/pf/audit.js';
 import { makeSample } from '../../lab/core/pf/sample.js';
 import { adapterKey, ADAPTERS } from '../../lab/core/pf/registry.js';
+import { parseNumber, compareMultiplier } from '../../lab/core/pf/common.js';
 
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const csv = (cols, rows) => [cols.join(','), ...rows.map((r) => cols.map((c) => r[c] ?? '').join(','))].join('\n') + '\n';
@@ -109,11 +110,17 @@ test('commitments: a wrong hash fails; a malformed hash or an unrevealed seed is
   const active = f.rows.map((x) => (x.client_seed === 'player-2' ? { ...x, server_seed: '' } : x));
   const r3 = run(active);
   assert.deepStrictEqual([r3.counts.ok, r3.counts.notChecked, r3.counts.notCheckedBy['seed-unrevealed'], r3.verdict.code], [80, 40, 40, 'CONDITIONAL']);
-  // A forward commitment that was never used while a later epoch exists.
+  // A forward commitment that was never used while a later epoch exists. The lab cannot
+  // tell an epoch with no bets in the file from an uncommitted seed: a point to review.
   const fw = f.rows.map((x) => (x.client_seed === 'player-0' ? { ...x, next_server_seed_hash: sha('an uncommitted seed') } : x));
   const r4 = run(fw);
-  assert.ok(r4.issueCounts.FORWARD_BREAK >= 1 && r4.issueCounts.FORWARD_UNANNOUNCED >= 1);
-  assert.strictEqual(r4.verdict.code, 'FAIL');
+  assert.deepStrictEqual([r4.issueCounts.FORWARD_GAP, r4.issueCounts.FORWARD_BREAK, r4.issueCounts.FORWARD_UNANNOUNCED], [1, undefined, undefined]);
+  assert.deepStrictEqual(r4.epochs.map((e) => e.forward), ['gap', 'ok', 'open']);
+  assert.strictEqual(r4.verdict.code, 'CONDITIONAL');
+  // One epoch announcing two different next hashes is a real inconsistency: a failure.
+  const two = f.rows.map((x, i) => (i === 5 ? { ...x, next_server_seed_hash: sha('another next seed') } : x));
+  const r4b = run(two);
+  assert.deepStrictEqual([r4b.issueCounts.FORWARD_BREAK, r4b.verdict.code], [1, 'FAIL']);
   // An export repeating one next hash on every row (today's) is not evidence of a break.
   const same = f.rows.map((x) => ({ ...x, next_server_seed_hash: sha('next at export time') }));
   const r5 = run(same);
@@ -283,4 +290,185 @@ test('CSV columns are found by common export names', () => {
   const { columns } = parsePfCsv('Server Seed,Server Seed Hashed,Client Seed,Nonce,Roll,Next Server Seed Hash,Created At\n', 'seeded');
   assert.deepStrictEqual(columns.sort(), ['client', 'commitment', 'next', 'nonce', 'result', 'server', 'time']);
   assert.throws(() => auditCsv('a,b\n1,2\n', 'stake', {}), (e) => e.en.includes('nonce'));
+});
+
+// ---------- review regressions: no false accusations from honest exports ----------
+
+// Stake Limbo computed independently: u = first 4 bytes of HMAC-SHA256(seed text,
+// "client:nonce:0"); calculator cents floor(99 x 2^24 / (floor(u / 2^8) + 1)), docs cents
+// floor(99 x 2^32 / u), both in BigInt; the shown result is never below 1.00.
+function stakeLimbo(seed, client, nonce) {
+  const u = BigInt(crypto.createHmac('sha256', seed).update(`${client}:${nonce}:0`).digest().readUInt32BE(0));
+  const clamp = (c) => (c < 100n ? 100n : c);
+  const calcPlain = (99n << 24n) / ((u >> 8n) + 1n);
+  return { u, calcPlain, calc: clamp(calcPlain), docs: u === 0n ? null : clamp((99n << 32n) / u) };
+}
+const cents = (c) => (Number(c) / 100).toFixed(2);
+
+test('Limbo: a result below 1.00 is shown as 1.00, under both formulas', () => {
+  // GuidoHam's stake.us seeds: the first nonce whose raw value is below 1 (BigInt search).
+  const S = 'e8df2cc3b9ccb583ce5ea92336842387', C = '83e27f682128eb1852b048203dfd6931';
+  let n = 0;
+  while (stakeLimbo(S, C, n).calcPlain >= 100n) n++;
+  const L = stakeLimbo(S, C, n);
+  assert.deepStrictEqual([n, L.u, L.calc, L.docs], [277, 4252352885n, 100n, 100n]);
+  const row = (result) => [{ line: 2, f: { server: S, commitment: sha(S), client: C, nonce: String(n), game: 'limbo', result } }];
+  for (const limboFormula of ['calc24', 'docs']) {
+    const r = auditRounds(row('1.00'), 'stake', { limboFormula });
+    assert.deepStrictEqual([r.verdict.code, r.counts.ok], ['PASS', 1], limboFormula);
+    // KyranRana's Limbo.ts (cited) has no lower bound: its 0.99 is accepted too
+    assert.strictEqual(auditRounds(row('0.99'), 'stake', { limboFormula }).counts.ok, 1, limboFormula);
+    // anything else is a mismatch
+    assert.strictEqual(auditRounds(row('1.01'), 'stake', { limboFormula }).verdict.code, 'FAIL', limboFormula);
+  }
+});
+
+test('Limbo: a history that matches the other labelled formula is a point to review, not a failure', () => {
+  // 1,000 rounds settled with the documented formula (BigInt, shown >= 1.00).
+  const seed = sha('limbo-seed'), client = 'player';
+  const rows = [];
+  let differ = 0;
+  for (let n = 0; n < 1000; n++) {
+    const L = stakeLimbo(seed, client, n);
+    if (L.docs !== L.calc) differ++;
+    rows.push({ line: n + 2, f: { server: seed, commitment: sha(seed), client, nonce: String(n), game: 'limbo', result: cents(L.docs) } });
+  }
+  assert.ok(differ > 0, 'the fixture needs rounds where the formulas differ');
+  const docs = auditRounds(rows, 'stake', { limboFormula: 'docs' });
+  assert.deepStrictEqual([docs.verdict.code, docs.counts.ok], ['PASS', 1000]);
+  const calc = auditRounds(rows, 'stake', { limboFormula: 'calc24' });
+  assert.deepStrictEqual([calc.verdict.code, calc.counts.ok, calc.counts.mismatch, calc.counts.notCheckedBy['limbo-other-formula'], calc.issueCounts.LIMBO_OTHER_FORMULA],
+    ['CONDITIONAL', 1000 - differ, 0, differ, differ]);
+  // a claim that matches neither formula is still a mismatch
+  const t = rows.map((x) => ({ ...x, f: { ...x.f } }));
+  t[10].f.result = cents(stakeLimbo(seed, client, 10).docs + 7n);
+  assert.deepStrictEqual([auditRounds(t, 'stake', { limboFormula: 'calc24' }).verdict.code, auditRounds(t, 'stake', { limboFormula: 'docs' }).counts.mismatch], ['FAIL', 1]);
+});
+
+test('epoch order: a clean history listed newest first, without times, passes', () => {
+  const { rows, seeds } = stakeFixture();
+  const noTime = COLS.filter((c) => c !== 'time');
+  const r = auditCsv(csv(noTime, rows.slice().reverse()), 'stake', { paytable: { dice: { rtp: 0.99 } } });
+  assert.strictEqual(r.verdict.code, 'PASS', JSON.stringify(r.issueCounts));
+  assert.strictEqual(r.listed, 'newest-first');
+  // epochs reported oldest first: alpha, bravo, charlie; only the newest is open
+  assert.deepStrictEqual(r.epochs.map((e) => [e.hash, e.forward]), [[sha(seeds[0]), 'ok'], [sha(seeds[1]), 'ok'], [sha(seeds[2]), 'open']]);
+  assert.strictEqual(auditCsv(csv(noTime, rows), 'stake', { paytable: { dice: { rtp: 0.99 } } }).listed, 'oldest-first');
+});
+
+test('seed reuse is only inferred from strictly interleaved times: a rotation within one minute is not reuse', () => {
+  // Two epochs of 40 dice bets, one bet every 5 s from 10:00:05; the rotation falls inside
+  // minute 10:03 (bet 40 at 10:03:20, bet 41 at 10:03:25). Times exported as "HH:MM".
+  const seeds = ['a', 'b', 'c'].map((w) => sha('srv-' + w));
+  const rows = [];
+  let t = Date.UTC(2026, 10, 3, 10, 0, 0);
+  for (let e = 0; e < 2; e++) {
+    for (let n = 0; n < 40; n++) {
+      t += 5000;
+      rows.push({ time: new Date(t).toISOString().slice(0, 16).replace('T', ' '), game: 'dice', server_seed: seeds[e], server_seed_hash: sha(seeds[e]), next_server_seed_hash: sha(seeds[e + 1]), client_seed: 'p' + e, nonce: n, result: (stakeDice(seeds[e], 'p' + e, n) / 100).toFixed(2) });
+    }
+  }
+  assert.deepStrictEqual([rows[39].time, rows[40].time], ['2026-11-03 10:03', '2026-11-03 10:03']);
+  const cols = ['time', 'game', 'server_seed', 'server_seed_hash', 'next_server_seed_hash', 'client_seed', 'nonce', 'result'];
+  for (const list of [rows, rows.slice().reverse()]) {
+    const r = auditCsv(csv(cols, list), 'stake', {});
+    assert.deepStrictEqual([r.verdict.code, r.issueCounts.SEED_REUSED, r.epochs.map((e) => e.forward)], ['PASS', undefined, ['ok', 'open']]);
+  }
+  // The first seed used again in a LATER minute (10:07) is reuse, in either listing order:
+  // the reported line is that bet (line 82 oldest first, line 2 newest first).
+  const back = rows.concat([{ ...rows[0], time: '2026-11-03 10:07', nonce: 40, result: (stakeDice(seeds[0], 'p0', 40) / 100).toFixed(2) }]);
+  for (const [list, line] of [[back, 82], [back.slice().reverse(), 2]]) {
+    const r = auditCsv(csv(cols, list), 'stake', {});
+    assert.deepStrictEqual([r.issueCounts.SEED_REUSED, r.verdict.code, r.issues.find((i) => i.code === 'SEED_REUSED').line], [1, 'FAIL', line]);
+  }
+});
+
+test('an epoch with no bets in the file (seeds rotated twice) is a point to review, not a failure', () => {
+  // Epoch A announces H(B); B was never bet on; the file goes on with C (announced by B).
+  const [A, B, C, D] = ['a', 'b', 'c', 'd'].map((w) => sha('rot-' + w));
+  const rows = [];
+  let t = Date.UTC(2026, 10, 1);
+  for (const [seed, next, client] of [[A, B, 'pa'], [C, D, 'pc']]) {
+    for (let n = 0; n < 20; n++) rows.push({ time: new Date(t += 5000).toISOString(), game: 'dice', server_seed: seed, server_seed_hash: sha(seed), next_server_seed_hash: sha(next), client_seed: client, nonce: n, result: (stakeDice(seed, client, n) / 100).toFixed(2) });
+  }
+  const r = auditCsv(csv(['time', 'game', 'server_seed', 'server_seed_hash', 'next_server_seed_hash', 'client_seed', 'nonce', 'result'], rows), 'stake', {});
+  assert.deepStrictEqual([r.verdict.code, r.counts.ok, r.issueCounts.FORWARD_GAP, r.issueCounts.FORWARD_BREAK, r.issueCounts.FORWARD_UNANNOUNCED], ['CONDITIONAL', 40, 1, undefined, undefined]);
+});
+
+test('a missing client seed is "not checked", never a mismatch; a player_seed column is read', () => {
+  const seed = sha('srv'), client = 'my-client-seed';
+  const line = (c, n) => `${seed},${sha(seed)},${c},${n},${(stakeDice(seed, client, n) / 100).toFixed(2)}`;
+  const named = ['server_seed,server_seed_hash,player_seed,nonce,result', ...Array.from({ length: 50 }, (_, n) => line(client, n))].join('\n');
+  const r0 = auditCsv(named, 'stake', { game: 'dice' });
+  assert.deepStrictEqual([r0.verdict.code, r0.counts.ok], ['PASS', 50]);
+  const empty = ['server_seed,server_seed_hash,client_seed,nonce,result', ...Array.from({ length: 50 }, (_, n) => line('', n))].join('\n');
+  const r = auditCsv(empty, 'stake', { game: 'dice' });
+  assert.deepStrictEqual([r.verdict.code, r.counts.mismatch, r.counts.notCheckedBy['client-missing'], r.issueCounts.CLIENT_SEED_MISSING, r.issueCounts.RESULT_MISMATCH], ['CONDITIONAL', 0, 50, 1, undefined]);
+  // without any client-seed column at all, the same
+  const none = ['server_seed,server_seed_hash,nonce,result', ...Array.from({ length: 5 }, (_, n) => `${seed},${sha(seed)},${n},${(stakeDice(seed, client, n) / 100).toFixed(2)}`)].join('\n');
+  assert.deepStrictEqual(auditCsv(none, 'stake', { game: 'dice' }).counts.notCheckedBy, { 'client-missing': 5 });
+});
+
+test('an unconfirmed chain scheme: link mismatches are inconclusive; a conflict inside the data still fails', () => {
+  // 30 games linked by SHA-256 of the RAW bytes (node:crypto), audited with the
+  // unconfirmed Roobet reconstruction (hex-text links): every link disagrees.
+  let h = crypto.createHash('sha256').update('start').digest();
+  const rows = [];
+  for (let i = 0; i < 30; i++) { rows.push({ line: i + 2, f: { gameId: String(1000 - i), gameHash: h.toString('hex'), result: '' } }); h = crypto.createHash('sha256').update(h).digest(); }
+  const r = auditRounds(rows, 'roobet', {});
+  assert.deepStrictEqual([r.verdict.code, r.verdict.exit, r.issueCounts.CHAIN_BREAK], ['INCONCLUSIVE', 3, 29]);
+  // one game id with two different hashes is a conflict in the file itself
+  const c = auditRounds(rows.concat([{ line: 40, f: { gameId: '1000', gameHash: sha('other'), result: '' } }]), 'roobet', {});
+  assert.deepStrictEqual([c.issueCounts.GAME_ID_CONFLICT, c.verdict.code], [1, 'FAIL']);
+});
+
+test('a list of chain hashes with every link verified is not "nothing checked"', () => {
+  // 50 Stake crash hashes linked by SHA-256 of the hex text (node:crypto), no results.
+  let h = sha('stake-crash-start');
+  const rows = [];
+  for (let i = 0; i < 50; i++) { rows.push({ line: i + 2, f: { gameId: String(5000 - i), gameHash: h, result: '' } }); h = sha(h); }
+  const r = auditRounds(rows, 'stake-crash', {});
+  assert.deepStrictEqual([r.chain.linksChecked, r.chain.breaks, r.counts.computed, r.verdict.code], [49, 0, 50, 'CONDITIONAL']);
+  // revealed seeds whose commitments match, with no result column: not "nothing checked"
+  const { rows: st } = stakeFixture();
+  assert.strictEqual(auditCsv(csv(COLS.filter((x) => x !== 'result' && x !== 'payout'), st), 'stake', {}).verdict.code, 'CONDITIONAL');
+});
+
+test('the only failing row stays listed when an informational issue fires on every row; per-row verdicts carry line numbers', () => {
+  // 600 dice rows (15 epochs of 40) whose seeds carry a trailing space; one tampered result.
+  const rows = [];
+  for (let e = 0; e < 15; e++) {
+    const seed = sha('cap-' + e);
+    for (let n = 0; n < 40; n++) rows.push({ game: 'dice', server_seed: seed + ' ', server_seed_hash: sha(seed), client_seed: 'c' + e + ' ', nonce: n, result: (stakeDice(seed, 'c' + e, n) / 100).toFixed(2) });
+  }
+  rows[555].result = (Number(rows[555].result) + (Number(rows[555].result) >= 99 ? -0.01 : 0.01)).toFixed(2);
+  const cols = ['game', 'server_seed', 'server_seed_hash', 'client_seed', 'nonce', 'result'];
+  const r = auditCsv(csv(cols, rows), 'stake', {});
+  assert.deepStrictEqual([r.verdict.code, r.issueCounts.SEED_CLEANED, r.issueCounts.RESULT_MISMATCH], ['FAIL', 1200, 1]);
+  // problems are listed first, and the failing line (header = line 1, row 555 = line 557) is there
+  assert.deepStrictEqual([r.issues[0].code, r.issues[0].line], ['RESULT_MISMATCH', 557]);
+  assert.ok(r.issues.filter((i) => i.code === 'SEED_CLEANED').length <= 100);
+  assert.deepStrictEqual(r.problemRows.map((p) => [p.line, p.status]), [[557, 'mismatch']]);
+  // rounds not checked are listed with their line and reason, after the mismatches
+  const blank = rows.map((x, i) => (i >= 40 && i < 80 ? { ...x, server_seed: '' } : x));
+  const r2 = auditCsv(csv(cols, blank), 'stake', {});
+  const nc = r2.problemRows.filter((p) => p.status === 'not-checked');
+  assert.deepStrictEqual([nc.length, nc[0].line, nc[39].line, nc[0].reason, r2.problemRows[0].status], [40, 42, 81, 'seed-unrevealed', 'mismatch']);
+});
+
+test('Duel: a malformed pasted seed is reported as malformed, not as "not revealed"', () => {
+  const seed = sha('duel-seed'); // 64 hex digits
+  const hash = crypto.createHash('sha256').update(Buffer.from(seed, 'hex')).digest('hex');
+  const bad = seed.slice(0, 63) + 'z';
+  const text = 'server_seed,server_seed_hash,client_seed,nonce,result\n' + [0, 1, 2].map((n) => `${bad},${hash},c,${n},50.00`).join('\n') + '\n';
+  const r = auditCsv(text, 'duel', {});
+  assert.deepStrictEqual([r.counts.notCheckedBy, r.issueCounts.SEED_UNREVEALED, r.epochs.map((e) => e.commitment)], [{ 'seed-malformed': 3 }, undefined, ['malformed']]);
+});
+
+test('numbers: a comma that may be a thousands separator is unreadable, not a different number', () => {
+  // "1,234" could be 1.234 or 1234: not checked. Unambiguous decimal commas are read.
+  assert.deepStrictEqual(['1,234', '12,345', '+1,000', '1,234.00', '1,5', '12,34', '0,123', '1,2345', '1234', '2.50x'].map(parseNumber),
+    [null, null, null, null, 1.5, 12.34, 0.123, 1.2345, 1234, 2.5]);
+  assert.strictEqual(compareMultiplier({ raw: 1234, cents: 123400, alt: [] }, '1,234'), 'unparsable');
+  assert.strictEqual(compareMultiplier({ raw: 1234, cents: 123400, alt: [] }, '1234.00'), 'match');
 });

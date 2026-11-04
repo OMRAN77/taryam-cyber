@@ -30,7 +30,7 @@ const COLS = {
   server: ['serverseed', 'server_seed', 'server', 'revealedserverseed', 'unhashedserverseed', 'serverseedrevealed', 'serverseedunhashed'],
   commitment: ['serverseedhash', 'server_seed_hash', 'hashedserverseed', 'serverseedhashed', 'commitment', 'serverhash', 'hash'],
   next: ['nextserverseedhash', 'next_server_seed_hash', 'nexthash', 'nextseedhash', 'nextserverhash'],
-  client: ['clientseed', 'client_seed', 'client', 'clientseed1', 'client_seed_1', 'client1'],
+  client: ['clientseed', 'client_seed', 'client', 'clientseed1', 'client_seed_1', 'client1', 'playerseed', 'player_seed', 'userseed', 'user_seed'],
   client2: ['clientseed2', 'client_seed_2', 'client2'],
   client3: ['clientseed3', 'client_seed_3', 'client3'],
   nonce: ['nonce'],
@@ -85,6 +85,7 @@ const SEVERITY = {
   RESULT_MISMATCH: 'fail', COMMITMENT_MISMATCH: 'fail', PAYOUT_MISMATCH: 'fail', NONCE_REUSED: 'fail', SEED_REUSED: 'fail',
   FORWARD_BREAK: 'fail', CHAIN_BREAK: 'fail', TERMINATING_MISMATCH: 'fail', GAME_ID_CONFLICT: 'fail',
   COMMITMENT_ENCODING: 'warn', SEED_ROW_MISMATCH: 'warn', NONCE_GAP: 'warn', NONCE_ORDER: 'warn', DUPLICATE_ROW: 'warn',
+  FORWARD_GAP: 'warn', LIMBO_OTHER_FORMULA: 'warn', CLIENT_SEED_MISSING: 'warn',
   FORWARD_UNANNOUNCED: 'warn', SERVER_SEED_SHARED: 'warn', SEED_DERIVABLE: 'warn', SEED_WEAK: 'warn', UNIFORMITY_REJECTED: 'warn',
   TERMINATING_NOT_REACHED: 'warn', CHAIN_ORDER_UNKNOWN: 'warn', UNCONFIRMED_FORMULA: 'warn', COMMITMENT_ABSENT: 'warn', HASH_MALFORMED: 'warn',
   LIMBO_FORMULAS_DISAGREE: 'info', SEED_UNREVEALED: 'info', FORWARD_COLUMN_CONSTANT: 'info', SEED_MALFORMED: 'info', NONCE_INVALID: 'info', SEED_CLEANED: 'info',
@@ -92,14 +93,20 @@ const SEVERITY = {
   RESULT_UNPARSABLE: 'info', GAME_UNKNOWN: 'info', PARAMS_INVALID: 'info', CHAIN_GAP_SKIPPED: 'info', GAME_GAP: 'info',
 };
 export const ISSUE_SEVERITY = SEVERITY;
-const MAX_ISSUES = 500;
+// Every occurrence is counted; the first MAX_PER_CODE of each code are listed. A cap
+// per code (not on the whole list) keeps a rare failing row listed even when an
+// informational code (a cleaned seed on every row) fires thousands of times first.
+const MAX_PER_CODE = 100;
+const SEV_RANK = { fail: 0, warn: 1, info: 2 };
 
 class Issues {
   constructor() { this.list = []; this.counts = {}; }
   add(code, detail = {}) {
     this.counts[code] = (this.counts[code] || 0) + 1;
-    if (this.list.length < MAX_ISSUES) this.list.push({ code, severity: SEVERITY[code] || 'info', ...detail });
+    if (this.counts[code] <= MAX_PER_CODE) this.list.push({ code, severity: SEVERITY[code] || 'info', ...detail });
   }
+  // problems first, then points to review, then information (stable within a level)
+  sorted() { return this.list.slice().sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity]); }
 }
 
 // ---------- verdict ----------
@@ -107,12 +114,21 @@ class Issues {
 // Codes modelled on the ProvablyFair.org audit exit codes.
 export const VERDICTS = { PASS: 0, FAIL: 1, CONDITIONAL: 2, INCONCLUSIVE: 3, NOTHING_CHECKED: 4 };
 
-function verdictOf(issues, counts, evidence) {
+// Failures that only mean "the data disagree with the adapter's scheme" (its result
+// formula, payout rule, commitment encoding or chain-link rule). With an UNCONFIRMED
+// scheme they may mean the reconstruction is wrong, so they are inconclusive, not a
+// failure. Failures inside the data itself (a nonce replayed with another result, a
+// seed reused, one game id with two hashes) stay failures.
+const SCHEME_DEPENDENT = new Set(['RESULT_MISMATCH', 'PAYOUT_MISMATCH', 'CHAIN_BREAK', 'TERMINATING_MISMATCH', 'COMMITMENT_MISMATCH']);
+
+// verified: other things that were checked besides results (chain links followed,
+// commitments matched), so that a clean list of hashes is not "nothing checked".
+function verdictOf(issues, counts, evidence, verified = 0) {
   const sev = (s) => Object.entries(issues.counts).filter(([c]) => SEVERITY[c] === s).map(([c]) => c);
   const fails = sev('fail'), warns = sev('warn');
-  const checked = counts.ok + counts.mismatch;
+  const checked = counts.ok + counts.mismatch + verified;
   let code;
-  if (fails.length && evidence === 'unconfirmed' && fails.every((c) => c === 'RESULT_MISMATCH' || c === 'PAYOUT_MISMATCH')) code = 'INCONCLUSIVE';
+  if (fails.length && evidence === 'unconfirmed' && fails.every((c) => SCHEME_DEPENDENT.has(c))) code = 'INCONCLUSIVE';
   else if (fails.length) code = 'FAIL';
   else if (checked === 0 && !issues.counts.TERMINATING_OK) code = 'NOTHING_CHECKED';
   else if (warns.length || counts.notChecked || counts.computed) code = 'CONDITIONAL';
@@ -380,7 +396,8 @@ function auditSeeded(rows, adapter, opts, issues, progress) {
       // not to a cheat; seeds carried here that belong to other epochs are pairing noise.
       const carried = e.rows.filter((r) => r.seed !== null);
       if (seedByOther.has(e.hash) || carried.some((r) => epochs.has(other(r.seed)))) e.commitment = 'encoding';
-      else if (!carried.length || carried.every((r) => epochs.has(commitOf(r.seed)))) e.commitment = 'unrevealed';
+      // a pasted seed that is not a valid key (hex adapters) is "malformed", not unrevealed
+      else if (!carried.length || carried.every((r) => epochs.has(commitOf(r.seed)))) e.commitment = e.rows.some((r) => r.seedMalformed) ? 'malformed' : 'unrevealed';
       else e.commitment = 'mismatch';
     }
     e.seed = found ? found.seed : e.commitment === 'none' ? (e.rows.find((r) => r.seed !== null) || {}).seed ?? null : null;
@@ -399,41 +416,94 @@ function auditSeeded(rows, adapter, opts, issues, progress) {
     if (e.seed && /^[0-9a-fA-F]+$/.test(e.seed) && e.seed.length < 32) issues.add('SEED_WEAK', { epoch: e.hash, detail: { length: e.seed.length } });
   }
 
-  // 3. order of epochs (by time when every row has one, otherwise as listed)
-  const timed = R.every((r) => Number.isFinite(r.time));
-  const seq = (timed ? R.slice().sort((a, b) => a.time - b.time || a.line - b.line) : R).filter((r) => r.epoch);
-  const runs = [];
-  for (const r of seq) if (!runs.length || runs[runs.length - 1].epoch !== r.epoch) runs.push({ epoch: r.epoch, line: r.line });
-  if (timed) {
-    const seen = new Set();
-    for (const run of runs) {
-      if (seen.has(run.epoch)) issues.add('SEED_REUSED', { epoch: run.epoch, line: run.line });
-      seen.add(run.epoch);
-    }
-  }
-  const order = [];
-  for (const run of runs) if (!order.includes(run.epoch)) order.push(run.epoch);
-
-  // forward commitment chain. An export that repeats today's next hash on every row
-  // (the same value for every epoch) says nothing about the past: it is not checked.
+  // 3. order of the epochs, oldest first. Forward links (an epoch's announced next
+  // hash is the hash of another epoch in the file) chain the epochs they connect.
+  // Without a time on every row, the chains are placed by their position in the
+  // file, read in the direction it is listed: bet histories are often newest first,
+  // and the direction is found from the nonces (which grow with time within a seed
+  // pair) and from the links. With times, epochs are ordered by their first use, ties
+  // by the links and then by position.
+  // An export that repeats today's next hash on every row (the same value for every
+  // epoch) says nothing about the past: the forward chain is not checked.
   const announced = new Set();
   for (const e of epochs.values()) for (const n of e.nexts) announced.add(n);
   const announcing = [...epochs.values()].filter((e) => e.nexts.size).length;
   if (announced.size === 1 && announcing > 1) { issues.add('FORWARD_COLUMN_CONSTANT', {}); announced.clear(); for (const e of epochs.values()) e.nexts.clear(); }
+  const timed = R.every((r) => Number.isFinite(r.time));
+  R.forEach((r, i) => { r.pos = i; });
+  const succ = new Map(), pred = new Set();
+  for (const e of epochs.values()) {
+    const n = e.nexts.size === 1 ? [...e.nexts][0] : null;
+    if (n && n !== e.hash && epochs.has(n) && !pred.has(n)) { succ.set(e.hash, n); pred.add(n); }
+  }
+  let votes = 0;
+  for (const e of epochs.values()) {
+    const last = new Map();
+    for (const r of e.rows) {
+      if (r.nonce === null) continue;
+      const p = last.get(r.client);
+      if (p !== undefined && p !== r.nonce) votes += r.nonce > p ? 1 : -1;
+      last.set(r.client, r.nonce);
+    }
+  }
+  for (const [a, b] of succ) votes += epochs.get(a).rows[0].pos < epochs.get(b).rows[0].pos ? 1 : -1;
+  const listed = votes < 0 ? 'newest-first' : 'oldest-first';
+  const posKey = (k) => (listed === 'newest-first' ? -1 : 1) * epochs.get(k).rows[0].pos;
+  const byPos = [...epochs.keys()].sort((a, b) => posKey(a) - posKey(b));
+  const placed = new Set(), segments = [];
+  const follow = (head) => { const list = []; for (let k = head; k !== undefined && !placed.has(k); k = succ.get(k)) { placed.add(k); list.push(k); } return list; };
+  for (const k of byPos) if (!pred.has(k) && !placed.has(k)) segments.push(follow(k));
+  for (const k of byPos) if (!placed.has(k)) segments.push(follow(k)); // links that form a cycle
+  let order = segments.flat();
+  if (timed) {
+    const first = new Map(), rank = new Map();
+    for (const r of R) if (r.epoch && !(first.get(r.epoch) <= r.time)) first.set(r.epoch, r.time);
+    order.forEach((k, i) => rank.set(k, i));
+    order = order.slice().sort((a, b) => first.get(a) - first.get(b) || rank.get(a) - rank.get(b));
+  }
+
+  // A server seed used again after another seed: only inferred from times that are
+  // strictly interleaved (E1 at t1 < E2 at t2 < E1 at t3). Equal times are unordered:
+  // an export at minute resolution often puts the last bets of the old seed and the
+  // first of the new one in the same minute.
+  if (timed) {
+    const rs = R.filter((r) => r.epoch && !r.record).sort((a, b) => a.time - b.time);
+    const slots = [];
+    for (const r of rs) {
+      if (!slots.length || slots[slots.length - 1].t !== r.time) slots.push({ t: r.time, set: new Set() });
+      slots[slots.length - 1].set.add(r.epoch);
+      r.slot = slots.length - 1;
+    }
+    const span = new Map();
+    slots.forEach((sl, i) => { for (const k of sl.set) { const x = span.get(k); if (x) x.last = i; else span.set(k, { first: i, last: i }); } });
+    for (const [k, { first, last }] of span) {
+      let between = -1;
+      for (let i = first + 1; i < last && between < 0; i++) if (slots[i].set.size > 1 || !slots[i].set.has(k)) between = i;
+      if (between >= 0) issues.add('SEED_REUSED', { epoch: k, line: rs.find((r) => r.epoch === k && r.slot > between).line });
+    }
+  }
+
+  // Forward commitment chain. An announced next hash that is not in the file is
+  // "open" for the newest epoch; for an older one the lab cannot tell an epoch with no
+  // bets in the file (seeds rotated twice, an export filtered by game) from an
+  // uncommitted seed used instead, so it is a point to review, not a failure.
   order.forEach((key, i) => {
     const e = epochs.get(key);
     e.order = i;
-    if (e.nexts.size > 1) { e.forward = 'break'; issues.add('FORWARD_BREAK', { epoch: key, detail: { announced: [...e.nexts] } }); return; }
+    if (e.nexts.size > 1) { e.forward = 'break'; issues.add('FORWARD_BREAK', { epoch: key, line: e.rows[0].line }); return; }
     const n = [...e.nexts][0];
     if (!n) { e.forward = null; return; }
     e.next = n;
     if (epochs.has(n)) e.forward = 'ok';
     else if (i === order.length - 1) e.forward = 'open';
-    else { e.forward = 'break'; issues.add('FORWARD_BREAK', { epoch: key, line: e.rows[0].line }); }
+    else { e.forward = 'gap'; issues.add('FORWARD_GAP', { epoch: key, line: e.rows[0].line }); }
   });
   if (announced.size) {
     order.forEach((key, i) => {
-      if (i > 0 && !announced.has(key)) { epochs.get(key).announced = false; issues.add('FORWARD_UNANNOUNCED', { epoch: key, line: epochs.get(key).rows[0].line }); }
+      if (i === 0 || announced.has(key)) return;
+      epochs.get(key).announced = false;
+      // right after an epoch whose announced successor is missing: the same gap
+      if (epochs.get(order[i - 1]).forward !== 'gap') issues.add('FORWARD_UNANNOUNCED', { epoch: key, line: epochs.get(key).rows[0].line });
     });
   }
   // a seed derivable from the previous one (next = SHA-256(previous)) is a weakness
@@ -479,7 +549,10 @@ function auditSeeded(rows, adapter, opts, issues, progress) {
   const notChecked = (r, reason) => { counts.notChecked++; counts.notCheckedBy[reason] = (counts.notCheckedBy[reason] || 0) + 1; r.status = 'not-checked'; r.reason = reason; };
   const payout = { checked: 0, ok: 0, mismatch: 0, notChecked: 0 };
   const collectors = new Map();
-  let limboDisagree = 0;
+  let limboDisagree = 0, clientMissing = 0;
+  // every seeded scheme here puts the client seed in the message: without it the
+  // outcome cannot be recomputed (an empty cell, or a column under an unknown name)
+  const needClient = !adapter.clientOptional;
   const defaultGame = opts.game && adapter.games[opts.game] ? opts.game : adapter.defaultGame;
   R.forEach((r, i) => {
     if (i % 512 === 0) progress(0.1 + 0.85 * (i / R.length));
@@ -497,13 +570,14 @@ function auditSeeded(rows, adapter, opts, issues, progress) {
     const e = r.epoch ? epochs.get(r.epoch) : null;
     const seed = e ? e.seed : r.seed;
     if (r.hashStatus === 'malformed' && !seed) { notChecked(r, 'hash-malformed'); return; }
-    if (!seed) { notChecked(r, e && e.commitment === 'mismatch' ? 'commitment-mismatch' : e && e.commitment === 'encoding' ? 'commitment-encoding' : 'seed-unrevealed'); return; }
+    if (!seed) { notChecked(r, e && e.commitment === 'mismatch' ? 'commitment-mismatch' : e && e.commitment === 'encoding' ? 'commitment-encoding' : e && e.commitment === 'malformed' ? 'seed-malformed' : 'seed-unrevealed'); return; }
     if (r.nonce === null) { notChecked(r, 'nonce-invalid'); return; }
+    if (needClient && r.client === '') { notChecked(r, 'client-missing'); clientMissing++; return; }
     let outcome;
     try {
       outcome = computeOutcome(adapter, game, { hmac: keyFor(seed), server: seed, client: r.client, nonceText: r.nonceText }, params, claimed, opts);
     } catch (err) {
-      notChecked(r, 'params-invalid'); issues.add('PARAMS_INVALID', { line: r.line, detail: { message: err.en || err.message } }); return;
+      notChecked(r, 'params-invalid'); issues.add('PARAMS_INVALID', { line: r.line, detail: { message: { ar: err.ar || err.message, en: err.en || err.message } } }); return;
     }
     r.computed = outcome.display;
     if (gname === 'limbo' && outcome.otherCents !== outcome.cents) limboDisagree++;
@@ -513,13 +587,19 @@ function auditSeeded(rows, adapter, opts, issues, progress) {
     else if (cmp === 'mismatch') {
       counts.mismatch++; r.status = 'mismatch';
       issues.add('RESULT_MISMATCH', { line: r.line, expected: outcome.display, claimed: String(claimed).slice(0, 120), game: gname });
+    } else if (cmp === 'other-formula') {
+      // equals the other labelled Limbo formula: which one settles bets is unconfirmed
+      notChecked(r, 'limbo-other-formula');
+      issues.add('LIMBO_OTHER_FORMULA', { line: r.line, expected: outcome.display, claimed: String(claimed).slice(0, 120), game: gname, detail: { formula: outcome.other.formula } });
+      return;
     } else if (cmp === 'edge') { notChecked(r, 'edge-case'); issues.add('EDGE_CASE', { line: r.line, detail: { edge: outcome.edge } }); return; }
     else { notChecked(r, 'result-unparsable'); issues.add('RESULT_UNPARSABLE', { line: r.line, claimed: String(claimed).slice(0, 80) }); return; }
     checkPayout(game, gname, outcome, params, r, opts, payout, issues);
   });
   if (limboDisagree) issues.add('LIMBO_FORMULAS_DISAGREE', { detail: { rows: limboDisagree } });
+  if (clientMissing) issues.add('CLIENT_SEED_MISSING', { detail: { rows: clientMissing } });
 
-  const epochList = order.concat([...epochs.keys()].filter((k) => !order.includes(k))).map((k) => {
+  const epochList = order.map((k) => { // every epoch is placed in `order`
     const e = epochs.get(k);
     const st = { ok: 0, mismatch: 0, notChecked: 0 };
     for (const r of e.rows) { if (r.status === 'ok') st.ok++; else if (r.status === 'mismatch') st.mismatch++; else if (r.status === 'not-checked') st.notChecked++; }
@@ -531,7 +611,7 @@ function auditSeeded(rows, adapter, opts, issues, progress) {
       gaps: e.gaps, duplicates: e.duplicates, next: e.next || null, forward: e.forward ?? null, announced: e.announced !== false, ...st,
     };
   });
-  return { R, counts, payout, collectors, epochs: epochList, timed, records: R.filter((r) => r.record).length };
+  return { R, counts, payout, collectors, epochs: epochList, timed, listed: timed ? null : listed, records: R.filter((r) => r.record).length, verified: epochList.filter((e) => e.commitment === 'ok').length };
 }
 
 // ---------- combined-seed audits (Aviator) ----------
@@ -552,7 +632,7 @@ function auditCombined(rows, adapter, opts, issues) {
       collectors.get('crash').add(r.f.result, out);
     }
     if (server.empty) { nc(out, 'seed-unrevealed'); return out; }
-    if (clients.length !== 3) { nc(out, 'params-invalid'); issues.add('PARAMS_INVALID', { line: r.line, detail: { message: 'three client seeds are needed' } }); return out; }
+    if (clients.length !== 3) { nc(out, 'params-invalid'); issues.add('PARAMS_INVALID', { line: r.line, detail: { message: { ar: 'يلزم ثلاث بذور للاعبين', en: 'three client seeds are needed' } } }); return out; }
     const o = game.compute(server.value, clients);
     out.computed = o.display;
     const claimed = r.f.result;
@@ -695,7 +775,7 @@ function auditChain(rows, adapter, opts, issues, progress) {
       issues.add(k >= 0 ? 'TERMINATING_OK' : 'TERMINATING_NOT_REACHED', { line: oldest.line, detail: { links: k >= 0 ? k : null } });
     }
   }
-  return { R, counts, payout, collectors, epochs: [], chain };
+  return { R, counts, payout, collectors, epochs: [], chain, verified: chain.linksChecked - chain.breaks + (chain.terminating && chain.terminating.status === 'ok' ? 1 : 0) };
 }
 
 // ---------- entry point ----------
@@ -718,10 +798,14 @@ export function auditRounds(rows, adapterOrKey, opts = {}, onProgress = () => {}
       : auditSeeded(rows, adapter, opts, issues, progress);
   const uniformity = runUniformity(t.collectors, issues, opts.alpha ?? ALPHA);
   if (adapter.evidence === 'unconfirmed') issues.add('UNCONFIRMED_FORMULA', {});
-  const verdict = verdictOf(issues, t.counts, adapter.evidence);
+  const verdict = verdictOf(issues, t.counts, adapter.evidence, t.verified || 0);
   progress(1);
-  const rowsOut = t.R.filter((r) => r.status === 'mismatch' || r.status === 'not-checked').slice(0, 200)
+  // Per-row verdicts for the rows that need attention: mismatches first, then the
+  // rounds that were not checked (with the reason), each with its line number.
+  const rowsOut = t.R.filter((r) => r.status === 'mismatch').concat(t.R.filter((r) => r.status === 'not-checked')).slice(0, 200)
     .map((r) => ({ line: r.line, status: r.status, reason: r.reason || null, game: r.game || null, computed: r.computed ?? null, claimed: r.f.result !== undefined ? String(r.f.result).slice(0, 120) : null }));
+  const games = {};
+  for (const r of t.R) if (r.game) games[r.game] = (games[r.game] || 0) + 1;
   return {
     adapter: { key, id: adapter.id, version: adapter.version, evidence: adapter.evidence, kind: adapter.kind },
     options: { game: opts.game || adapter.defaultGame || null, exactSeeds: !!opts.exactSeeds, limboFormula: opts.limboFormula || 'calc24', tileBase: Number(opts.tileBase) === 1 ? 1 : 0, paytable: !!opts.paytable, walkTerminating: !!opts.walkTerminating, era: opts.era || null },
@@ -732,7 +816,9 @@ export function auditRounds(rows, adapterOrKey, opts = {}, onProgress = () => {}
     epochs: t.epochs,
     chain: t.chain || null,
     uniformity: uniformity.map((u) => ({ game: u.group.game, group: u.group, type: u.type, n: u.n, chi2: u.chi2 ?? null, df: u.df ?? null, pValue: u.pValue ?? null, status: u.status })),
-    issues: issues.list,
+    games,
+    listed: t.listed || null,
+    issues: issues.sorted(),
     issueCounts: issues.counts,
     problemRows: rowsOut,
     verdict,

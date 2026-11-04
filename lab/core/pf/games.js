@@ -56,16 +56,27 @@ export const LIMBO_FORMULAS = {
   docs: { label: '1e8 / (f × 1e8) × 0.99', fn: limboDocs },
 };
 
+// Which formula Stake settles Limbo with is unconfirmed (research fact-check), so a
+// claim that differs from the selected formula but equals the OTHER labelled one is
+// 'other-formula' (a point to review), not a mismatch.
 export const limboGame = {
   params: ['target'],
   floats: () => 1,
   compute([f], p, opts = {}) {
     const which = opts.limboFormula === 'docs' ? 'docs' : 'calc24';
+    const otherName = which === 'docs' ? 'calc24' : 'docs';
     const r = LIMBO_FORMULAS[which].fn(f);
-    const other = LIMBO_FORMULAS[which === 'docs' ? 'calc24' : 'docs'].fn(f);
-    return { ...r, formula: which, otherCents: other.cents, display: Number.isFinite(r.raw) ? (r.cents / 100).toFixed(2) : '∞' };
+    const other = LIMBO_FORMULAS[otherName].fn(f);
+    return {
+      ...r, formula: which, otherCents: other.cents,
+      other: { formula: otherName, raw: other.raw, cents: other.cents, alt: other.alt, display: Number.isFinite(other.raw) ? (other.cents / 100).toFixed(2) : '∞' },
+      display: Number.isFinite(r.raw) ? (r.cents / 100).toFixed(2) : '∞',
+    };
   },
-  compare: (o, c) => compareMultiplier(o, c),
+  compare(o, c) {
+    const cmp = compareMultiplier(o, c);
+    return cmp === 'mismatch' && o.other && compareMultiplier(o.other, c) === 'match' ? 'other-formula' : cmp;
+  },
   win(o, p) { const t = parseNumber(p.target); return t === null ? null : o.cents >= Math.round(t * 100); },
   multiplier(o, p) { const t = parseNumber(p.target); return t === null ? null : t; },
   // P(shown >= m), m in cents: calculator floor(99 2^24 / m) / 2^24; docs (floor(99 2^32 / m) + 1) / 2^32.
