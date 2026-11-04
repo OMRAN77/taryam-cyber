@@ -159,3 +159,43 @@ test('desktop: the side panel stays, without Preview / Code / Download, and hold
   await page.click('#socPanel [data-soc-tool="hashid"]');
   assert.strictEqual(await page.getAttribute('.secToolNavBtn.active', 'data-tool'), 'hashid');
 });
+
+test('desktop drag bars push either side panel all the way in, and a double-click brings it back', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const page = await browser.newPage({ viewport: { width: 1366, height: 820 } });
+  page.setDefaultTimeout(5000);
+  await page.goto(server.url + '/');
+  await page.click('#btnGuestMode');
+  const width = (sel) => page.$eval(sel, (e) => Math.round(e.getBoundingClientRect().width));
+  const drag = async (sel, dx) => {
+    const b = await (await page.$(sel)).boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2 + dx, b.y + b.height / 2, { steps: 8 });
+    await page.mouse.up();
+  };
+  // Arabic layout: projects on the right, operations panel on the left.
+  assert.ok(await width('#sidebar') > 150);
+  await drag('#resizer1', 400);
+  assert.strictEqual(await width('#sidebar'), 0, 'projects sidebar pushed all the way in');
+  await page.dblclick('#resizer1');
+  assert.ok(await width('#sidebar') >= 200, 'double-click brings it back');
+
+  const before = await width('#workarea');
+  assert.ok(before > 300);
+  await drag('#resizer2', -1200);
+  assert.strictEqual(await width('#workarea'), 0, 'operations panel pushed all the way in');
+  assert.ok(await width('#chatcol') > 900, 'the chat takes the room');
+  await page.dblclick('#resizer2');
+  assert.ok(await width('#workarea') >= 300, 'double-click brings the panel back');
+  await drag('#resizer2', 1200);
+  assert.ok(await width('#chatcol') >= 320, 'the chat keeps at least 320px');
+
+  // Widths survive a reload.
+  await drag('#resizer1', 400);
+  await page.reload();
+  await page.click('#btnGuestMode');
+  assert.strictEqual(await width('#sidebar'), 0);
+});

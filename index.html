@@ -1004,6 +1004,21 @@ dialog::backdrop{background:rgba(0,0,0,.75)}
 
 /* Phones: the account menu drops from the header, no drawer */
 #acctMenu.from-header{position:fixed;top:56px;bottom:auto;inset-inline:10px auto;width:min(300px,calc(100vw - 20px));z-index:70}
+/* Three columns on desktop: projects | chat (fills) | operations panel, with drag bars
+   that can push either side panel all the way in. */
+@media (min-width:861px){
+  html:not(.mobile-ui) #chatcol{flex:1;width:auto;min-width:320px}
+  html:not(.mobile-ui) #workarea{flex:none;width:clamp(380px,46%,760px)}
+}
+#sidebar.collapsed,#workarea.collapsed{width:0!important;min-width:0!important;border:0!important;overflow:hidden;padding:0!important}
+.resizer{width:9px;margin-inline:-2px;touch-action:none}
+.resizer::after{top:calc(50% - 22px);bottom:auto;height:44px;width:3px;border-radius:3px;background:var(--border-3)}
+.resizer:hover::after,.resizer.dragging::after,.resizer:focus-visible::after{top:0;bottom:0;height:auto;width:2px;border-radius:0;background:var(--primary);box-shadow:0 0 10px rgba(0,255,156,.6)}
+.resizer:focus-visible{outline:none}
+.resizer.edge::after{background:var(--primary);opacity:.7}
+body.resizing{cursor:col-resize;user-select:none}
+body.resizing iframe{pointer-events:none}
+
 /* Projects sidebar */
 .side-kicker{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 0;font:600 10.5px var(--font-mono);letter-spacing:.16em;color:var(--text-3);direction:ltr}
 .side-kicker span{color:var(--primary)}
@@ -1198,7 +1213,7 @@ html.mobile-ui #messages:empty ~ .chat-hint{display:none}
     </div>
   </div>
 
-  <div class="resizer" id="resizer1"></div>
+  <div class="resizer" id="resizer1" role="separator" aria-orientation="vertical" tabindex="0" title="اسحب لتغيير العرض · نقرتان للإخفاء"></div>
 
   <div id="chatcol">
     <div id="messages"></div>
@@ -1245,7 +1260,7 @@ html.mobile-ui #messages:empty ~ .chat-hint{display:none}
     <div class="cmd-hint" aria-hidden="true"><span>Enter</span> <b data-i18n="hintSend">للإرسال</b> · <span>Shift+Enter</span> <b data-i18n="hintNewline">سطر جديد</b></div>
   </div>
 
-  <div class="resizer" id="resizer2"></div>
+  <div class="resizer" id="resizer2" role="separator" aria-orientation="vertical" tabindex="0" title="اسحب لتغيير العرض · نقرتان للإخفاء"></div>
 
   <div id="workarea">
     <section id="socPanel" class="soc-home" aria-labelledby="socPanelTitle"></section>
@@ -3153,17 +3168,53 @@ $('#btnClock').onclick = () => { const sel = $('#clockTZSelect'); sel.innerHTML 
 $('#btnCloseClock').onclick = () => { closeDialogSafe($('#clockDialog')); if(clockTimer){ clearInterval(clockTimer); clockTimer = null; } };
 
 /* ═══ Resizers ═══ */
-function setupResizer(res, panel, {min, max, key}){
-  const saved = parseInt(localStorage.getItem(key)||'', 10);
-  if(saved >= min && saved <= max) panel.style.width = saved + 'px';
+// Drag bars on both sides of the chat. Each sizes the panel next to it (the projects
+// sidebar, the operations panel) and can push it all the way in: past `snap` it
+// collapses to 0, and a double-click (or Enter) collapses / restores it. `after` marks
+// a panel that sits after its bar in the DOM, so the drag direction flips.
+function setupResizer(res, panel, {min, max, key, snap = 140, after = false, fallback}){
+  const apply = w => { panel.style.width = w + 'px'; panel.classList.toggle('collapsed', w === 0); res.classList.toggle('edge', w === 0); };
+  const limit = () => typeof max === 'function' ? max() : max;
+  let last = fallback;
+  const saved = parseInt(localStorage.getItem(key) || '', 10);
+  if(saved === 0 || (saved >= min && saved <= limit())){ apply(saved); if(saved) last = saved; }
+  const store = w => { localStorage.setItem(key, w); if(w) last = w; };
+  const toggle = () => { const w = panel.getBoundingClientRect().width > 1 ? 0 : Math.min(last || fallback, limit()); apply(w); store(w); };
   let sX = 0, sW = 0, drag = false;
-  function mm(x){ const rtl = document.documentElement.dir === 'rtl'; let d = x - sX; if(rtl) d = -d; panel.style.width = Math.max(min, Math.min(max, sW+d)) + 'px'; }
-  function up(){ if(!drag) return; drag = false; localStorage.setItem(key, parseInt(panel.style.width, 10)); window.removeEventListener('mousemove', onM); window.removeEventListener('mouseup', up); }
-  function onM(e){ mm(e.clientX); }
-  res.addEventListener('mousedown', e => { if(window.innerWidth <= 860) return; drag = true; sX = e.clientX; sW = panel.getBoundingClientRect().width; window.addEventListener('mousemove', onM); window.addEventListener('mouseup', up); });
+  function move(e){
+    if(!drag) return;
+    let d = e.clientX - sX;
+    if(document.documentElement.dir === 'rtl') d = -d;
+    if(after) d = -d;
+    let w = sW + d;
+    w = w < snap ? 0 : Math.max(min, Math.min(limit(), w));
+    apply(w);
+  }
+  function up(){ if(!drag) return; drag = false; res.classList.remove('dragging'); document.body.classList.remove('resizing'); store(parseInt(panel.style.width, 10) || 0); }
+  res.addEventListener('pointerdown', e => {
+    if(window.innerWidth <= 860 || document.documentElement.classList.contains('mobile-ui')) return;
+    drag = true; sX = e.clientX; sW = panel.getBoundingClientRect().width;
+    res.setPointerCapture(e.pointerId); res.classList.add('dragging'); document.body.classList.add('resizing');
+  });
+  res.addEventListener('pointermove', move);
+  res.addEventListener('pointerup', up);
+  res.addEventListener('pointercancel', up);
+  res.addEventListener('dblclick', toggle);
+  res.addEventListener('keydown', e => {
+    const step = (e.key === 'ArrowLeft' ? 1 : e.key === 'ArrowRight' ? -1 : 0) * (document.documentElement.dir === 'rtl' ? 1 : -1) * (after ? -1 : 1);
+    if(e.key === 'Enter'){ e.preventDefault(); toggle(); return; }
+    if(!step) return;
+    e.preventDefault();
+    const cur = panel.getBoundingClientRect().width;
+    let w = cur + step * 32;
+    w = w < snap ? 0 : Math.max(min, Math.min(limit(), w));
+    apply(w); store(w);
+  });
 }
-setupResizer($('#resizer2'), $('#chatcol'), {min:320, max:640, key:'panelWidthChat'});
-setupResizer($('#resizer1'), $('#sidebar'), {min:200, max:420, key:'panelWidthSidebar'});
+// The chat keeps at least 320px; the operations panel may take the rest or nothing.
+const socPanelMax = () => Math.max(0, $('main').getBoundingClientRect().width - $('#sidebar').getBoundingClientRect().width - 330);
+setupResizer($('#resizer2'), $('#workarea'), {min:300, max:socPanelMax, key:'panelWidthSoc', after:true, fallback:560});
+setupResizer($('#resizer1'), $('#sidebar'), {min:200, max:420, key:'panelWidthSidebar', snap:120, fallback:260});
 
 /* ═══ Command Palette ═══ */
 const CMD_ITEMS = [
