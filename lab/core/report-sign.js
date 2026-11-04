@@ -102,6 +102,13 @@ async function pdfUnchanged(bytes, sigFile, s, reportSha256) {
 
 const pct = (v) => (typeof v === 'number' ? (v * 100).toFixed(4) + '%' : '—');
 
+// "1 in N" of a probability { value, method, below } (a bound gives "> N").
+function oneInOf(p) {
+  const count = (n) => (n >= 1e9 ? n.toExponential(2) : Math.round(n).toLocaleString('en-US'));
+  if (p.method === 'bound') return p.below > 0 ? '> ' + count(1 / p.below) : null;
+  return p.value > 0 ? count(1 / p.value) : null;
+}
+
 // The headline figures, as report.json states them, to compare with the pages.
 function figures(report) {
   const r = (report && report.results) || {};
@@ -118,6 +125,10 @@ function figures(report) {
   } else if (r.fair) out.push({ section: 'fair', value: r.fair.scheme || null, pass: !!r.fair.ok });
   if (r.montecarlo && r.montecarlo.result) out.push({ section: 'montecarlo', value: pct(r.montecarlo.result.rtp), spins: r.montecarlo.spins ?? null });
   if (r.lut && Array.isArray(r.lut.modes)) out.push({ section: 'lut', value: r.lut.modes.map((m) => `${m.name}: ${m.rtp && m.rtp.percent}%`).join(' · ') || null });
+  // Whole-round distribution (P0-8): the top win and how often it happens; the session funnel.
+  const rd = r.theoretical && r.theoretical.roundDistribution;
+  if (rd && rd.maxWin) out.push({ section: 'round', value: rd.maxWin.bounded ? rd.maxWin.x + '×' : '∞', oneIn: rd.maxWin.bounded ? oneInOf(rd.maxWin) : null });
+  if (r.session && typeof r.session.pAhead === 'number') out.push({ section: 'session', value: pct(r.session.pAhead), rounds: r.session.rounds ?? null });
   return out;
 }
 

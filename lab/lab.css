@@ -246,3 +246,22 @@ td.warn { color: var(--amber); font-weight: 700; }
 #pfFields > * + * { margin-top: 12px; }
 /* long hashes wrap, but a column never shrinks below 12 characters (phones scroll the table instead) */
 #res-fair td.mono { white-space: normal; overflow-wrap: anywhere; min-width: 12ch; max-width: 260px; }
+
+/* Whole-round distribution, max-win cap and session funnel (P0-8) */
+#fsCapFields { margin-top: 12px; }
+#res-round .card .v, #res-round .card .s, #res-roundcap .card .s, #res-session .card .s { unicode-bidi: plaintext; }
+#res-round td.mono, #res-roundcap td.mono { white-space: nowrap; }
+.funnel-wrap { margin: 0; }
+.funnel { width: 100%; max-width: 680px; }
+.funnel .f90 { fill: rgba(167, 139, 250, 0.16); stroke: none; }
+.funnel .f50 { fill: rgba(167, 139, 250, 0.32); stroke: none; }
+.funnel .fzero { stroke: rgba(255, 255, 255, 0.22); stroke-width: 1; }
+.funnel .fmedian { fill: none; stroke: var(--primary-2); stroke-width: 2; stroke-linejoin: round; }
+.funnel .fmean { fill: none; stroke: var(--amber); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.funnel-wrap figcaption { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.fkey { display: inline-flex; align-items: center; gap: 6px; }
+.fkey i { display: inline-block; width: 18px; height: 10px; border-radius: 2px; }
+.fkey i.f90 { background: rgba(167, 139, 250, 0.16); }
+.fkey i.f50 { background: rgba(167, 139, 250, 0.32); }
+.fkey i.fmedian { height: 2px; background: var(--primary-2); }
+.fkey i.fmean { height: 0; border-top: 2px dashed var(--amber); }

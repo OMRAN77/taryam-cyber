@@ -5,7 +5,7 @@
 // nothing has to be regenerated when the code changes.
 
 // Bump by hand when a change alters a result or the report format.
-export const LAB_VERSION = '2026.11.1';
+export const LAB_VERSION = '2026.11.2';
 
 // Inputs larger than this are not attached inside the PDF; the report keeps their
 // SHA-256 only, and the original file is needed to check them.
@@ -42,9 +42,17 @@ const REFERENCES = [
   { id: 'NIST SP 800-22 Rev. 1a', title: 'A Statistical Test Suite for Random and Pseudorandom Number Generators (April 2010)', usedFor: 'RNG tests', when: (s) => !!s.results.rng },
   { id: 'NIST STS 2.1.2', title: 'reference implementation of SP 800-22', usedFor: 'compared against; see deviations', when: (s) => !!s.results.rng },
   { id: 'RFC 2104', title: 'HMAC', usedFor: 'HMAC-SHA256 outcomes of provably-fair rounds', when: (s) => s.results.fair && s.results.fair.scheme !== 'chain' },
-  { id: 'xoshiro128** 1.1', title: 'Blackman & Vigna, scrambled linear generator', usedFor: 'Monte Carlo generator (simulation, and the P-values of the distribution tests)', when: (s) => !!(s.results.montecarlo || s.results.distTests) },
+  { id: 'xoshiro128** 1.1', title: 'Blackman & Vigna, scrambled linear generator', usedFor: 'Monte Carlo generator (simulation, and the P-values of the distribution tests)', when: (s) => !!(s.results.montecarlo || s.results.distTests || sessionUsedMc(s)) },
   { id: 'Stake Engine math-sdk', title: 'StakeEngine/math-sdk (MIT): docs/rgs_docs/data_format.md and utils/rgs_verification.py', usedFor: 'outcome-table (LUT) format and RGS limits; the commit is in parameters.lut.rgsProfile', when: (s) => !!s.results.lut },
+  // Whole-round distribution and session funnel (P0-8). The two odds rules were not
+  // checked against their official text (unverified); the report says so.
+  { id: 'GLI-19 v3.0', title: 'GLI-19 Standards for Interactive Gaming Systems v3.0, 4.7.3 (text not verified here)', usedFor: 'top-award odds check: at least once in 100,000,000 games (unverified)', when: (s) => oddsChecked(s) },
+  { id: '58 Pa. Code 461a.7', title: 'Pennsylvania Code, slot machine payout and odds (text not verified here)', usedFor: 'top-award odds check: odds no worse than 50,000,000 to 1 (unverified)', when: (s) => oddsChecked(s) },
+  { id: 'Vose 1991', title: 'M. D. Vose, A linear algorithm for generating random numbers with a given distribution, IEEE TSE 17(9)', usedFor: 'alias-table draws of the session Monte Carlo', when: (s) => sessionUsedMc(s) },
 ];
+
+const sessionUsedMc = (s) => !!(s.results.session && s.results.session.result && s.results.session.result.generator);
+const oddsChecked = (s) => !!(s.results.theoretical && s.results.theoretical.cap && s.results.theoretical.cap.odds && s.results.theoretical.cap.result && s.results.theoretical.cap.result.top);
 
 const nistApplicable = (s, id) => !!(s.results.rng && s.results.rng.nist.results.some((t) => t.id === id && t.applicable));
 
@@ -89,6 +97,21 @@ function fairParameters(f) {
   return { input: f.inputId, scheme: f.scheme ?? null, options: f.options || null };
 }
 
+// The whole-round distribution's settings (P0-8): method, grid and its limit, the
+// bound on wrapped mass, the noise floor, and the max-win cap / odds checks asked for.
+function roundParameters(th) {
+  const x = th && th.result;
+  if (!x || !(x.round || x.roundError)) return null;
+  const rd = x.round;
+  return {
+    input: th.inputId,
+    method: rd ? rd.method : null, grid: rd && rd.grid ? rd.grid.size : null, gridLimit: rd && rd.grid ? rd.grid.limit : null,
+    aliasBound: rd ? rd.aliasBound : null, noiseFloor: rd ? rd.floor : null, checkTolerance: 1e-9,
+    error: x.roundError ? x.roundError.en : null,
+    maxWinCap: th.cap ? th.cap.M : null, oddsChecks: th.cap ? !!th.cap.odds : false,
+  };
+}
+
 // session: { inputs (from planAttachments), results, signer, attachLimit (the limit
 // planAttachments was given; the default when absent) }.
 export function buildManifest(session) {
@@ -112,6 +135,12 @@ export function buildManifest(session) {
         generator: (r.distTests.result && r.distTests.result.generator) || null,
       } : null,
       lut: r.lut ? { inputs: r.lut.inputIds || [], rgsProfile: (r.lut.result && r.lut.result.profile && r.lut.result.profile.profile) || null } : null,
+      roundDistribution: roundParameters(th),
+      session: r.session ? {
+        input: r.session.inputId, modelSha256: r.session.modelSha256, options: r.session.options,
+        method: r.session.result.method, ruinMethod: r.session.result.ruin ? r.session.result.ruin.method : null,
+        generator: r.session.result.generator || null, grid: r.session.result.grid ? r.session.result.grid.size : null,
+      } : null,
     },
     references: REFERENCES.filter((x) => !x.when || x.when(session)).map(({ id, title, usedFor }) => ({ id, title, usedFor })),
     deviations: DEVIATIONS.filter((x) => x.when(session)).map(({ id, reference, text }) => ({ id, reference, text })),

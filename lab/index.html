@@ -76,11 +76,46 @@
           <label><span data-t="fsMultiplier"></span><input id="f-fsMultiplier" value="1" dir="ltr"></label>
           <label class="check"><input type="checkbox" id="f-fsRetrigger"><span data-t="fsRetrigger"></span></label>
         </div>
+        <!-- Free-spin caps (P0-8): with retrigger only. -->
+        <div class="grid two" id="fsCapFields">
+          <label><span data-t="fsMaxSpins"></span><input id="f-fsMaxSpins" type="number" min="1" dir="ltr" inputmode="numeric"></label>
+          <label><span data-t="fsMaxRetriggers"></span><input id="f-fsMaxRetriggers" type="number" min="0" dir="ltr" inputmode="numeric"></label>
+        </div>
         <label><span data-t="fsReels"></span><textarea id="f-fsReels" rows="3" dir="ltr" spellcheck="false"></textarea></label>
       </fieldset>
       <div class="actions"><button type="button" class="primary" id="run-theory" data-t="run"></button><progress id="prog-theory" max="1" value="0" hidden></progress></div>
       <div class="error" id="err-theory" hidden></div>
       <div class="results" id="res-theory"></div>
+
+      <!-- Whole-round distribution and max-win cap (P0-8) -->
+      <section class="dist round" id="round" aria-labelledby="round-title" hidden>
+        <h2 class="dist-title" id="round-title" data-t="roundTitle"></h2>
+        <p class="muted small" data-t="roundIntro"></p>
+        <div class="results" id="res-round"></div>
+        <h3 class="sub" data-t="roundCapTitle"></h3>
+        <div class="grid two">
+          <label><span data-t="roundCap"></span><input id="r-cap" dir="ltr" inputmode="decimal" autocomplete="off"></label>
+          <label class="check"><input type="checkbox" id="r-odds"><span data-t="roundOdds"></span></label>
+        </div>
+        <div class="actions"><button type="button" id="run-round" data-t="roundApply"></button><progress id="prog-round" max="1" value="0" hidden></progress></div>
+        <div class="error" id="err-round" hidden></div>
+        <div class="results" id="res-roundcap"></div>
+      </section>
+
+      <!-- Session funnel (P0-8) -->
+      <section class="dist session" id="session" aria-labelledby="session-title" hidden>
+        <h2 class="dist-title" id="session-title" data-t="sessTitle"></h2>
+        <p class="muted small" data-t="sessIntro"></p>
+        <div class="grid four">
+          <label><span data-t="sessRounds"></span><input id="s-rounds" type="number" min="1" value="1000" dir="ltr" inputmode="numeric"></label>
+          <label><span data-t="sessBet"></span><input id="s-bet" value="1" dir="ltr" inputmode="decimal" autocomplete="off"></label>
+          <label><span data-t="sessBudget"></span><input id="s-budget" value="100" dir="ltr" inputmode="decimal" autocomplete="off"></label>
+          <label><span data-t="seed"></span><input id="s-seed" value="taryam-session" dir="ltr" spellcheck="false"></label>
+        </div>
+        <div class="actions"><button type="button" class="primary" id="run-session" data-t="sessRun"></button><progress id="prog-session" max="1" value="0" hidden></progress></div>
+        <div class="error" id="err-session" hidden></div>
+        <div class="results" id="res-session"></div>
+      </section>
     </section>
 
     <section class="panel" id="panel-actual" role="tabpanel" hidden>
