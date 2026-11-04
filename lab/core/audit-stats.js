@@ -802,7 +802,8 @@ export function auditDistribution(log, pmfs, options = {}, rng, onProgress = () 
       return { threshold: T, probability: q, expected: n * q, observed: k, pValue: binomCdf(k, n, q), powered: minP < alpha / 2 };
     };
     const top = own.reduce((a, e) => Math.max(a, e.x), 0);
-    const thresholds = TAIL_THRESHOLDS.filter((T) => T < top);
+    // Fixed thresholds well below the top prize (one close to it would repeat it).
+    const thresholds = TAIL_THRESHOLDS.filter((T) => T <= top / 2);
     if (top > 0) thresholds.push(top);
     fit.tails = thresholds.map(tailAt);
     fit.tails.forEach((t, i) => { if (t.powered) fit.tests.push({ id: 'tail', index: i, p: t.pValue }); });
