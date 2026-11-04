@@ -4,43 +4,8 @@
 // "coming soon" message instead of erroring.
 // Free AbuseIPDB tier allows ~1000 checks/day, so this endpoint also applies
 // its own lightweight per-IP daily throttling to keep the owner's quota safe.
-const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
-const BLOB_BASE = 'https://blob.vercel-storage.com';
-const STORE_ID = process.env.BLOB_STORE_ID || '6tfgxvttzyoiavtu';
-const PUBLIC_BASE = 'https://' + STORE_ID + '.public.blob.vercel-storage.com/';
-
 const DAILY_LIMIT = 40;
-const { quotaEnabled, isOwnerToken } = require('./_quota');
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-function usagePath(id) {
-  return 'taryam/db/iprep_usage/' + encodeURIComponent(id) + '.json';
-}
-async function readBlobJson(path, fallback) {
-  try {
-    const res = await fetch(PUBLIC_BASE + path + '?_=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) return fallback;
-    return await res.json();
-  } catch (e) {
-    return fallback;
-  }
-}
-async function writeBlobJson(path, data) {
-  try {
-    await fetch(BLOB_BASE + '/' + path, {
-      method: 'PUT',
-      headers: {
-        Authorization: 'Bearer ' + BLOB_TOKEN,
-        'x-content-type': 'application/json',
-        'x-add-random-suffix': '0',
-        'x-cache-control-max-age': '0',
-      },
-      body: JSON.stringify(data),
-    });
-  } catch (e) {}
-}
+const scanQuota = require('./_scancounter');
 
 const IPV4_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 const IPV6_RE = /^[0-9a-fA-F:]+$/;
@@ -79,20 +44,17 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const id = String(body.guestId || req.headers['x-forwarded-for'] || 'anon').slice(0, 100);
-    const today = todayStr();
-    // Daily per-tool limit; never for the owner's account or a QUOTA=off deployment (api/_quota.js).
-    const limited = quotaEnabled() && !isOwnerToken(body.token);
-    let usage = { date: today, count: 0 };
-    if (limited) {
-      usage = await readBlobJson(usagePath(id), null);
-      if (!usage || usage.date !== today) usage = { date: today, count: 0 };
-      if (usage.count >= DAILY_LIMIT) {
-        res.status(429).json({ error: 'limit', message: 'وصلت للحد اليومي المسموح لهذه الأداة (' + DAILY_LIMIT + ' فحوصات/يوم). حاول غدًا.' });
-        return;
-      }
+    // Daily per-tool limit keyed on the caller address; never for the owner's account
+    // or a QUOTA=off deployment (see _scancounter.js).
+    let quota;
+    try {
+      quota = await scanQuota.consume(req, { namespace: 'iprep', limit: DAILY_LIMIT, token: body.token });
+    } catch (e) {
+      res.status(503).json({ error: 'الخدمة غير مهيأة للمحاسبة (AUTH_SECRET)' });
+      return;
     }
-    if (limited) { usage.count += 1; await writeBlobJson(usagePath(id), usage); }
+    if (quota.noAddress) { res.status(403).json({ error: 'Cannot determine caller address' }); return; }
+    if (!quota.allowed) { scanQuota.limitResponse(res, DAILY_LIMIT); return; }
 
     const upstream = await fetch(
       'https://api.abuseipdb.com/api/v2/check?ipAddress=' + encodeURIComponent(ip) + '&maxAgeInDays=90&verbose',
@@ -122,7 +84,7 @@ module.exports = async (req, res) => {
         comment: (r.comment || '').slice(0, 200),
         categories: r.categories || [],
       })),
-      remaining: limited ? DAILY_LIMIT - usage.count : null,
+      remaining: quota.remaining,
     });
   } catch (e) {
     res.status(500).json({ error: 'Proxy error: ' + (e && e.message ? e.message : String(e)) });

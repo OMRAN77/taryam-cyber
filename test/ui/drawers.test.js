@@ -1,5 +1,7 @@
-// Browser test for the off-canvas drawers (#sidebar = projects, #workarea = code /
-// preview) used at widths of 860px or less and whenever html.mobile-ui is set.
+// Browser test for the off-canvas drawers (#sidebar = projects, #workarea = side panel)
+// used at widths of 860px or less and whenever html.mobile-ui is set. On phones the
+// side panel has no menu entry (its operations center shows in the empty chat), so it
+// must simply stay closed.
 // In Arabic (RTL, the default) the closed drawers used to be pinned to the left
 // edge and slid right by only their own width, so they stayed on screen over the
 // chat and swallowed taps on the dock: the attach button, the Ask-all / Merge
@@ -77,7 +79,7 @@ for (const { lang, width, height, mobileUi } of CASES) {
     let g = await settle(page, { '#sidebar': 'closed', '#workarea': 'closed' });
     assert.strictEqual(g.rtl, lang === 'ar', 'page direction follows the language');
     assert.ok(g.sidebar.closed, `closed sidebar is off-screen (${JSON.stringify(g.sidebar)}, viewport ${g.iw})`);
-    assert.ok(g.workarea.closed, `closed workarea is off-screen (${JSON.stringify(g.workarea)}, viewport ${g.iw})`);
+    assert.ok(g.workarea.closed, `closed side panel is off-screen (${JSON.stringify(g.workarea)}, viewport ${g.iw})`);
     assert.ok(g.scrollWidth <= g.iw, `no horizontal scroll (${g.scrollWidth} > ${g.iw})`);
 
     // Nothing sits on top of the dock controls (hit-test at each control's centre).
@@ -96,19 +98,15 @@ for (const { lang, width, height, mobileUi } of CASES) {
     ]);
     assert.ok(chooser.isMultiple(), 'the attach button opened the file chooser');
 
-    // Each drawer opens from the header menu onto the start edge, and closes again
+    // The drawer opens from the header menu onto the start edge, and closes again
     // fully off-screen when the backdrop is tapped.
-    for (const [sel, button] of [['#sidebar', '#btnToggleProjects'], ['#workarea', '#btnToggleHistory']]) {
-      const key = sel.slice(1);
-      await page.click('#btnHeaderMenu');
-      await page.click(button);
-      g = await settle(page, { [sel]: 'open' });
-      assert.ok(g[key].open, `open ${key} is on screen against the ${g.rtl ? 'right' : 'left'} edge (${JSON.stringify(g[key])}, viewport ${g.iw})`);
-
-      // Tap the backdrop on the side away from the drawer.
-      await page.mouse.click(g.rtl ? 5 : g.iw - 5, Math.round(height / 2));
-      g = await settle(page, { '#sidebar': 'closed', '#workarea': 'closed' });
-      assert.ok(g.sidebar.closed && g.workarea.closed, `both drawers closed again (${JSON.stringify([g.sidebar, g.workarea])})`);
-    }
+    await page.click('#btnHeaderMenu');
+    await page.click('#btnToggleProjects');
+    g = await settle(page, { '#sidebar': 'open' });
+    assert.ok(g.sidebar.open, `open sidebar is on screen against the ${g.rtl ? 'right' : 'left'} edge (${JSON.stringify(g.sidebar)}, viewport ${g.iw})`);
+    // Tap the backdrop on the side away from the drawer.
+    await page.mouse.click(g.rtl ? 5 : g.iw - 5, Math.round(height / 2));
+    g = await settle(page, { '#sidebar': 'closed' });
+    assert.ok(g.sidebar.closed, `drawer closed again (${JSON.stringify(g.sidebar)})`);
   });
 }

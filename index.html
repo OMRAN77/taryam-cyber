@@ -5,38 +5,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>TARYAM Cyber — أدوات الأمن السيبراني</title>
 <meta name="description" content="منصة احترافية لأدوات الأمن السيبراني بالذكاء الاصطناعي — 9 مزوّدين، دمج ذكي، 18 أداة.">
-<meta name="theme-color" content="#8b5cf6">
+<meta name="theme-color" content="#000000">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════ AETHER DESIGN SYSTEM ═══════════════ */
 :root{
-  --bg:#08090d;
-  --bg-2:#0a0c11;
+  --bg:#000000;
+  --bg-2:#0a0a0a;
   --surface:rgba(255,255,255,.03);
-  --surface-2:rgba(255,255,255,.05);
-  --surface-3:rgba(255,255,255,.07);
-  --border:rgba(255,255,255,.07);
-  --border-2:rgba(255,255,255,.11);
-  --border-3:rgba(255,255,255,.18);
-  --text:#f4f4f5;
-  --text-2:#a1a1aa;
-  --text-3:#71717a;
-  --text-4:#52525b;
-  --primary:#8b5cf6;
-  --primary-2:#a78bfa;
-  --cyan:#22d3ee;
-  --pink:#ec4899;
+  --surface-2:rgba(255,255,255,.055);
+  --surface-3:rgba(255,255,255,.08);
+  --border:rgba(255,255,255,.08);
+  --border-2:rgba(255,255,255,.13);
+  --border-3:rgba(255,255,255,.22);
+  --text:#ededed;
+  --text-2:#a3a3a3;
+  --text-3:#737373;
+  --text-4:#525252;
+  --primary:#00ff9c;
+  --primary-2:#5cffbe;
+  --cyan:#00e5ff;
+  --pink:#ff3b5c;
   --gold:#fbbf24;
   --green:#34d399;
   --red:#f87171;
-  --grad:linear-gradient(135deg,#8b5cf6 0%,#22d3ee 100%);
-  --grad-pink:linear-gradient(135deg,#ec4899 0%,#8b5cf6 100%);
-  --glow:0 0 40px rgba(139,92,246,.28);
-  --glow-cyan:0 0 32px rgba(34,211,238,.22);
+  --grad:linear-gradient(135deg,#00ff9c 0%,#00e5ff 100%);
+  --grad-pink:linear-gradient(135deg,#ff3b5c 0%,#00ff9c 100%);
+  --glow:0 0 36px rgba(0,255,156,.28);
+  --glow-cyan:0 0 32px rgba(0,229,255,.22);
   --shadow-1:0 1px 2px rgba(0,0,0,.4);
   --shadow-2:0 4px 20px rgba(0,0,0,.35);
   --shadow-3:0 12px 48px rgba(0,0,0,.5);
@@ -63,25 +63,24 @@ body{
 }
 html[dir="ltr"] body{font-family:var(--font-en)}
 code,pre,kbd,.mono{font-family:var(--font-mono)}
-::selection{background:rgba(139,92,246,.35);color:#fff}
+::selection{background:rgba(0,255,156,.35);color:#fff}
 
 /* ═══════════════ AURORA BACKGROUND ═══════════════ */
 #auroraHost{position:fixed;inset:0;z-index:-2;overflow:hidden;pointer-events:none;background:var(--bg)}
 #auroraHost::before{
   content:'';position:absolute;inset:0;
   background:
-    radial-gradient(ellipse 60% 50% at 20% 20%, rgba(139,92,246,.20), transparent 60%),
-    radial-gradient(ellipse 50% 40% at 80% 30%, rgba(34,211,238,.15), transparent 60%),
-    radial-gradient(ellipse 50% 50% at 50% 90%, rgba(236,72,153,.12), transparent 60%);
+    radial-gradient(ellipse 60% 45% at 50% 0%, rgba(0,255,156,.035), transparent 70%);
   filter:blur(40px);opacity:.9;
   animation:auroraShift 22s ease-in-out infinite;
 }
 #auroraHost::after{
   content:'';position:absolute;inset:0;
   background-image:
-    linear-gradient(rgba(255,255,255,.015) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(255,255,255,.015) 1px,transparent 1px);
-  background-size:56px 56px;
+    repeating-linear-gradient(0deg,rgba(0,0,0,.25) 0 1px,transparent 1px 3px),
+    linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);
+  background-size:auto,40px 40px,40px 40px;
   mask-image:radial-gradient(ellipse at center,#000 30%,transparent 80%);
   -webkit-mask-image:radial-gradient(ellipse at center,#000 30%,transparent 80%);
 }
@@ -136,9 +135,9 @@ header h1 .subtitle{font-size:10.5px;color:var(--text-3);font-weight:400;letter-
 .btn:active{transform:translateY(0)}
 .btn.primary{
   background:var(--grad);border:none;color:#fff;font-weight:600;
-  box-shadow:0 4px 20px rgba(139,92,246,.35);
+  box-shadow:0 4px 20px rgba(0,255,156,.35);
 }
-.btn.primary:hover{box-shadow:0 8px 28px rgba(139,92,246,.5);transform:translateY(-1px)}
+.btn.primary:hover{box-shadow:0 8px 28px rgba(0,255,156,.5);transform:translateY(-1px)}
 .btn.primary:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
 .btn.ghost{background:transparent;border-color:transparent}
 .btn.ghost:hover{background:var(--surface)}
@@ -172,10 +171,10 @@ html[dir="ltr"] #sidebar{border-right:1px solid var(--border)}
 }
 .hist-item:hover{background:var(--surface);color:var(--text);border-color:var(--border)}
 .hist-item.active{
-  background:linear-gradient(135deg,rgba(139,92,246,.14),rgba(34,211,238,.10));
-  border-color:rgba(139,92,246,.35);
+  background:linear-gradient(135deg,rgba(0,255,156,.14),rgba(34,211,238,.10));
+  border-color:rgba(0,255,156,.35);
   color:var(--text);
-  box-shadow:inset 0 0 0 1px rgba(139,92,246,.15);
+  box-shadow:inset 0 0 0 1px rgba(0,255,156,.15);
 }
 .hist-item .hist-title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
 .hist-item .hist-del{
@@ -210,9 +209,9 @@ html[dir="ltr"] #chatcol{border-right:1px solid var(--border)}
 @keyframes msgIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
 
 .msg.user{
-  background:linear-gradient(135deg,rgba(139,92,246,.9),rgba(34,211,238,.85));
+  background:linear-gradient(135deg,rgba(0,255,156,.9),rgba(34,211,238,.85));
   color:#fff;align-self:flex-end;border-bottom-right-radius:5px;
-  box-shadow:0 6px 24px rgba(139,92,246,.28);
+  box-shadow:0 6px 24px rgba(0,255,156,.28);
   font-weight:500;
 }
 html[dir="rtl"] .msg.user{border-bottom-right-radius:16px;border-bottom-left-radius:5px}
@@ -227,9 +226,9 @@ html[dir="rtl"] .msg.user{border-bottom-right-radius:16px;border-bottom-left-rad
 html[dir="rtl"] .msg.assistant{border-bottom-left-radius:16px;border-bottom-right-radius:5px}
 
 .msg.assistant.merged{
-  border:1px solid rgba(139,92,246,.4);
-  box-shadow:0 0 32px rgba(139,92,246,.14),inset 0 0 0 1px rgba(255,255,255,.02);
-  background:linear-gradient(135deg,rgba(139,92,246,.04),rgba(34,211,238,.03));
+  border:1px solid rgba(0,255,156,.4);
+  box-shadow:0 0 32px rgba(0,255,156,.14),inset 0 0 0 1px rgba(255,255,255,.02);
+  background:linear-gradient(135deg,rgba(0,255,156,.04),rgba(34,211,238,.03));
 }
 
 /* Markdown in messages */
@@ -244,7 +243,7 @@ html[dir="rtl"] .msg.assistant{border-bottom-left-radius:16px;border-bottom-righ
 .md strong{color:var(--primary-2);font-weight:600}
 .md em{color:var(--text-2);font-style:italic}
 .md code{
-  background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.18);
+  background:rgba(0,255,156,.1);border:1px solid rgba(0,255,156,.18);
   border-radius:5px;padding:1px 6px;font-family:var(--font-mono);font-size:12px;
   color:var(--primary-2);direction:ltr;
 }
@@ -255,7 +254,7 @@ html[dir="rtl"] .msg.assistant{border-bottom-left-radius:16px;border-bottom-righ
 }
 .md pre code{background:none;border:none;padding:0;color:#d4d8e2;font-size:12px}
 .md hr{border:none;border-top:1px solid var(--border);margin:12px 0}
-.md blockquote{border-inline-start:3px solid var(--primary);margin:8px 0;padding:4px 12px;color:var(--text-2);background:rgba(139,92,246,.05);border-radius:6px}
+.md blockquote{border-inline-start:3px solid var(--primary);margin:8px 0;padding:4px 12px;color:var(--text-2);background:rgba(0,255,156,.05);border-radius:6px}
 .md table{border-collapse:collapse;font-size:12.5px;margin:10px 0;border-radius:8px;overflow:hidden}
 .md th,.md td{border:1px solid var(--border);padding:6px 10px;text-align:start}
 .md th{background:var(--surface-2);font-weight:600;color:var(--text)}
@@ -273,7 +272,7 @@ html[dir="rtl"] .msg.assistant{border-bottom-left-radius:16px;border-bottom-righ
   background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;
   font-weight:700;font-size:11.5px;
 }
-.merged-tag::before{background:linear-gradient(135deg,#8b5cf6,#22d3ee);box-shadow:0 0 10px rgba(139,92,246,.8)}
+.merged-tag::before{background:linear-gradient(135deg,#00ff9c,#00e5ff);box-shadow:0 0 10px rgba(0,255,156,.8)}
 
 /* Streaming cursor */
 .streaming-cursor::after{
@@ -317,21 +316,21 @@ details.md-sources summary:hover{color:var(--text-2)}
   transition:all var(--transition);flex-shrink:0;
 }
 .dock-btn:hover{background:var(--surface-2);color:var(--text)}
-.dock-btn.active{background:rgba(139,92,246,.18);color:var(--primary-2)}
+.dock-btn.active{background:rgba(0,255,156,.18);color:var(--primary-2)}
 .dock-btn svg{width:16px;height:16px}
 .dock-btn.recording{background:rgba(248,113,113,.2);color:var(--red);animation:recPulse 1.2s infinite}
 @keyframes recPulse{0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,.5)}70%{box-shadow:0 0 0 10px rgba(248,113,113,0)}}
-.dock-btn.transcribing{background:rgba(139,92,246,.2);color:var(--primary-2);opacity:.7}
+.dock-btn.transcribing{background:rgba(0,255,156,.2);color:var(--primary-2);opacity:.7}
 
 #btnSend{
   background:var(--grad);border:none;color:#fff;
   padding:0 16px;height:34px;border-radius:10px;
   font-weight:600;font-size:12.5px;cursor:pointer;
   display:flex;align-items:center;gap:6px;
-  box-shadow:0 4px 20px rgba(139,92,246,.35);
+  box-shadow:0 4px 20px rgba(0,255,156,.35);
   transition:all var(--transition);font-family:inherit;
 }
-#btnSend:hover{box-shadow:0 6px 26px rgba(139,92,246,.5);transform:translateY(-1px)}
+#btnSend:hover{box-shadow:0 6px 26px rgba(0,255,156,.5);transform:translateY(-1px)}
 #btnSend:disabled{opacity:.5;cursor:not-allowed;transform:none}
 #btnSend svg{width:15px;height:15px}
 
@@ -348,8 +347,8 @@ details.md-sources summary:hover{color:var(--text-2)}
 }
 .toggle-chip:hover{border-color:var(--border-2);color:var(--text-2)}
 .toggle-chip.on{
-  background:linear-gradient(135deg,rgba(139,92,246,.15),rgba(34,211,238,.12));
-  border-color:rgba(139,92,246,.5);color:var(--primary-2);
+  background:linear-gradient(135deg,rgba(0,255,156,.15),rgba(34,211,238,.12));
+  border-color:rgba(0,255,156,.5);color:var(--primary-2);
 }
 .toggle-chip input{display:none}
 
@@ -382,7 +381,7 @@ details.md-sources summary:hover{color:var(--text-2)}
   font:500 11.5px/1.5 var(--font-mono);
   background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text-2);
 }
-.msg-file .ic{flex-shrink:0;font-size:11px}
+.msg-file .ic{flex-shrink:0;font:700 9px/1 var(--font-mono);letter-spacing:.06em;color:var(--primary);opacity:.85}
 .msg-file .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* On the purple→cyan user bubble: dark glass and white text so names stay readable */
 .msg.user .msg-file{background:rgba(8,10,18,.28);border-color:rgba(255,255,255,.3);color:#fff}
@@ -393,26 +392,6 @@ details.md-sources summary:hover{color:var(--text-2)}
 .msg-files.expanded .msg-file.extra{display:inline-flex}
 .msg-files.expanded .msg-img.extra{display:block}
 
-/* Emoji picker */
-#emojiPicker{
-  position:absolute;bottom:100%;margin-bottom:8px;
-  width:290px;max-height:280px;overflow-y:auto;
-  background:rgba(15,18,25,.92);
-  backdrop-filter:blur(24px);
-  -webkit-backdrop-filter:blur(24px);
-  border:1px solid var(--border-2);border-radius:16px;padding:10px;
-  box-shadow:var(--shadow-3);
-  display:none;grid-template-columns:repeat(8,1fr);gap:2px;
-  z-index:100;
-}
-html[dir="rtl"] #emojiPicker{right:0}
-html[dir="ltr"] #emojiPicker{left:0}
-#emojiPicker.open{display:grid;animation:msgIn .2s ease}
-#emojiPicker .em{
-  cursor:pointer;font-size:18px;text-align:center;padding:6px 0;border-radius:8px;
-  transition:all var(--transition);
-}
-#emojiPicker .em:hover{background:var(--surface-2);transform:scale(1.15)}
 
 /* ═══════════════ WORKAREA ═══════════════ */
 #workarea{flex:1;display:flex;flex-direction:column;min-width:0}
@@ -453,7 +432,7 @@ html[dir="ltr"] #emojiPicker{left:0}
 .empty{
   display:flex;flex:1;align-items:center;justify-content:center;
   color:var(--text-3);text-align:center;flex-direction:column;gap:18px;padding:40px;
-  background:radial-gradient(circle at center,rgba(139,92,246,.06),transparent 70%);
+  background:radial-gradient(circle at center,rgba(0,255,156,.06),transparent 70%);
 }
 .empty .icon{
   width:80px;height:80px;border-radius:22px;
@@ -504,7 +483,7 @@ dialog input,dialog select,dialog textarea{
 }
 dialog input:focus,dialog select:focus,dialog textarea:focus{
   outline:none;border-color:var(--primary);
-  box-shadow:0 0 0 3px rgba(139,92,246,.15);
+  box-shadow:0 0 0 3px rgba(0,255,156,.15);
   background:rgba(0,0,0,.35);
 }
 dialog select option{background:#0f1219;color:var(--text)}
@@ -563,7 +542,7 @@ dialog select option{background:#0f1219;color:var(--text)}
 .provider-card .model-row input{flex:1;min-width:0}
 .provider-card .model-row .btn{flex-shrink:0;padding:8px 11px}
 .model-badge{
-  font-size:10px;background:rgba(139,92,246,.15);color:var(--primary-2);
+  font-size:10px;background:rgba(0,255,156,.15);color:var(--primary-2);
   padding:2px 7px;border-radius:5px;font-weight:600;
 }
 
@@ -589,7 +568,7 @@ dialog select option{background:#0f1219;color:var(--text)}
 @keyframes toastOut{to{opacity:0;transform:translateY(10px) scale(.95)}}
 .toast.success{border-color:rgba(52,211,153,.4);box-shadow:0 0 20px rgba(52,211,153,.15)}
 .toast.error{border-color:rgba(248,113,113,.4);box-shadow:0 0 20px rgba(248,113,113,.15)}
-.toast.info{border-color:rgba(139,92,246,.4);box-shadow:0 0 20px rgba(139,92,246,.15)}
+.toast.info{border-color:rgba(0,255,156,.4);box-shadow:0 0 20px rgba(0,255,156,.15)}
 
 /* ═══════════════ COMMAND PALETTE ═══════════════ */
 #cmdPalette{
@@ -622,7 +601,7 @@ dialog select option{background:#0f1219;color:var(--text)}
   display:flex;align-items:center;gap:12px;font-size:13px;
   color:var(--text-2);transition:all var(--transition);
 }
-.cmd-item:hover,.cmd-item.sel{background:linear-gradient(135deg,rgba(139,92,246,.14),rgba(34,211,238,.10));color:var(--text)}
+.cmd-item:hover,.cmd-item.sel{background:linear-gradient(135deg,rgba(0,255,156,.14),rgba(34,211,238,.10));color:var(--text)}
 .cmd-item svg{width:16px;height:16px;color:var(--primary-2)}
 .cmd-item kbd{
   margin-inline-start:auto;font-size:10px;background:var(--surface-2);
@@ -633,7 +612,7 @@ dialog select option{background:#0f1219;color:var(--text)}
 /* ═══════════════ AUTH OVERLAY ═══════════════ */
 #authOverlay{
   position:fixed;inset:0;z-index:9999;
-  background:radial-gradient(circle at 50% 30%,rgba(139,92,246,.15),transparent 60%),var(--bg);
+  background:radial-gradient(circle at 50% 30%,rgba(0,255,156,.15),transparent 60%),var(--bg);
   display:none;align-items:center;justify-content:center;padding:20px;
 }
 #authOverlay.show{display:flex;animation:fadeIn .3s ease}
@@ -668,6 +647,7 @@ dialog select option{background:#0f1219;color:var(--text)}
 @media (max-width:860px){
   header{padding:8px 10px;flex-wrap:wrap;row-gap:6px}
   header h1{font-size:13px;flex:1 1 auto;overflow:hidden}
+  .hdr-start{flex:1 1 auto;overflow:hidden;gap:8px}
   header h1 .subtitle{display:none}
   header .btn{padding:7px 9px;min-width:34px;height:34px;justify-content:center}
   header .btn span:not(.must-show):not(#headerClockTime){display:none}
@@ -716,7 +696,7 @@ dialog select option{background:#0f1219;color:var(--text)}
   width:1px;transform:translateX(-50%);
   background:var(--border);transition:all var(--transition);
 }
-.resizer:hover::after{top:0;bottom:0;background:var(--primary);width:2px;box-shadow:0 0 10px rgba(139,92,246,.6)}
+.resizer:hover::after{top:0;bottom:0;background:var(--primary);width:2px;box-shadow:0 0 10px rgba(0,255,156,.6)}
 
 /* Utility */
 .hint{color:var(--text-3);font-size:11.5px;display:block;line-height:1.7}
@@ -731,7 +711,7 @@ dialog select option{background:#0f1219;color:var(--text)}
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:4px}
-::-webkit-scrollbar-thumb:hover{background:rgba(139,92,246,.4)}
+::-webkit-scrollbar-thumb:hover{background:rgba(0,255,156,.4)}
 
 /* RTL specifics */
 html[dir="rtl"] .provider-tag::before{order:2}
@@ -779,13 +759,34 @@ html.mobile-ui .resizer{display:none}
 .hdr-btn svg{width:15px;height:15px}
 .hdr-btn.primary{background:var(--grad);border:none;color:#fff}
 
-/* User badge */
-#authUserBadge{
-  display:none;align-items:center;gap:7px;padding:6px 11px;border-radius:10px;
-  background:var(--surface);border:1px solid var(--border);font-size:12px;
-  color:var(--text-2);font-weight:500;
-}
-#authUserBadge svg{width:14px;height:14px;color:var(--primary-2)}
+/* Account bar: bottom of the sidebar, menu opens upwards */
+#acctBar{position:relative;display:flex;align-items:center;gap:6px;padding:10px;border-top:1px solid var(--border)}
+.acct-btn{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;
+  background:transparent;border:1px solid transparent;color:var(--text);cursor:pointer;text-align:start;font-family:inherit;transition:all var(--transition)}
+.acct-btn:hover,.acct-btn[aria-expanded="true"]{background:var(--surface-2);border-color:var(--border)}
+.acct-avatar{width:30px;height:30px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;
+  background:#0d0d0d;border:1px solid var(--border-3);color:var(--primary);font:700 13px var(--font-mono)}
+.acct-avatar svg{width:15px;height:15px}
+.acct-text{display:flex;flex-direction:column;min-width:0;line-height:1.3}
+.acct-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct-plan{font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct-chev{width:14px;height:14px;margin-inline-start:auto;color:var(--text-3);flex-shrink:0}
+.acct-gear{width:36px;height:36px;flex-shrink:0;display:grid;place-items:center;border-radius:8px;cursor:pointer;
+  background:transparent;border:1px solid transparent;color:var(--text-2);transition:all var(--transition)}
+.acct-gear:hover{background:var(--surface-2);border-color:var(--border);color:var(--primary)}
+.acct-gear svg{width:17px;height:17px}
+#acctMenu{position:absolute;bottom:calc(100% + 6px);inset-inline:10px;z-index:40;display:none;flex-direction:column;padding:6px;
+  background:rgba(14,14,14,.98);border:1px solid var(--border-2);border-radius:10px;box-shadow:var(--shadow-3),0 0 24px rgba(0,255,156,.08)}
+#acctMenu.show{display:flex;animation:cmdIn .18s ease}
+#acctMenu .acct-who{padding:8px 10px 6px;font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#acctMenu .mi{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border-radius:6px;background:none;border:0;
+  color:var(--text);font-family:inherit;font-size:13px;cursor:pointer;text-align:start}
+#acctMenu .mi:hover{background:var(--surface-2)}
+#acctMenu .mi svg{width:16px;height:16px;flex-shrink:0;color:var(--text-2)}
+#acctMenu .mi kbd{margin-inline-start:auto;font:11px var(--font-mono);color:var(--text-3);direction:ltr}
+#acctMenu .mi.danger,#acctMenu .mi.danger svg{color:var(--red)}
+#acctMenu hr{border:0;border-top:1px solid var(--border);margin:5px 4px}
+#btnAcctMobile{display:none}
 
 /* Clock dialog */
 #clockDialog{width:520px}
@@ -808,8 +809,8 @@ html.mobile-ui .resizer{display:none}
 }
 .secToolNavBtn:hover{background:var(--surface-2);color:var(--text)}
 .secToolNavBtn.active{
-  background:linear-gradient(135deg,rgba(139,92,246,.18),rgba(34,211,238,.12));
-  border-color:rgba(139,92,246,.5);color:var(--primary-2);
+  background:linear-gradient(135deg,rgba(0,255,156,.18),rgba(34,211,238,.12));
+  border-color:rgba(0,255,156,.5);color:var(--primary-2);
 }
 
 .secToolAiResult{
@@ -828,7 +829,7 @@ html.mobile-ui .resizer{display:none}
 }
 .ctf-item.solved{border-color:rgba(52,211,153,.4);box-shadow:0 0 20px rgba(52,211,153,.1)}
 .ctf-item h4{margin:0 0 8px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
-.ctf-item code{font-family:var(--font-mono);font-size:11.5px;color:var(--primary-2);background:rgba(139,92,246,.1);padding:2px 6px;border-radius:4px}
+.ctf-item code{font-family:var(--font-mono);font-size:11.5px;color:var(--primary-2);background:rgba(0,255,156,.1);padding:2px 6px;border-radius:4px}
 
 /* RTP list */
 .hks-row{
@@ -836,7 +837,7 @@ html.mobile-ui .resizer{display:none}
   border-bottom:1px solid var(--border);cursor:pointer;
   transition:background var(--transition);
 }
-.hks-row:hover{background:rgba(139,92,246,.06)}
+.hks-row:hover{background:rgba(0,255,156,.06)}
 .hks-row:last-child{border-bottom:none}
 
 /* Background picker */
@@ -847,7 +848,7 @@ html.mobile-ui .resizer{display:none}
   transition:all var(--transition);
 }
 .bg-item:hover{border-color:var(--border-2);background:rgba(0,0,0,.3)}
-.bg-item.selected{border-color:var(--primary);box-shadow:0 0 16px rgba(139,92,246,.3)}
+.bg-item.selected{border-color:var(--primary);box-shadow:0 0 16px rgba(0,255,156,.3)}
 .bg-thumb{width:100%;height:44px;border-radius:8px;margin-bottom:6px;overflow:hidden;background:#05080a}
 .bg-label{font-size:10.5px;line-height:1.3;color:var(--text-2)}
 
@@ -861,6 +862,213 @@ html.mobile-ui .resizer{display:none}
 
 /* Primary color variable propagation */
 .msg.user{background:linear-gradient(135deg,var(--primary) 0%,var(--cyan) 100%)}
+/* ═══════════════ CYBER CONSOLE THEME ═══════════════ */
+.msg.assistant.failed{border-color:rgba(248,113,113,.45);box-shadow:inset 3px 0 0 var(--red)}
+html[dir="rtl"] .msg.assistant.failed{box-shadow:inset -3px 0 0 var(--red)}
+/* Terminal face for chrome and labels, neon on near-black, HUD corner brackets. */
+header h1 .subtitle{font-family:var(--font-mono);color:var(--primary);opacity:.75;letter-spacing:.08em}
+header{background:rgba(0,0,0,.82);border-bottom-color:var(--border-2);box-shadow:0 1px 0 rgba(0,255,156,.06),0 8px 30px rgba(0,0,0,.35)}
+header h1 .brand{background:#0a0a0a;border:1px solid var(--border-3);box-shadow:0 0 18px rgba(0,255,156,.25)}
+.sys-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;border:1px solid var(--border-2);
+  background:rgba(0,255,156,.05);font:600 10px/1.4 var(--font-mono);letter-spacing:.12em;color:var(--primary);direction:ltr;white-space:nowrap}
+.sys-chip i{width:7px;height:7px;border-radius:50%;background:var(--primary);box-shadow:0 0 8px var(--primary);animation:sysBlink 2s ease-in-out infinite}
+.sys-chip.off{color:var(--red);border-color:rgba(248,113,113,.4);background:rgba(248,113,113,.08)}
+.sys-chip.off i{background:var(--red);box-shadow:0 0 8px var(--red)}
+@keyframes sysBlink{0%,100%{opacity:1}50%{opacity:.35}}
+::selection{background:rgba(0,255,156,.3);color:#eafff5}
+
+.btn,.hdr-btn{border-radius:8px;letter-spacing:.02em}
+.btn:hover,.hdr-btn:hover{border-color:var(--border-3);box-shadow:0 0 14px rgba(0,255,156,.12)}
+.btn.primary,#btnSend{color:#00150c;font-weight:700;border-radius:8px;box-shadow:0 0 20px rgba(0,255,156,.3)}
+.btn.primary:hover,#btnSend:hover{box-shadow:0 0 30px rgba(0,255,156,.5)}
+.btn.primary svg,#btnSend svg{stroke:#00150c}
+#inputbar{background:rgba(14,14,14,.92);border-color:var(--border-2);box-shadow:0 0 0 1px rgba(0,255,156,.04),0 10px 40px rgba(0,0,0,.5)}
+#chatcol,#sidebar{background:rgba(6,6,6,.7)}
+.hist-item.active{box-shadow:inset 3px 0 0 var(--primary)}
+html[dir="rtl"] .hist-item.active{box-shadow:inset -3px 0 0 var(--primary)}
+
+/* HUD frame: corner brackets on cards and dialogs */
+.hud,dialog,#authOverlay .card{
+  --hud-c:rgba(0,255,156,.55);
+  background-image:
+    linear-gradient(var(--hud-c),var(--hud-c)),linear-gradient(var(--hud-c),var(--hud-c)),
+    linear-gradient(var(--hud-c),var(--hud-c)),linear-gradient(var(--hud-c),var(--hud-c)),
+    linear-gradient(var(--hud-c),var(--hud-c)),linear-gradient(var(--hud-c),var(--hud-c)),
+    linear-gradient(var(--hud-c),var(--hud-c)),linear-gradient(var(--hud-c),var(--hud-c));
+  background-repeat:no-repeat;
+  background-size:16px 2px,2px 16px,16px 2px,2px 16px,16px 2px,2px 16px,16px 2px,2px 16px;
+  background-position:top left,top left,top right,top right,bottom left,bottom left,bottom right,bottom right;
+}
+dialog{background-color:rgba(12,12,12,.97);border-radius:6px;border-color:var(--border-2)}
+dialog>h3::before{content:'// ';color:var(--primary)}
+dialog input:focus,dialog select:focus,dialog textarea:focus{box-shadow:0 0 0 3px rgba(0,255,156,.14),0 0 18px rgba(0,255,156,.12)}
+dialog::backdrop{background:rgba(0,0,0,.75)}
+
+/* Security tools: tabs read like terminal commands */
+.secToolNavBtn{border-radius:6px;font-size:11.5px;letter-spacing:.03em}
+.secToolNavBtn::before{content:'$';color:var(--text-4);font-family:var(--font-mono)}
+.secToolNavBtn.active{background:rgba(0,255,156,.1);border-color:var(--primary);color:var(--primary);box-shadow:0 0 14px rgba(0,255,156,.2)}
+.secToolNavBtn.active::before{content:'>';color:var(--primary)}
+
+/* Empty preview pane */
+.empty .icon{border-radius:14px;background:#0a0a0a;border:1px solid var(--border-3);box-shadow:0 0 30px rgba(0,255,156,.25)}
+.empty .icon svg{stroke:var(--primary)}
+.empty .icon::after{background:radial-gradient(circle,rgba(0,255,156,.35),transparent 70%)}
+
+/* Security operations home, over the empty chat */
+#socHome{display:none}
+
+.soc-head{display:flex;flex-direction:column;gap:6px}
+.soc-kicker{font:600 10.5px var(--font-mono);letter-spacing:.18em;color:var(--primary);direction:ltr;text-align:start}
+.soc-head h2{margin:0;font-size:19px;font-weight:700;line-height:1.3;color:var(--text)}
+.soc-head p{margin:0;font-size:12.5px;line-height:1.7;color:var(--text-2)}
+.soc-stats{display:flex;flex-wrap:wrap;gap:6px}
+.soc-stat{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border:1px solid var(--border);border-radius:6px;
+  font-size:11px;color:var(--text-2);background:rgba(0,0,0,.25)}
+.soc-stat i{width:6px;height:6px;border-radius:50%;background:var(--primary);box-shadow:0 0 6px var(--primary)}
+.soc-stat.warn i{background:var(--gold);box-shadow:0 0 6px var(--gold)}
+.soc-stat b{font:600 11px var(--font-mono);color:var(--text)}
+.soc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.soc-tile{position:relative;display:flex;flex-direction:column;gap:4px;padding:11px 12px;text-align:start;cursor:pointer;
+  border:1px solid var(--border);border-radius:8px;background-color:rgba(0,0,0,.3);color:var(--text);font-family:inherit;
+  transition:border-color var(--transition),box-shadow var(--transition),transform var(--transition);--hud-c:rgba(0,255,156,.35)}
+.soc-tile:hover{border-color:var(--primary);box-shadow:0 0 18px rgba(0,255,156,.18);transform:translateY(-1px)}
+.soc-tile code{font:700 10.5px var(--font-mono);letter-spacing:.12em;color:var(--primary);direction:ltr;text-align:start}
+.soc-tile strong{font-size:13px;font-weight:600}
+.soc-tile span{font-size:11px;line-height:1.55;color:var(--text-3);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.soc-all{margin-inline-start:auto;padding:4px 10px;font-size:11.5px}
+
+/* Login: a secure terminal */
+#authOverlay{background:radial-gradient(circle at 50% 25%,rgba(0,255,156,.05),transparent 60%),var(--bg)}
+#authOverlay::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.25) 0 1px,transparent 1px 3px),
+    linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);
+  background-size:auto,40px 40px,40px 40px}
+#authOverlay .card{background-color:rgba(10,10,10,.94);border-radius:8px;border-color:var(--border-2);box-shadow:0 0 50px rgba(0,255,156,.08),var(--shadow-3)}
+#authOverlay .logo{border-radius:14px;background:#0a0a0a;border:1px solid var(--border-3)}
+#authOverlay .logo svg{stroke:var(--primary)}
+#authOverlay label{display:block;margin:12px 0 6px;font-size:12.5px;color:var(--text-2)}
+#authOverlay input[type="text"],#authOverlay input[type="password"]{
+  display:block;width:100%;margin-top:6px;padding:0 13px;border-radius:6px;border:1px solid var(--border-2);
+  background:rgba(0,0,0,.45);color:var(--text);font-size:14px;font-family:inherit;transition:all var(--transition)}
+#authOverlay input[type="text"]:focus,#authOverlay input[type="password"]:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(0,255,156,.14),0 0 18px rgba(0,255,156,.12)}
+#authOverlay label:has(#authRememberMe){display:flex}
+.hud-line{font:500 11.5px var(--font-mono);color:var(--text-2);margin:-6px 0 18px;padding-bottom:10px;border-bottom:1px dashed var(--border-2);text-align:left}
+.hud-line span{color:var(--primary)}
+.caret{display:inline-block;width:7px;height:13px;margin-left:4px;vertical-align:-2px;background:var(--primary);animation:caretBlink 1s steps(1) infinite}
+@keyframes caretBlink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.sys-chip i,.caret{animation:none}}
+@media (max-width:860px){
+  #btnAcctMobile{display:inline-flex}
+  .sys-chip{padding:2px 7px;font-size:9px}
+  #messages:empty ~ #socHome{padding:16px 14px 8px}
+}
+/* Side panel: the security operations center in place of preview / code (labels and download hidden) */
+#workarea #tabs,#workarea #panels{display:none}
+#messages{padding-inline:max(18px,calc((100% - 820px) / 2))}
+#workarea{background:rgba(4,4,4,.55)}
+#socPanel{flex:1;overflow-y:auto;padding:26px 28px 24px}
+.soc-home{display:flex;flex-direction:column;gap:14px}
+#socHome{display:none}
+#socPanel .soc-grid{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.chat-hint{display:none}
+#messages:empty ~ .chat-hint{display:flex;align-items:center;justify-content:center;gap:8px;position:absolute;inset:0 18px calc(var(--dock-h, 128px) + 30px);
+  text-align:center;font-size:13px;color:var(--text-3);pointer-events:none}
+.chat-hint span{font:700 13px var(--font-mono);color:var(--primary);direction:ltr}
+.chat-hint b{font-weight:400;max-width:300px;line-height:1.7}
+
+/* Composer: a command line, one control row, icon send */
+#inputbar{inset-inline:max(14px,calc((100% - 720px) / 2));bottom:30px;gap:0;padding:0;border-radius:12px;overflow:hidden}
+#inputbar:focus-within{border-color:var(--primary);box-shadow:0 0 0 1px rgba(0,255,156,.35),0 0 32px rgba(0,255,156,.12),0 10px 40px rgba(0,0,0,.5)}
+.cmd-line{display:flex;align-items:flex-start;gap:8px;padding:10px 14px 2px}
+.cmd-sigil{font:700 12px/22px var(--font-mono);color:var(--primary);flex-shrink:0;direction:ltr;user-select:none;text-shadow:0 0 10px rgba(0,255,156,.5)}
+#inputbar #prompt{flex:1;min-height:22px;line-height:22px;padding:0;font-size:13.5px}
+#attachStrip{padding:10px 14px 0}
+#inputbar .dock-row{padding:2px 8px 7px;gap:8px}
+#inputbar .dock-icons{align-items:center;gap:2px;min-width:0}
+.dock-sep{width:1px;height:18px;background:var(--border-2);margin:0 6px}
+.dock-btn{border-radius:8px}
+#inputbar .dock-btn{width:30px;height:30px}
+#inputbar .dock-btn svg{width:15px;height:15px}
+.dock-send{display:flex;align-items:center;gap:6px;flex-shrink:0}
+#chat-toggles{padding:0;gap:4px}
+.toggle-chip{border-radius:6px;padding:5px 9px;font-size:11.5px;gap:7px;background:transparent;border-color:transparent}
+.toggle-chip:hover{background:var(--surface-2);border-color:var(--border)}
+.toggle-chip .sw{position:relative;width:22px;height:12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid var(--border-2);flex-shrink:0;transition:all var(--transition)}
+.toggle-chip .sw::after{content:'';position:absolute;top:1px;inset-inline-start:1px;width:8px;height:8px;border-radius:50%;background:var(--text-3);transition:all var(--transition)}
+.toggle-chip.on{background:transparent;border-color:transparent;color:var(--text)}
+.toggle-chip.on .sw{background:rgba(0,255,156,.25);border-color:var(--primary)}
+.toggle-chip.on .sw::after{inset-inline-start:11px;background:var(--primary);box-shadow:0 0 6px var(--primary)}
+#btnSend{width:34px;height:34px;padding:0;justify-content:center;border-radius:9px}
+#btnSend span:not(.spinner){display:none}
+#btnSend svg{width:15px;height:15px}
+#btnStop{color:var(--text-3)}
+.cmd-hint{position:absolute;bottom:10px;inset-inline:max(14px,calc((100% - 720px) / 2));font:11px var(--font-mono);color:var(--text-4);text-align:center;direction:ltr;pointer-events:none}
+.cmd-hint b{font-family:var(--font-ar);font-weight:400;color:var(--text-3)}
+
+/* Phones: the account menu drops from the header, no drawer */
+#acctMenu.from-header{position:fixed;top:56px;bottom:auto;inset-inline:10px auto;width:min(300px,calc(100vw - 20px));z-index:70}
+/* Three columns on desktop: projects | chat (fills) | operations panel, with drag bars
+   that can push either side panel all the way in. */
+@media (min-width:861px){
+  html:not(.mobile-ui) #chatcol{flex:1;width:auto;min-width:320px}
+  html:not(.mobile-ui) #workarea{flex:none;width:clamp(380px,46%,760px)}
+}
+#sidebar.collapsed,#workarea.collapsed{width:0!important;min-width:0!important;border:0!important;overflow:hidden;padding:0!important}
+.resizer{width:9px;margin-inline:-2px;touch-action:none}
+.resizer::after{top:calc(50% - 22px);bottom:auto;height:44px;width:3px;border-radius:3px;background:var(--border-3)}
+.resizer:hover::after,.resizer.dragging::after,.resizer:focus-visible::after{top:0;bottom:0;height:auto;width:2px;border-radius:0;background:var(--primary);box-shadow:0 0 10px rgba(0,255,156,.6)}
+.resizer:focus-visible{outline:none}
+.resizer.edge::after{background:var(--primary);opacity:.7}
+body.resizing{cursor:col-resize;user-select:none}
+body.resizing iframe{pointer-events:none}
+
+/* Panel buttons: small, on the drag bars on desktop; in the header on phones (no bars) */
+.rz-btn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;width:20px;height:28px;padding:0;display:grid;place-items:center;
+  border-radius:6px;background:#0d0d0d;border:1px solid var(--border-2);color:var(--text-3);cursor:pointer;transition:color var(--transition),border-color var(--transition),box-shadow var(--transition)}
+.rz-btn svg{width:12px;height:12px}
+.rz-btn:hover,.resizer.edge .rz-btn{color:var(--primary);border-color:rgba(0,255,156,.45);box-shadow:0 0 10px rgba(0,255,156,.2)}
+html[dir="ltr"] .rz-btn svg{transform:scaleX(-1)}
+/* A collapsed panel leaves its bar at the window edge: keep the button inside the window */
+#resizer1.edge .rz-btn{left:auto;inset-inline-start:100%;transform:translateY(-50%)}
+#resizer2.edge .rz-btn{left:auto;inset-inline-end:100%;transform:translateY(-50%)}
+.resizer::after{display:none}
+.resizer:hover::after,.resizer.dragging::after,.resizer:focus-visible::after{display:block}
+.panel-toggle{display:none}
+.hdr-start{display:flex;align-items:center;gap:10px;min-width:0}
+.panel-toggle svg{width:17px;height:17px}
+.panel-toggle[aria-expanded="true"]{color:var(--primary);border-color:rgba(0,255,156,.35)}
+html[dir="ltr"] .panel-toggle svg{transform:scaleX(-1)}
+
+/* Projects sidebar */
+.side-kicker{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 0;font:600 10.5px var(--font-mono);letter-spacing:.16em;color:var(--text-3);direction:ltr}
+.side-kicker span{color:var(--primary)}
+.side-kicker b{font-weight:600;color:var(--text-2);padding:1px 7px;border:1px solid var(--border-2);border-radius:5px}
+#btnNew{background:transparent;color:var(--primary);border:1px dashed rgba(0,255,156,.45);box-shadow:none;border-radius:8px;height:38px}
+#btnNew svg{stroke:var(--primary)}
+#btnNew:hover{background:rgba(0,255,156,.07);border-style:solid;box-shadow:0 0 16px rgba(0,255,156,.15)}
+.hist-item{display:flex;align-items:center;gap:10px;border-radius:8px;padding:9px 10px;cursor:pointer}
+.hist-glyph{font:700 12px var(--font-mono);color:var(--text-4);width:10px;flex-shrink:0;direction:ltr}
+.hist-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.hist-item .hist-title{font-size:13px}
+.hist-meta{font:500 10px var(--font-mono);letter-spacing:.08em;color:var(--text-4);direction:ltr;text-align:start}
+.hist-item.active{background:rgba(0,255,156,.06);border-color:rgba(0,255,156,.28);color:var(--text)}
+.hist-item.active .hist-glyph{color:var(--primary)}
+.hist-item.active .hist-meta{color:var(--text-3)}
+
+/* Phones: the side panel is a drawer, so the operations center shows in the empty chat */
+html.mobile-ui #messages:empty ~ #socHome{display:flex;position:absolute;inset:0 0 auto 0;max-height:calc(100% - var(--dock-h, 128px) - 24px);overflow-y:auto;padding:22px 18px 10px}
+html.mobile-ui #messages:empty ~ .chat-hint{display:none}
+html.mobile-ui .panel-toggle{display:inline-flex}
+@media (max-width:860px){
+  #messages:empty ~ #socHome{display:flex;position:absolute;inset:0 0 auto 0;max-height:calc(100% - var(--dock-h, 128px) - 24px);overflow-y:auto;padding:22px 18px 10px}
+  #messages:empty ~ .chat-hint{display:none}
+  .panel-toggle{display:inline-flex}
+  #inputbar{inset-inline:10px;bottom:12px}
+  .cmd-hint{display:none}
+  .soc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .toggle-chip span{font-size:11px}
+}
 </style>
 </head>
 <body>
@@ -904,17 +1112,18 @@ html.mobile-ui .resizer{display:none}
 <div id="toastHost"></div>
 
 <!-- Offline Banner -->
-<div id="offlineBanner"><span data-i18n="offlineBanner">⚠️ أنت غير متصل بالإنترنت</span></div>
+<div id="offlineBanner"><span data-i18n="offlineBanner">أنت غير متصل بالإنترنت</span></div>
 
 <!-- Auth Overlay -->
 <div id="authOverlay">
   <div class="card">
+    <div class="hud-line" dir="ltr"><span>root@taryam:~#</span> secure-login<i class="caret"></i></div>
     <div class="logo-wrap"><div class="logo"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div></div>
     <h2 data-i18n="authTitle">مرحبًا بك</h2>
     <p class="sub" data-i18n="authSubtitle">سجّل الدخول أو أنشئ حسابًا جديدًا</p>
     <div style="display:flex;gap:8px;justify-content:center;margin:12px 0">
-      <button type="button" class="btn" id="btnAuthLangAr" style="padding:6px 12px">🇦🇪 عربي</button>
-      <button type="button" class="btn" id="btnAuthLangEn" style="padding:6px 12px">🇬🇧 English</button>
+      <button type="button" class="btn" id="btnAuthLangAr" style="padding:6px 12px">عربي</button>
+      <button type="button" class="btn" id="btnAuthLangEn" style="padding:6px 12px">English</button>
     </div>
     <div style="display:flex;gap:8px;margin:18px 0">
       <button type="button" class="btn primary" id="authTabLogin" style="flex:1;justify-content:center" data-i18n="authTabLogin">دخول</button>
@@ -930,7 +1139,7 @@ html.mobile-ui .resizer{display:none}
       <label><span id="authPasswordLabelText" data-i18n="authPasswordLabel">كلمة المرور</span>
         <div style="position:relative">
           <input type="password" id="authPassword" autocomplete="current-password" style="height:42px;padding-inline-end:44px">
-          <button type="button" id="authTogglePassBtn" style="position:absolute;inset-inline-end:4px;top:4px;height:34px;width:34px;border:none;background:transparent;cursor:pointer;color:var(--text-3);display:flex;align-items:center;justify-content:center;border-radius:8px">👁</button>
+          <button type="button" id="authTogglePassBtn" style="position:absolute;inset-inline-end:4px;top:4px;height:34px;width:34px;border:none;background:transparent;cursor:pointer;color:var(--text-3);display:flex;align-items:center;justify-content:center;border-radius:8px" aria-label="إظهار كلمة المرور"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
         </div>
       </label>
       <label style="display:flex;align-items:center;gap:8px;margin:12px 0;font-size:12.5px;cursor:pointer">
@@ -964,13 +1173,17 @@ html.mobile-ui .resizer{display:none}
 
 <!-- Header -->
 <header>
+  <div class="hdr-start">
+  <button class="hdr-btn icon panel-toggle" id="btnToggleSide" type="button" title="إظهار / إخفاء المشاريع" aria-controls="sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
   <h1>
     <span class="brand"><img src="icons/icon-192.png" alt="logo" onerror="this.parentNode.innerHTML='<svg width=\'20\' height=\'20\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'#fff\' stroke-width=\'2.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><path d=\'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\'/></svg>'"></span>
     <span class="titles">
       <span class="title-main" data-i18n="appTitle">تريم سايبر</span>
-      <span class="subtitle">TARYAM • DeepSeek-Powered</span>
+      <span class="subtitle">TARYAM // SECURITY CONSOLE</span>
     </span>
+    <span class="sys-chip" id="sysChip"><i></i><b id="sysChipText">ONLINE</b></span>
   </h1>
+  </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center">
     <button class="hdr-btn" id="btnCmdK" title="Command Palette (Ctrl+K)">
       <svg><use href="#i-search"/></svg>
@@ -980,23 +1193,18 @@ html.mobile-ui .resizer{display:none}
       <svg><use href="#i-clock"/></svg>
       <span id="headerClockTime" style="direction:ltr;font-weight:600;font-family:var(--font-mono);font-size:11.5px">--:--:--</span>
     </button>
-    <span id="authUserBadge">
-      <svg><use href="#i-user"/></svg>
-      <span id="authUserLabel"></span>
-    </span>
-    <button class="hdr-btn" id="btnSettings"><svg><use href="#i-settings"/></svg> <span data-i18n="settings">الإعدادات</span></button>
+    <button class="hdr-btn icon" id="btnAcctMobile" title="الحساب"><svg><use href="#i-user"/></svg></button>
     <div id="headerMenuWrap">
       <button class="hdr-btn icon" id="btnHeaderMenu" style="padding:8px"><svg><use href="#i-more-v"/></svg></button>
       <div id="headerMenuDropdown">
         <button class="btn" id="btnToggleProjects"><svg><use href="#i-folder"/></svg> <span data-i18n="projectsListTitle">المشاريع</span></button>
-        <button class="btn" id="btnToggleHistory"><svg><use href="#i-code"/></svg> <span data-i18n="code">الكود</span></button>
         <button class="btn" id="btnSecTools"><svg><use href="#i-tools"/></svg> <span data-i18n="secToolsTitle">أدوات الأمن</span></button>
         <a class="btn" id="linkCasino" href="lab/casino.html" style="text-decoration:none"><svg><use href="#i-shield"/></svg> <span data-i18n="casinoTitle">كيف يكسب الكازينو</span></a>
         <a class="btn" id="linkRtpLab" href="lab/index.html" style="text-decoration:none"><svg><use href="#i-preview"/></svg> <span data-i18n="rtpLabTitle">مختبر RTP</span></a>
         <button class="btn" id="btnInstall"><svg><use href="#i-install"/></svg> <span data-i18n="install">تثبيت التطبيق</span></button>
-        <button class="btn" id="btnLogout" style="display:none;color:var(--red)"><svg><use href="#i-logout"/></svg> <span data-i18n="logout">خروج</span></button>
       </div>
     </div>
+    <button class="hdr-btn icon panel-toggle" id="btnTogglePanel" type="button" title="إظهار / إخفاء مركز العمليات" aria-controls="workarea"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
   </div>
 </header>
 
@@ -1004,6 +1212,7 @@ html.mobile-ui .resizer{display:none}
 
 <main>
   <div id="sidebar">
+    <div class="side-kicker"><span>// PROJECTS</span><b id="projCount">0</b></div>
     <div class="sidebar-head">
       <button class="btn primary" id="btnNew" style="flex:1;justify-content:center">
         <svg><use href="#i-plus"/></svg>
@@ -1011,50 +1220,77 @@ html.mobile-ui .resizer{display:none}
       </button>
     </div>
     <div id="history"></div>
+    <div id="acctBar">
+      <div id="acctMenu" role="menu">
+        <div class="acct-who" id="acctWho" dir="auto"></div>
+        <button type="button" class="mi" id="miSettings" role="menuitem"><svg><use href="#i-settings"/></svg><span data-i18n="settings">الإعدادات</span><kbd>Ctrl+,</kbd></button>
+        <button type="button" class="mi" id="miLang" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg><span data-i18n="acctLang">اللغة</span><kbd id="miLangNext"></kbd></button>
+        <hr>
+        <button type="button" class="mi" id="miInstall" role="menuitem"><svg><use href="#i-install"/></svg><span data-i18n="install">تثبيت التطبيق</span></button>
+        <hr>
+        <button type="button" class="mi" id="btnAcctLogin" role="menuitem"><svg><use href="#i-user"/></svg><span data-i18n="acctLogin">تسجيل الدخول</span></button>
+        <button type="button" class="mi danger" id="btnLogout" role="menuitem" style="display:none"><svg><use href="#i-logout"/></svg><span data-i18n="logout">خروج</span></button>
+      </div>
+      <button type="button" class="acct-btn" id="btnAcct" aria-haspopup="menu">
+        <span class="acct-avatar" id="acctAvatar"></span>
+        <span class="acct-text"><span class="acct-name" id="acctName" dir="auto"></span><span class="acct-plan" id="acctPlan"></span></span>
+        <svg class="acct-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+      </button>
+      <button type="button" class="acct-gear" id="btnSettings" title="الإعدادات"><svg><use href="#i-settings"/></svg></button>
+    </div>
   </div>
 
-  <div class="resizer" id="resizer1"></div>
+  <div class="resizer" id="resizer1" role="separator" aria-orientation="vertical" tabindex="0" title="اسحب لتغيير العرض"><button type="button" class="rz-btn" id="rzSide" title="إظهار / إخفاء المشاريع" aria-controls="sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button></div>
 
   <div id="chatcol">
     <div id="messages"></div>
+    <!-- Shown only while the conversation is empty (see #messages:not(:empty) ~ #socHome). -->
+    <section id="socHome" class="soc-home" aria-labelledby="socTitle"></section>
 
     <!-- The dock floats over the bottom of the chat column, so everything that belongs
          to the composer (toggles, attachments) lives inside it; outside it they were
          laid out underneath the dock and ended up hidden or cut off. -->
     <div id="inputbar">
       <input type="file" id="attachInput" accept="image/*,.txt,.py,.js,.json,.md,.html,.log,.css,.csv" multiple style="display:none">
-      <div id="emojiPicker"></div>
-      <div id="chat-toggles">
-        <label class="toggle-chip" id="chip-askall">
-          <input type="checkbox" id="chkAskAll">
-          <span data-i18n="askAllLabel">🎯 اسأل كل المزوّدين</span>
-        </label>
-        <label class="toggle-chip on" id="chip-merge">
-          <input type="checkbox" id="chkMerge" checked>
-          <span data-i18n="mergeLabel">🧠 دمج ذكي</span>
-        </label>
-      </div>
       <div id="attachStrip"></div>
-      <textarea id="prompt" rows="1" data-i18n-placeholder="promptPlaceholder" placeholder="صف ما تريد... مثال: اشرح ثغرة XSS"></textarea>
+      <div class="cmd-line">
+        <span class="cmd-sigil" aria-hidden="true">&gt;_</span>
+        <textarea id="prompt" rows="1" data-i18n-placeholder="promptPlaceholder" placeholder="صف ما تريد... مثال: اشرح ثغرة XSS"></textarea>
+      </div>
       <div class="dock-row">
         <div class="dock-icons">
           <button class="dock-btn" id="btnAttach" type="button" title="إرفاق"><svg><use href="#i-attach"/></svg></button>
-          <button class="dock-btn" id="btnEmoji" type="button" title="إيموجي"><svg><use href="#i-smile"/></svg></button>
           <button class="dock-btn" id="btnMic" type="button" title="تحدث"><svg><use href="#i-mic"/></svg></button>
           <button class="dock-btn" id="btnVoiceChat" type="button" title="محادثة صوتية"><svg><use href="#i-headphones"/></svg></button>
-          <button class="dock-btn" id="btnStop" type="button" title="إيقاف"><svg><use href="#i-stop"/></svg></button>
+          <span class="dock-sep" aria-hidden="true"></span>
+          <div id="chat-toggles">
+            <label class="toggle-chip" id="chip-askall">
+              <input type="checkbox" id="chkAskAll">
+              <i class="sw" aria-hidden="true"></i><span data-i18n="askAllLabel">اسأل كل المزوّدين</span>
+            </label>
+            <label class="toggle-chip on" id="chip-merge">
+              <input type="checkbox" id="chkMerge" checked>
+              <i class="sw" aria-hidden="true"></i><span data-i18n="mergeLabel">دمج ذكي</span>
+            </label>
+          </div>
         </div>
-        <button id="btnSend" type="button">
-          <span data-i18n="send">إرسال</span>
-          <svg><use href="#i-send"/></svg>
-        </button>
+        <div class="dock-send">
+          <button class="dock-btn" id="btnStop" type="button" title="إيقاف"><svg><use href="#i-stop"/></svg></button>
+          <button id="btnSend" type="button" aria-label="إرسال">
+            <span data-i18n="send">إرسال</span>
+            <svg><use href="#i-send"/></svg>
+          </button>
+        </div>
       </div>
     </div>
+    <div class="chat-hint" id="chatHint"><span>&gt;_</span><b data-i18n="chatHint">اكتب أمرك أو سؤالك الأمني بالأسفل، أو اختر أداة من مركز العمليات.</b></div>
+    <div class="cmd-hint" aria-hidden="true"><span>Enter</span> <b data-i18n="hintSend">للإرسال</b> · <span>Shift+Enter</span> <b data-i18n="hintNewline">سطر جديد</b></div>
   </div>
 
-  <div class="resizer" id="resizer2"></div>
+  <div class="resizer" id="resizer2" role="separator" aria-orientation="vertical" tabindex="0" title="اسحب لتغيير العرض"><button type="button" class="rz-btn" id="rzPanel" title="إظهار / إخفاء مركز العمليات" aria-controls="workarea"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button></div>
 
   <div id="workarea">
+    <section id="socPanel" class="soc-home" aria-labelledby="socPanelTitle"></section>
     <div id="tabs">
       <div class="tab active" data-tab="preview">
         <svg><use href="#i-preview"/></svg>
@@ -1077,8 +1313,8 @@ html.mobile-ui .resizer{display:none}
           <div class="icon">
             <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </div>
-          <h2 data-i18n="emptyTitle">ابدأ ببناء أول تطبيق 🚀</h2>
-          <p data-i18n="emptyDesc">اكتب وصفًا في المربع على اليسار</p>
+          <h2 data-i18n="emptyTitle">مساحة العمل جاهزة</h2>
+          <p data-i18n="emptyDesc">اكتب طلبك في المحادثة أو افتح أداة أمنية؛ الأكواد والتقارير تظهر هنا.</p>
         </div>
         <iframe id="previewFrame" style="display:none" sandbox="allow-scripts allow-modals allow-forms allow-popups"></iframe>
       </div>
@@ -1095,19 +1331,19 @@ html.mobile-ui .resizer{display:none}
 
   <div class="settings-section" id="langSection">
     <div class="head" onclick="toggleSection('langSection')">
-      <h3 data-i18n="langSectionTitle">🌐 اللغة</h3><span class="arrow" id="langSectionArrow">▶</span>
+      <h3 data-i18n="langSectionTitle">اللغة</h3><span class="arrow" id="langSectionArrow">▶</span>
     </div>
     <div class="content" id="langSectionContent">
       <div style="display:flex;gap:8px">
-        <button type="button" class="btn" id="btnLangAr" style="flex:1;justify-content:center">🇦🇪 العربية</button>
-        <button type="button" class="btn" id="btnLangEn" style="flex:1;justify-content:center">🇬🇧 English</button>
+        <button type="button" class="btn" id="btnLangAr" style="flex:1;justify-content:center">العربية</button>
+        <button type="button" class="btn" id="btnLangEn" style="flex:1;justify-content:center">English</button>
       </div>
     </div>
   </div>
 
   <div class="settings-section" id="accountSection">
     <div class="head" onclick="toggleSection('accountSection')">
-      <h3 data-i18n="acctSectionTitle">👤 حسابي</h3><span class="arrow" id="accountSectionArrow">▶</span>
+      <h3 data-i18n="acctSectionTitle">حسابي</h3><span class="arrow" id="accountSectionArrow">▶</span>
     </div>
     <div class="content" id="accountSectionContent">
       <label data-i18n="acctUsernameLabel">اسم المستخدم</label>
@@ -1122,10 +1358,10 @@ html.mobile-ui .resizer{display:none}
 
   <div class="settings-section" id="apiKeysSection">
     <div class="head" onclick="toggleSection('apiKeysSection')">
-      <h3 data-i18n="apiKeysSectionTitle">🔑 مفاتيح API</h3><span class="arrow" id="apiKeysSectionArrow">▶</span>
+      <h3 data-i18n="apiKeysSectionTitle">مفاتيح API</h3><span class="arrow" id="apiKeysSectionArrow">▶</span>
     </div>
     <div class="content" id="apiKeysSectionContent">
-      <small class="hint" style="margin-bottom:12px">🔒 مفاتيحك تبقى في متصفحك فقط. اتركها فارغة لاستخدام proxy الخادم.<br>💡 اضغط زر التحديث لجلب الموديلات المتاحة من كل مزوّد.</small>
+      <small class="hint" style="margin-bottom:12px">مفاتيحك تبقى في متصفحك فقط. اتركها فارغة لاستخدام proxy الخادم.<br>اضغط زر التحديث لجلب الموديلات المتاحة من كل مزوّد.</small>
       <label data-i18n="provider">المزوّد الافتراضي</label>
       <select id="provider"></select>
       <div id="providersContainer" style="margin-top:14px"></div>
@@ -1134,7 +1370,7 @@ html.mobile-ui .resizer{display:none}
 
   <div class="settings-section" id="themeSection">
     <div class="head" onclick="toggleSection('themeSection')">
-      <h3 data-i18n="themeSectionLabel">🎨 المظهر</h3><span class="arrow" id="themeSectionArrow">▶</span>
+      <h3 data-i18n="themeSectionLabel">المظهر</h3><span class="arrow" id="themeSectionArrow">▶</span>
     </div>
     <div class="content" id="themeSectionContent">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
@@ -1143,10 +1379,10 @@ html.mobile-ui .resizer{display:none}
         <label style="font-size:12px;margin:0"><span data-i18n="themeBgLabel">الخلفية</span><input type="text" id="themeBg" maxlength="7" style="font-family:var(--font-mono)"></label>
       </div>
       <div style="margin-top:14px">
-        <label style="font-weight:600;display:block;margin-bottom:10px">🖥️ خلفية متحركة</label>
+        <label style="font-weight:600;display:block;margin-bottom:10px">خلفية متحركة</label>
         <label class="toggle-chip" id="chip-bgrotate" style="margin-bottom:12px">
           <input type="checkbox" id="chkBgAutoRotate">
-          <span>🔁 تدوير تلقائي كل 20 ثانية</span>
+          <span>تدوير تلقائي كل 20 ثانية</span>
         </label>
         <div id="bgPickerGrid" class="bg-picker-grid"></div>
       </div>
@@ -1158,7 +1394,7 @@ html.mobile-ui .resizer{display:none}
 
   <div class="settings-section" id="voiceSection">
     <div class="head" onclick="toggleSection('voiceSection')">
-      <h3 data-i18n="voiceSectionLabel">🔊 الصوت</h3><span class="arrow" id="voiceSectionArrow">▶</span>
+      <h3 data-i18n="voiceSectionLabel">الصوت</h3><span class="arrow" id="voiceSectionArrow">▶</span>
     </div>
     <div class="content" id="voiceSectionContent">
       <label>نوع الصوت المفضل</label>
@@ -1169,26 +1405,26 @@ html.mobile-ui .resizer{display:none}
       </select>
       <label class="toggle-chip" style="margin-top:14px;display:inline-flex">
         <input type="checkbox" id="chkCloudVoice">
-        <span>🌟 OpenAI TTS عالي الجودة</span>
+        <span>OpenAI TTS عالي الجودة</span>
       </label>
       <select id="cloudVoicePick" style="margin-top:8px">
-        <option value="onyx">🧔 رجل — Onyx</option>
-        <option value="nova">👩 امرأة — Nova</option>
-        <option value="fable">🙂 محايد — Fable</option>
-        <option value="shimmer">👩 امرأة — Shimmer</option>
+        <option value="onyx">رجل — Onyx</option>
+        <option value="nova">امرأة — Nova</option>
+        <option value="fable">محايد — Fable</option>
+        <option value="shimmer">امرأة — Shimmer</option>
       </select>
-      <button type="button" class="btn" id="btnTestVoice" style="margin-top:12px">🔊 تجربة الصوت</button>
+      <button type="button" class="btn" id="btnTestVoice" style="margin-top:12px">تجربة الصوت</button>
     </div>
   </div>
 
   <div class="settings-section" id="aboutSection">
     <div class="head" onclick="toggleSection('aboutSection')">
-      <h3 data-i18n="aboutSectionTitle">ℹ️ عن البرنامج</h3><span class="arrow" id="aboutSectionArrow">▶</span>
+      <h3 data-i18n="aboutSectionTitle">ℹ عن البرنامج</h3><span class="arrow" id="aboutSectionArrow">▶</span>
     </div>
     <div class="content" id="aboutSectionContent">
       <div style="font-size:12.5px;line-height:1.85;background:rgba(0,0,0,.25);border:1px solid var(--border);border-radius:12px;padding:14px;color:var(--text-2)">
         <b style="color:var(--text)">TARYAM Cyber</b> — منصة عربية شاملة لأدوات الأمن السيبراني بمساعدة الذكاء الاصطناعي. دعم 9 مزوّدين، محرك توحيد إجابات ذكي 3 مراحل، و18 أداة أمنية متقدمة.<br><br>
-        ⚠️ جميع الأدوات للاستخدام على الأنظمة التي تملكها أو لديك إذن صريح بفحصها فقط.
+        جميع الأدوات للاستخدام على الأنظمة التي تملكها أو لديك إذن صريح بفحصها فقط.
       </div>
     </div>
   </div>
@@ -1201,9 +1437,9 @@ html.mobile-ui .resizer{display:none}
 
 <!-- ═══ SECURITY TOOLS DIALOG ═══ -->
 <dialog id="secToolsDialog" style="width:min(960px,95vw);max-width:95vw">
-  <h3 data-i18n="secToolsTitle">🛠️ أدوات الأمن السيبراني</h3>
+  <h3 data-i18n="secToolsTitle">أدوات الأمن السيبراني</h3>
   <div style="font-size:11.5px;color:var(--text-3);margin-bottom:14px;padding:8px 12px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:10px">
-    ⚠️ للاستخدام على أنظمة تملكها أو لديك إذن صريح بفحصها فقط.
+    للاستخدام على أنظمة تملكها أو لديك إذن صريح بفحصها فقط.
   </div>
   <div id="secToolsNav"></div>
   <div id="secToolPanels"></div>
@@ -1212,7 +1448,7 @@ html.mobile-ui .resizer{display:none}
 
 <!-- ═══ CLOCK DIALOG ═══ -->
 <dialog id="clockDialog">
-  <h3 data-i18n="clockDialogTitle">🕐 التقويم والوقت</h3>
+  <h3 data-i18n="clockDialogTitle">التقويم والوقت</h3>
   <div class="clock-box">
     <div id="clockGregorianTime">--:--:--</div>
     <div id="clockGregorianDate">--</div>
@@ -1281,8 +1517,8 @@ const PROVIDER_ORDER = ['deepseek','claude','openai','gemini','groq','openrouter
 
 /* ═══ i18n ═══ */
 const I18N = {
-  ar:{dir:'rtl',pageTitle:'TARYAM Cyber — أدوات الأمن السيبراني',appTitle:'تريم سايبر',offlineBanner:'⚠️ أنت غير متصل بالإنترنت',backOnlineBanner:'✅ عاد الاتصال',authTitle:'مرحبًا بك',authSubtitle:'سجّل الدخول أو أنشئ حسابًا جديدًا',authTabLogin:'دخول',authTabSignup:'حساب جديد',authUsernameLabel:'اسم المستخدم',authPasswordLabel:'كلمة المرور',authNewPasswordLabel:'كلمة مرور جديدة',authRecoveryLabel:'رمز الاسترجاع',authForgotLink:'نسيت كلمة المرور؟',authRememberMe:'تذكرني',authBackToLogin:'رجوع',authSubmitReset:'إعادة تعيين',authRecoveryModalTitle:'🔑 احتفظ برمز الاسترجاع',authRecoveryModalDesc:'هذا الرمز الوحيد لاستعادة حسابك إذا نسيت كلمة المرور.',authSubmitLogin:'دخول',authSubmitSignup:'إنشاء الحساب',guestMode:'الدخول كضيف (20 رسالة يوميًا)',guestLimitMsg:'🎉 استخدمت رسائلك المجانية! سجّل الدخول للمتابعة.',logout:'خروج',settings:'الإعدادات',download:'تنزيل',newProject:'مشروع جديد',send:'إرسال',preview:'المعاينة',code:'الكود',promptPlaceholder:'صف ما تريد... مثال: اشرح ثغرة XSS',emptyTitle:'ابدأ ببناء أول تطبيق 🚀',emptyDesc:'اكتب وصفًا في المربع على اليسار',settingsTitle:'إعدادات الاتصال',langSectionTitle:'🌐 اللغة',apiKeysSectionTitle:'🔑 مفاتيح API',themeSectionLabel:'🎨 المظهر',voiceSectionLabel:'🔊 الصوت',aboutSectionTitle:'ℹ️ عن البرنامج',provider:'المزوّد الافتراضي',apiKeyLabel:'مفتاح API',modelLabel:'اسم النموذج',cancel:'إلغاء',save:'حفظ',close:'إغلاق',askAllLabel:'🎯 اسأل كل المزوّدين',mergeLabel:'🧠 دمج ذكي',building:'جارٍ العمل...',scoring:'📊 تقييم جودة الإجابات...',synthesizing:'🎨 توليف الجواب الموحّد...',verifying:'✅ التحقق النهائي...',merging:'🧠 دمج ذكي 3 مراحل...',mergedLabel:'🧠 الجواب الموحّد',mergeContributors:'دُمِجت إجابات: ',mergeFailedNote:'⚠️ لم يستجب: ',mergeSourcesLabel:'عرض الإجابات الفردية',buildSuccess:'تم ✅',defaultProjectTitle:'مشروع جديد',confirmDeleteProject:'حذف "{name}"؟',install:'تثبيت التطبيق',speakBtn:'استماع',stopSpeakBtn:'إيقاف',providerError:'خطأ من المزوّد: ',quotaError:'⏳ الحصة المجانية انتهت مؤقتًا',authError:'🔑 مفتاح API غير صحيح',apiKeyMissing:'أدخل مفتاح API أولاً',acctSectionTitle:'👤 حسابي',acctUsernameLabel:'اسم المستخدم',themeAccentLabel:'اللون الأساسي',themeTextLabel:'لون النص',themeBgLabel:'لون الخلفية',projectsListTitle:'المشاريع',secToolsTitle:'أدوات الأمن',rtpLabTitle:'مختبر RTP',casinoTitle:'كيف يكسب الكازينو',clockDialogTitle:'🕐 التقويم والوقت'},
-  en:{dir:'ltr',pageTitle:'TARYAM Cyber — Cybersecurity Tools',appTitle:'TARYAM Cyber',offlineBanner:"⚠️ You're offline",backOnlineBanner:'✅ Back online',authTitle:'Welcome',authSubtitle:'Log in or create an account',authTabLogin:'Log In',authTabSignup:'Sign Up',authUsernameLabel:'Username',authPasswordLabel:'Password',authNewPasswordLabel:'New password',authRecoveryLabel:'Recovery code',authForgotLink:'Forgot password?',authRememberMe:'Remember me',authBackToLogin:'Back',authSubmitReset:'Reset',authRecoveryModalTitle:'🔑 Save this recovery code',authRecoveryModalDesc:'The only code to recover your account if you forget your password.',authSubmitLogin:'Log In',authSubmitSignup:'Create Account',guestMode:'Continue as guest (20 messages/day)',guestLimitMsg:'🎉 Free messages used! Log in to continue.',logout:'Log out',settings:'Settings',download:'Download',newProject:'New Project',send:'Send',preview:'Preview',code:'Code',promptPlaceholder:'Describe what you want... e.g. explain XSS',emptyTitle:'Start building your first app 🚀',emptyDesc:'Type a description in the box',settingsTitle:'Connection Settings',langSectionTitle:'🌐 Language',apiKeysSectionTitle:'🔑 API Keys',themeSectionLabel:'🎨 Appearance',voiceSectionLabel:'🔊 Voice',aboutSectionTitle:'ℹ️ About',provider:'Default provider',apiKeyLabel:'API Key',modelLabel:'Model name',cancel:'Cancel',save:'Save',close:'Close',askAllLabel:'🎯 Ask all providers',mergeLabel:'🧠 Smart merge',building:'Working...',scoring:'📊 Scoring answer quality...',synthesizing:'🎨 Synthesizing unified answer...',verifying:'✅ Final verification...',merging:'🧠 3-stage smart merge...',mergedLabel:'🧠 Unified Answer',mergeContributors:'Merged from: ',mergeFailedNote:'⚠️ Did not respond: ',mergeSourcesLabel:'Show individual answers',buildSuccess:'Done ✅',defaultProjectTitle:'New Project',confirmDeleteProject:'Delete "{name}"?',install:'Install App',speakBtn:'Listen',stopSpeakBtn:'Stop',providerError:'Provider error: ',quotaError:'⏳ Free quota temporarily exhausted',authError:'🔑 Invalid API key',apiKeyMissing:'Enter your API key first',acctSectionTitle:'👤 My account',acctUsernameLabel:'Username',themeAccentLabel:'Accent color',themeTextLabel:'Text color',themeBgLabel:'Background color',projectsListTitle:'Projects',secToolsTitle:'Security Tools',rtpLabTitle:'RTP Lab',casinoTitle:'How the casino wins',clockDialogTitle:'🕐 Calendar & Time'}
+  ar:{dir:'rtl',pageTitle:'TARYAM Cyber — أدوات الأمن السيبراني',appTitle:'تريم سايبر',offlineBanner:'أنت غير متصل بالإنترنت',backOnlineBanner:'عاد الاتصال',authTitle:'مرحبًا بك',authSubtitle:'سجّل الدخول أو أنشئ حسابًا جديدًا',authTabLogin:'دخول',authTabSignup:'حساب جديد',authUsernameLabel:'اسم المستخدم',authPasswordLabel:'كلمة المرور',authNewPasswordLabel:'كلمة مرور جديدة',authRecoveryLabel:'رمز الاسترجاع',authForgotLink:'نسيت كلمة المرور؟',authRememberMe:'تذكرني',authBackToLogin:'رجوع',authSubmitReset:'إعادة تعيين',authRecoveryModalTitle:'احتفظ برمز الاسترجاع',authRecoveryModalDesc:'هذا الرمز الوحيد لاستعادة حسابك إذا نسيت كلمة المرور.',authSubmitLogin:'دخول',authSubmitSignup:'إنشاء الحساب',guestMode:'الدخول كضيف (20 رسالة يوميًا)',guestLimitMsg:'استخدمت رسائلك المجانية! سجّل الدخول للمتابعة.',logout:'خروج',settings:'الإعدادات',download:'تنزيل',newProject:'مشروع جديد',send:'إرسال',preview:'المعاينة',code:'الكود',promptPlaceholder:'صف ما تريد... مثال: اشرح ثغرة XSS',emptyTitle:'مساحة العمل جاهزة',emptyDesc:'اكتب طلبك في المحادثة أو افتح أداة أمنية؛ الأكواد والتقارير تظهر هنا.',socTitle:'مركز العمليات الأمنية',socSub:'اختر أداة، أو اكتب طلبك تحت: فحص، تحليل، تشفير، تحقيق.',socLink:'اتصال مشفّر',socLinkPlain:'اتصال غير مشفّر',socTools:'أدوات جاهزة',socAll:'كل الأدوات',chatHint:'اكتب أمرك أو سؤالك الأمني بالأسفل، أو اختر أداة من مركز العمليات.',projKicker:'المشاريع',hintSend:'للإرسال',hintNewline:'سطر جديد',acctGuest:'ضيف',acctGuestPlan:'20 رسالة يوميًا',acctPlan:'حساب مسجّل',acctLogin:'تسجيل الدخول',acctLang:'اللغة',settingsTitle:'إعدادات الاتصال',langSectionTitle:'اللغة',apiKeysSectionTitle:'مفاتيح API',themeSectionLabel:'المظهر',voiceSectionLabel:'الصوت',aboutSectionTitle:'ℹ عن البرنامج',provider:'المزوّد الافتراضي',apiKeyLabel:'مفتاح API',modelLabel:'اسم النموذج',cancel:'إلغاء',save:'حفظ',close:'إغلاق',askAllLabel:'اسأل كل المزوّدين',mergeLabel:'دمج ذكي',building:'جارٍ العمل...',scoring:'تقييم جودة الإجابات...',synthesizing:'توليف الجواب الموحّد...',verifying:'التحقق النهائي...',merging:'دمج ذكي 3 مراحل...',mergedLabel:'الجواب الموحّد',mergeContributors:'دُمِجت إجابات: ',mergeFailedNote:'لم يستجب: ',mergeSourcesLabel:'عرض الإجابات الفردية',buildSuccess:'تم ',defaultProjectTitle:'مشروع جديد',confirmDeleteProject:'حذف "{name}"؟',install:'تثبيت التطبيق',speakBtn:'استماع',stopSpeakBtn:'إيقاف',providerError:'خطأ من المزوّد: ',quotaError:'الحصة المجانية انتهت مؤقتًا',authError:'مفتاح API غير صحيح',apiKeyMissing:'أدخل مفتاح API أولاً',acctSectionTitle:'حسابي',acctUsernameLabel:'اسم المستخدم',themeAccentLabel:'اللون الأساسي',themeTextLabel:'لون النص',themeBgLabel:'لون الخلفية',projectsListTitle:'المشاريع',secToolsTitle:'أدوات الأمن',rtpLabTitle:'مختبر RTP',casinoTitle:'كيف يكسب الكازينو',clockDialogTitle:'التقويم والوقت'},
+  en:{dir:'ltr',pageTitle:'TARYAM Cyber — Cybersecurity Tools',appTitle:'TARYAM Cyber',offlineBanner:"You're offline",backOnlineBanner:'Back online',authTitle:'Welcome',authSubtitle:'Log in or create an account',authTabLogin:'Log In',authTabSignup:'Sign Up',authUsernameLabel:'Username',authPasswordLabel:'Password',authNewPasswordLabel:'New password',authRecoveryLabel:'Recovery code',authForgotLink:'Forgot password?',authRememberMe:'Remember me',authBackToLogin:'Back',authSubmitReset:'Reset',authRecoveryModalTitle:'Save this recovery code',authRecoveryModalDesc:'The only code to recover your account if you forget your password.',authSubmitLogin:'Log In',authSubmitSignup:'Create Account',guestMode:'Continue as guest (20 messages/day)',guestLimitMsg:'Free messages used! Log in to continue.',logout:'Log out',settings:'Settings',download:'Download',newProject:'New Project',send:'Send',preview:'Preview',code:'Code',promptPlaceholder:'Describe what you want... e.g. explain XSS',emptyTitle:'Workspace ready',emptyDesc:'Ask in the chat or open a security tool; code and reports show up here.',socTitle:'Security Operations Center',socSub:'Pick a tool, or type your request below: scan, analyze, encrypt, investigate.',socLink:'Encrypted connection',socLinkPlain:'Unencrypted connection',socTools:'tools ready',socAll:'All tools',chatHint:'Type a command or a security question below, or pick a tool from the operations center.',projKicker:'Projects',hintSend:'to send',hintNewline:'new line',acctGuest:'Guest',acctGuestPlan:'20 messages a day',acctPlan:'Signed-in account',acctLogin:'Log in',acctLang:'Language',settingsTitle:'Connection Settings',langSectionTitle:'Language',apiKeysSectionTitle:'API Keys',themeSectionLabel:'Appearance',voiceSectionLabel:'Voice',aboutSectionTitle:'ℹ About',provider:'Default provider',apiKeyLabel:'API Key',modelLabel:'Model name',cancel:'Cancel',save:'Save',close:'Close',askAllLabel:'Ask all providers',mergeLabel:'Smart merge',building:'Working...',scoring:'Scoring answer quality...',synthesizing:'Synthesizing unified answer...',verifying:'Final verification...',merging:'3-stage smart merge...',mergedLabel:'Unified Answer',mergeContributors:'Merged from: ',mergeFailedNote:'Did not respond: ',mergeSourcesLabel:'Show individual answers',buildSuccess:'Done ',defaultProjectTitle:'New Project',confirmDeleteProject:'Delete "{name}"?',install:'Install App',speakBtn:'Listen',stopSpeakBtn:'Stop',providerError:'Provider error: ',quotaError:'Free quota temporarily exhausted',authError:'Invalid API key',apiKeyMissing:'Enter your API key first',acctSectionTitle:'My account',acctUsernameLabel:'Username',themeAccentLabel:'Accent color',themeTextLabel:'Text color',themeBgLabel:'Background color',projectsListTitle:'Projects',secToolsTitle:'Security Tools',rtpLabTitle:'RTP Lab',casinoTitle:'How the casino wins',clockDialogTitle:'Calendar & Time'}
 };
 let lang = localStorage.getItem('aiapp_lang') || 'ar';
 const t = k => I18N[lang][k] || k;
@@ -1324,9 +1560,7 @@ window.requireLogin = (reason) => { setAuthMode('login'); if(reason === 'guestLi
 function onAuthed(username){
   authSet('aiapp_username', username);
   hideAuth();
-  $('#btnLogout').style.display = '';
-  $('#authUserLabel').textContent = username;
-  $('#authUserBadge').style.display = 'inline-flex';
+  renderAcct();
 }
 $('#authTabLogin').onclick = () => setAuthMode('login');
 $('#authTabSignup').onclick = () => setAuthMode('signup');
@@ -1334,7 +1568,38 @@ $('#authForgotLink').onclick = e => { e.preventDefault(); setAuthMode('reset'); 
 $('#authBackToLoginLink').onclick = e => { e.preventDefault(); setAuthMode('login'); };
 $('#authTogglePassBtn').onclick = () => { const p = $('#authPassword'); p.type = p.type === 'text' ? 'password' : 'text'; };
 $('#btnGuestMode').onclick = () => hideAuth();
-$('#btnLogout').onclick = () => { authRemove('aiapp_auth_token'); authRemove('aiapp_username'); $('#btnLogout').style.display = 'none'; $('#authUserBadge').style.display = 'none'; showAuth(); };
+$('#btnLogout').onclick = () => { authRemove('aiapp_auth_token'); authRemove('aiapp_username'); closeAcctMenu(); renderAcct(); showAuth(); };
+
+/* ═══ Account bar ═══ */
+function renderAcct(){
+  const name = authGet('aiapp_username'), signedIn = Boolean(name && authGet('aiapp_auth_token'));
+  const avatar = $('#acctAvatar');
+  if(signedIn) avatar.textContent = name.trim().charAt(0).toUpperCase(); else avatar.innerHTML = '<svg><use href="#i-user"/></svg>';
+  $('#acctName').textContent = signedIn ? name : t('acctGuest');
+  $('#acctPlan').textContent = signedIn ? t('acctPlan') : t('acctGuestPlan');
+  $('#acctWho').textContent = signedIn ? name : t('acctGuest');
+  $('#miLangNext').textContent = lang === 'ar' ? 'English' : 'العربية';
+  $('#btnLogout').style.display = signedIn ? '' : 'none';
+  $('#btnAcctLogin').style.display = signedIn ? 'none' : '';
+}
+window.renderAcct = renderAcct;
+function closeAcctMenu(){ const menu = $('#acctMenu'); menu.classList.remove('show'); $('#btnAcct').setAttribute('aria-expanded', 'false'); if(menu.classList.contains('from-header')){ menu.classList.remove('from-header'); menu.style.top = ''; $('#acctBar').prepend(menu); } }
+function toggleAcctMenu(){ const menu = $('#acctMenu'); if(menu.classList.contains('from-header')) closeAcctMenu(); const open = menu.classList.toggle('show'); $('#btnAcct').setAttribute('aria-expanded', String(open)); }
+$('#btnAcct').onclick = e => { e.stopPropagation(); toggleAcctMenu(); };
+document.addEventListener('click', e => { if($('#acctMenu').classList.contains('show') && !e.target.closest('#acctBar') && !e.target.closest('#acctMenu')) closeAcctMenu(); });
+$('#miSettings').onclick = () => { closeAcctMenu(); $('#btnSettings').click(); };
+$('#miLang').onclick = () => { closeAcctMenu(); setLang(lang === 'ar' ? 'en' : 'ar'); };
+$('#miInstall').onclick = () => { closeAcctMenu(); $('#btnInstall').click(); };
+$('#btnAcctLogin').onclick = () => { closeAcctMenu(); setAuthMode('login'); showAuth(); };
+// Phones: the menu drops from the header button. It moves to <body> for that, because
+// the closed sidebar drawer is transformed off-screen and would carry it along.
+$('#btnAcctMobile').onclick = e => {
+  e.stopPropagation();
+  const menu = $('#acctMenu');
+  if(menu.classList.contains('show') && menu.classList.contains('from-header')){ closeAcctMenu(); return; }
+  document.body.appendChild(menu); menu.classList.add('from-header', 'show');
+  menu.style.top = Math.round(document.querySelector('header').getBoundingClientRect().bottom + 6) + 'px';
+};
 
 async function authSubmit(){
   const username = $('#authUsername').value.trim();
@@ -1380,6 +1645,8 @@ function applyLanguage(){
   $$('[data-i18n-placeholder]').forEach(el => { const k = el.getAttribute('data-i18n-placeholder'); if(dict[k]) el.placeholder = dict[k]; });
   localStorage.setItem('aiapp_lang', lang);
   if(window.renderBgPicker) window.renderBgPicker();
+  if(window.renderSocHome) window.renderSocHome();
+  if(window.renderAcct) window.renderAcct();
 }
 function setLang(n){ if(lang === n) return; lang = n; applyLanguage(); renderAll(true); }
 $('#btnLangAr').onclick = () => setLang('ar');
@@ -1407,20 +1674,20 @@ function errorText(text){
 }
 function throwProviderError(status, text){
   const said = errorText(text);
-  if(status === 402 && said) throw new Error('⏳ ' + said); // daily allowance (only when QUOTA=on)
+  if(status === 402 && said) throw new Error('' + said); // daily allowance (only when QUOTA=on)
   if(status === 429) throw new Error(t('quotaError') + (said ? ' — ' + said : ''));
   const missing = said.match(/Server is missing (\w+)/);
-  if(missing) throw new Error(isAr() ? '🔑 المفتاح ' + missing[1] + ' غير مضبوط في إعدادات Vercel (Environment Variables)' : '🔑 ' + missing[1] + ' is not set in Vercel → Environment Variables');
-  if(status === 504) throw new Error(isAr() ? '⌛ انتهت مهلة الخادم (الطلب كبير أو المزوّد بطيء)' : '⌛ The server timed out (large request or slow provider)');
-  if(status === 401 || status === 403){ let m=null; try { const p = JSON.parse(text); if(p?.error && /session|الجلسة/i.test(p.error)) m = p.error; } catch(e){} throw new Error(m ? '🔒 '+m : t('authError') + (said ? ' — ' + said : '')); }
+  if(missing) throw new Error(isAr() ? 'المفتاح ' + missing[1] + ' غير مضبوط في إعدادات Vercel (Environment Variables)' : '' + missing[1] + ' is not set in Vercel → Environment Variables');
+  if(status === 504) throw new Error(isAr() ? 'انتهت مهلة الخادم (الطلب كبير أو المزوّد بطيء)' : 'The server timed out (large request or slow provider)');
+  if(status === 401 || status === 403){ let m=null; try { const p = JSON.parse(text); if(p?.error && /session|الجلسة/i.test(p.error)) m = p.error; } catch(e){} throw new Error(m ? ''+m : t('authError') + (said ? ' — ' + said : '')); }
   if(status === 404){
     try {
       const p = JSON.parse(text);
       if(p?.error?.code === 'model_not_found' || /model.*not.*exist/i.test(p?.error?.message || '')){
         const mm = (p.error.message || '').match(/`([^`]+)`/);
-        throw new Error(`⚠️ الموديل "${mm ? mm[1] : '?'}" لم يعد متاحاً. افتح الإعدادات → مفاتيح API → اضغط 🔄 لتحديث الموديلات.`);
+        throw Object.assign(new Error(`الموديل "${mm ? mm[1] : '?'}" لم يعد متاحاً. افتح الإعدادات → مفاتيح API → اضغط زر التحديث لتحديث الموديلات.`), { modelGone: true });
       }
-    } catch(e){ if(e.message.startsWith('⚠️')) throw e; }
+    } catch(e){ if(e.modelGone) throw e; }
   }
   throw new Error(t('providerError') + status + ' — ' + (said || (text||'').slice(0,150)));
 }
@@ -1462,7 +1729,7 @@ async function callProvider(key, messages, opts = {}){
   const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs);
   try { return await callProviderOnce(key, messages, {...opts, signal: ctrl.signal}); }
   catch(e){
-    if(ctrl.signal.aborted) throw new Error((isAr() ? '⌛ انتهت المهلة (' : '⌛ Timed out (') + Math.round(opts.timeoutMs/1000) + (isAr() ? ' ث)' : ' s)'));
+    if(ctrl.signal.aborted) throw new Error((isAr() ? 'انتهت المهلة (' : 'Timed out (') + Math.round(opts.timeoutMs/1000) + (isAr() ? ' ث)' : ' s)'));
     throw e;
   }
   finally { clearTimeout(timer); }
@@ -1644,7 +1911,7 @@ ${answers}
 8. Same language as question.`;
 }
 async function consensusMerge(question, good, failed, apiMsgs){
-  if(!good.length) return {content: isAr()?'⚠️ لم يستجب أي مزوّد.':'⚠️ No provider responded.',sources:[],contributors:[],failed};
+  if(!good.length) return {content: isAr()?'لم يستجب أي مزوّد.':'No provider responded.',sources:[],contributors:[],failed};
   const scored = good.map(r => ({...r, score: scoreReply(r.text, good)})).sort((a,b) => b.score-a.score);
   if(scored.length === 1) return {content:scored[0].text, sources:scored, contributors:[scored[0].label], failed, synthModel:scored[0].label};
 
@@ -1727,7 +1994,7 @@ function renderMessages(keep){
     const wrap = isAskAllReply ? document.createElement('div') : null;
     if(wrap) wrap.style.cssText = 'display:flex;gap:6px;max-width:100%';
     const div = document.createElement('div');
-    div.className = 'msg ' + (m.role === 'user' ? 'user' : 'assistant') + (isMerged ? ' merged' : '');
+    div.className = 'msg ' + (m.role === 'user' ? 'user' : 'assistant') + (isMerged ? ' merged' : '') + (m.failed ? ' failed' : '');
     if(isAskAllReply) div.style.flex = '1 1 auto';
     if(m.providerLabel){
       const lbl = document.createElement('div');
@@ -1749,7 +2016,7 @@ function renderMessages(keep){
       const det = document.createElement('details');
       det.className = 'md-sources';
       const sum = document.createElement('summary');
-      sum.textContent = '📚 ' + t('mergeSourcesLabel') + ' (' + m.sources.length + ')';
+      sum.textContent = '' + t('mergeSourcesLabel') + ' (' + m.sources.length + ')';
       det.appendChild(sum);
       [...m.sources].sort((a,b) => (b.score||0)-(a.score||0)).forEach(src => {
         const box = document.createElement('div');
@@ -1757,7 +2024,7 @@ function renderMessages(keep){
         const lbl = document.createElement('div');
         lbl.className = 'md-source-label';
         lbl.style.color = PROVIDERS[src.key]?.color || 'var(--primary-2)';
-        lbl.innerHTML = `<span>${src.label}</span>` + (src.score != null ? `<span class="md-source-score">⭐ ${src.score}/100</span>` : '');
+        lbl.innerHTML = `<span>${src.label}</span>` + (src.score != null ? `<span class="md-source-score">${src.score}/100</span>` : '');
         box.appendChild(lbl);
         const body = document.createElement('div');
         if(mdLooks(src.text)){ body.className = 'md'; body.innerHTML = mdToHtml(src.text.slice(0, 3000)); }
@@ -1777,7 +2044,7 @@ function renderMessages(keep){
         if(a.isImage && !a.purged){ el = document.createElement('img'); el.className = 'msg-img'; el.src = a.dataUrl; el.alt = a.name || ''; }
         else {
           el = document.createElement('span'); el.className = 'msg-file'; el.title = a.name;
-          const ic = document.createElement('span'); ic.className = 'ic'; ic.textContent = a.isImage ? '🖼️' : '📄';
+          const ic = document.createElement('span'); ic.className = 'ic'; ic.textContent = (/\.([a-z0-9]{1,4})$/i.exec(a.name)?.[1] || (a.isImage ? 'img' : 'file')).toUpperCase();
           const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = a.name;
           el.append(ic, nm);
         }
@@ -1836,12 +2103,17 @@ function renderMessages(keep){
 const historyEl = $('#history');
 function renderHistory(){
   historyEl.innerHTML = '';
+  $('#projCount').textContent = String(state.projects.length).padStart(2, '0');
   [...state.projects].reverse().forEach(p => {
     const div = document.createElement('div');
     div.className = 'hist-item' + (p.id === state.currentId ? ' active' : '');
+    const glyph = document.createElement('span'); glyph.className = 'hist-glyph'; glyph.textContent = '>';
+    const body = document.createElement('span'); body.className = 'hist-body';
     const ti = document.createElement('span'); ti.className = 'hist-title'; ti.textContent = p.title;
-    ti.onclick = () => { state.currentId = p.id; renderAll(); };
-    div.appendChild(ti);
+    const meta = document.createElement('span'); meta.className = 'hist-meta'; meta.textContent = `${(p.messages || []).length} MSG`;
+    body.append(ti, meta);
+    div.onclick = () => { state.currentId = p.id; renderAll(); };
+    div.append(glyph, body);
     const del = document.createElement('button'); del.className = 'hist-del';
     del.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
     del.onclick = e => { e.stopPropagation(); if(!confirm(t('confirmDeleteProject').replace('{name}', p.title))) return; state.projects = state.projects.filter(x => x.id !== p.id); if(state.currentId === p.id) state.currentId = state.projects.length ? state.projects[state.projects.length-1].id : null; if(!state.projects.length){ const id = 'p_'+Date.now(); state.projects.push({id,title:t('defaultProjectTitle'),messages:[],code:''}); state.currentId = id; } saveState(); renderAll(); };
@@ -1972,17 +2244,6 @@ $('#attachInput').addEventListener('change', async e => {
 });
 
 /* ═══ Emoji ═══ */
-const EMOJIS = ['😀','😂','😊','😍','🥰','😎','🤔','😴','😢','😡','🤖','💀','🔥','⭐','❤️','💯','👍','👎','👏','🙏','🎉','🎁','☕','🍕','🍔','⚽','🎮','💻','📱','✅','❌','⚠️','🚀','🛡️','🔒','🔑','🔐','🕵️','🎯','⚡','🌟','💡','📚','📝','🗑️','↗️','⏹️','✨','💎','🌈','🌙','☀️'];
-const emojiPicker = $('#emojiPicker');
-emojiPicker.innerHTML = EMOJIS.map(e => `<span class="em">${e}</span>`).join('');
-emojiPicker.addEventListener('click', e => {
-  const target = e.target.closest('.em'); if(!target) return;
-  const p = $('#prompt'); const s = p.selectionStart ?? p.value.length;
-  p.value = p.value.slice(0, s) + target.textContent + p.value.slice(p.selectionEnd ?? s);
-  p.focus(); p.setSelectionRange(s + target.textContent.length, s + target.textContent.length);
-});
-$('#btnEmoji').onclick = e => { e.stopPropagation(); emojiPicker.classList.toggle('open'); };
-document.addEventListener('click', e => { if(emojiPicker.classList.contains('open') && !emojiPicker.contains(e.target) && e.target.id !== 'btnEmoji') emojiPicker.classList.remove('open'); });
 
 /* ═══ Send Prompt ═══ */
 const sendBtn = $('#btnSend');
@@ -1992,14 +2253,14 @@ let sending = false; // one request at a time (Enter and voice chat bypass the d
 function pushReply(cur, key, reply, cut){
   const name = PROVIDERS[key].name;
   if(!reply?.trim()){
-    cur.messages.push({role:'assistant', content:'⚠️ '+(isAr() ? 'وصل ردّ فارغ من '+name+'. أعد المحاولة أو جرّب مزوّدًا آخر.' : name+' sent an empty reply. Try again or use another provider.'), providerKey:key, providerLabel:name, notice:true});
+    cur.messages.push({role:'assistant', content:''+(isAr() ? 'وصل ردّ فارغ من '+name+'. أعد المحاولة أو جرّب مزوّدًا آخر.' : name+' sent an empty reply. Try again or use another provider.'), providerKey:key, providerLabel:name, notice:true});
     return;
   }
   const {code, explanation} = extractReply(reply);
   if(code && !cut) cur.code = code; // a cut-off reply's code may be incomplete: offer it, don't apply it
   const answer = explanation||(code && !cut ? t('buildSuccess') : '');
   const msg = {role:'assistant', content:answer, code, providerKey:key, providerLabel:name};
-  if(cut){ msg.apiText = answer; msg.content = [answer, '⚠️ '+(isAr() ? 'انقطع الرد قبل اكتماله: ' : 'The reply was cut off: ')+cut.message].filter(Boolean).join('\n\n'); }
+  if(cut){ msg.apiText = answer; msg.content = [answer, ''+(isAr() ? 'انقطع الرد قبل اكتماله: ' : 'The reply was cut off: ')+cut.message].filter(Boolean).join('\n\n'); }
   cur.messages.push(msg);
 }
 async function sendPrompt(){
@@ -2015,14 +2276,14 @@ async function sendPrompt(){
   const images = attachments.filter(a => a.isImage);
   const files = attachments.filter(a => !a.isImage);
   let apiText = text;
-  files.forEach(f => { apiText += (apiText ? '\n\n' : '') + '📄 ' + f.name + ':\n```\n' + f.text + '\n```'; });
+  files.forEach(f => { apiText += (apiText ? '\n\n' : '') + '' + f.name + ':\n```\n' + f.text + '\n```'; });
   cur.messages.push({role:'user', content:text||'📎', attachments: attachments.length ? attachments : undefined, apiText, apiImages: images.length ? images : undefined});
   promptEl.value = ''; pendingAttachments = []; renderAttachStrip(); renderAll(); saveState();
 
   sending = true; sendBtn.disabled = true; sendBtn.innerHTML = '<span class="spinner"></span>';
   const thinking = document.createElement('div');
   thinking.className = 'msg assistant';
-  thinking.innerHTML = '<span class="provider-tag" style="color:var(--primary-2)">⚡ جارٍ العمل...</span><div>'+t('building')+'</div>';
+  thinking.innerHTML = '<span class="provider-tag" style="color:var(--primary-2)">جارٍ العمل...</span><div>'+t('building')+'</div>';
   messagesEl.appendChild(thinking); messagesEl.scrollTop = messagesEl.scrollHeight;
 
   const customProvider = cur.continueProvider;
@@ -2044,7 +2305,7 @@ async function sendPrompt(){
       // Only providers that can actually be called (a site proxy, or the user's own key).
       const enabled = PROVIDER_ORDER.filter(k => localStorage.getItem('aiapp_include_'+k) !== 'false' && canCallProvider(k));
       if(!enabled.length) throw new Error('لم يُفعّل أي مزوّد.');
-      thinking.querySelector('div').textContent = mergeMode ? t('scoring') : '⚡ '+enabled.length+' مزوّد...';
+      thinking.querySelector('div').textContent = mergeMode ? t('scoring') : ''+enabled.length+' مزوّد...';
       const results = await Promise.allSettled(enabled.map(k => callProvider(k, apiMsgs, {timeoutMs: askAllTimeoutMs()}).then(text => ({key:k, text}))));
       const good = [], failed = [];
       results.forEach((r, i) => {
@@ -2076,8 +2337,8 @@ async function sendPrompt(){
         // Same reason everywhere (e.g. a missing quota or network) → one message, not eight.
         const reasons = [...new Set(failed.map(f => f.reason))];
         if(failed.length > 1 && reasons.length === 1){
-          cur.messages.push({role:'assistant', content:'⚠️ '+reasons[0]+'\n('+failed.map(f => f.name).join('، ')+')', providerLabel: isAr() ? 'المزوّدون' : 'Providers', notice:true});
-        } else failed.forEach(f => cur.messages.push({role:'assistant', content:'⚠️ '+f.reason, providerKey:f.key, providerLabel:f.name, askAllReply:true, failed:true}));
+          cur.messages.push({role:'assistant', content:''+reasons[0]+'\n('+failed.map(f => f.name).join('، ')+')', providerLabel: isAr() ? 'المزوّدون' : 'Providers', notice:true});
+        } else failed.forEach(f => cur.messages.push({role:'assistant', content:''+f.reason, providerKey:f.key, providerLabel:f.name, askAllReply:true, failed:true}));
       }
     } else {
       const defKey = localStorage.getItem('aiapp_provider') || 'deepseek';
@@ -2090,12 +2351,11 @@ async function sendPrompt(){
       contentDiv.classList.remove('streaming-cursor');
       pushReply(cur, defKey, reply, cut);
     }
-  } catch(err){ cur.messages.push({role:'assistant', content:'⚠️ '+err.message, notice:true}); } // shown, never sent back
+  } catch(err){ cur.messages.push({role:'assistant', content:''+err.message, notice:true}); } // shown, never sent back
   finally {
     sending = false; sendBtn.disabled = false; sendBtn.innerHTML = '<span>'+t('send')+'</span> <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
     saveState(); renderAll();
     if($('#btnVoiceChat').classList.contains('active')){ const last = cur.messages[cur.messages.length-1]; if(last?.role === 'assistant' && last.content) speakSmart(mdStrip(last.content)); }
-    if(window.innerWidth <= 860 && cur.code){ document.querySelector('.tab[data-tab="preview"]')?.click(); setTimeout(() => openDrawer($('#workarea')), 300); }
   }
 }
 $('#btnSend').onclick = sendPrompt;
@@ -2126,7 +2386,6 @@ function openDrawer(el){ const o = el.classList.contains('open'); closeDrawers()
 $('#btnHeaderMenu').onclick = e => { e.stopPropagation(); $('#headerMenuDropdown').classList.toggle('show'); };
 document.addEventListener('click', e => { const d = $('#headerMenuDropdown'); if(d.classList.contains('show') && !e.target.closest('#headerMenuDropdown') && e.target !== $('#btnHeaderMenu')) d.classList.remove('show'); });
 $('#btnToggleProjects').onclick = () => { openDrawer($('#sidebar')); $('#headerMenuDropdown').classList.remove('show'); };
-$('#btnToggleHistory').onclick = () => { document.querySelector('.tab[data-tab="code"]')?.click(); openDrawer($('#workarea')); };
 $('#drawerBackdrop').onclick = closeDrawers;
 window.addEventListener('resize', () => { if(window.innerWidth > 860) closeDrawers(); });
 
@@ -2194,7 +2453,7 @@ function buildProviderCards(){
     card.className = 'provider-card';
     card.style.setProperty('--provider-color', p.color);
     card.innerHTML = `<h4>
-      <span class="pname">${p.name}${k==='deepseek'?' ⭐':''}</span>
+      <span class="pname">${p.name}${k==='deepseek'?' ':''}</span>
       <span style="font-size:11px;color:var(--text-3)"><input type="checkbox" id="inc_${k}" style="width:auto;accent-color:var(--primary)"> في "اسأل الكل"</span>
     </h4>
     <label style="margin-top:0">${t('apiKeyLabel')}</label>
@@ -2240,7 +2499,7 @@ function buildProviderCards(){
 
 $('#btnSettings').onclick = () => {
   ['langSection','accountSection','apiKeysSection','themeSection','voiceSection','aboutSection'].forEach(s => { const c = document.getElementById(s+'Content'); if(c) c.classList.remove('open'); });
-  $('#provider').innerHTML = PROVIDER_ORDER.map(k => `<option value="${k}">${PROVIDERS[k].name}${k==='deepseek'?' ⭐':''}</option>`).join('');
+  $('#provider').innerHTML = PROVIDER_ORDER.map(k => `<option value="${k}">${PROVIDERS[k].name}${k==='deepseek'?' ':''}</option>`).join('');
   $('#provider').value = localStorage.getItem('aiapp_provider') || 'deepseek';
   buildProviderCards();
   const th = getTheme();
@@ -2261,7 +2520,7 @@ $('#btnSaveSettings').onclick = () => {
     if(modelVal) localStorage.setItem(p.modelVar, modelVal); else localStorage.removeItem(p.modelVar);
     localStorage.setItem('aiapp_include_'+k, document.getElementById('inc_'+k)?.checked ? 'true' : 'false');
   });
-  const th = {accent:$('#themeAccent').value||'#8b5cf6',text:$('#themeText').value||'#f4f4f5',bg:$('#themeBg').value||'#08090d'};
+  const th = {accent:$('#themeAccent').value||'#00ff9c',text:$('#themeText').value||'#ededed',bg:$('#themeBg').value||'#000000'};
   localStorage.setItem('aiapp_theme', JSON.stringify(th)); applyTheme();
   localStorage.setItem('aiapp_voice_gender', $('#voiceGenderPref').value);
   localStorage.setItem('aiapp_cloud_voice', $('#chkCloudVoice').checked?'true':'false');
@@ -2270,12 +2529,12 @@ $('#btnSaveSettings').onclick = () => {
   toast('تم الحفظ ✓', 'success');
 };
 $('#btnCancelSettings').onclick = () => closeDialogSafe($('#settingsDialog'));
-$('#btnResetColors').onclick = () => { localStorage.removeItem('aiapp_theme'); applyTheme(); ['themeAccent','themeText','themeBg'].forEach((id, i) => { document.getElementById(id).value = ['#8b5cf6','#f4f4f5','#08090d'][i]; }); };
+$('#btnResetColors').onclick = () => { localStorage.removeItem('aiapp_theme'); applyTheme(); ['themeAccent','themeText','themeBg'].forEach((id, i) => { document.getElementById(id).value = ['#00ff9c','#ededed','#000000'][i]; }); };
 
 $('#acctUsernameSaveBtn').onclick = async () => {
   const newU = $('#acctUsername').value.trim(); const msg = $('#acctUsernameMsg');
   if(!newU || newU.length < 3){ msg.textContent = 'اسم قصير جداً'; msg.style.color = 'var(--red)'; return; }
-  try { const res = await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'changeUsername', token:authGet('aiapp_auth_token'), newUsername:newU})}); const data = await res.json(); if(!res.ok||data.error){ msg.textContent = data.error||'خطأ'; msg.style.color = 'var(--red)'; return; } authSet('aiapp_auth_token', data.token); authSet('aiapp_username', data.username); $('#authUserLabel').textContent = data.username; msg.textContent = '✓ تم الحفظ'; msg.style.color = 'var(--green)'; } catch(e){ msg.textContent = 'خطأ'; msg.style.color = 'var(--red)'; }
+  try { const res = await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'changeUsername', token:authGet('aiapp_auth_token'), newUsername:newU})}); const data = await res.json(); if(!res.ok||data.error){ msg.textContent = data.error||'خطأ'; msg.style.color = 'var(--red)'; return; } authSet('aiapp_auth_token', data.token); authSet('aiapp_username', data.username); renderAcct(); msg.textContent = '✓ تم الحفظ'; msg.style.color = 'var(--green)'; } catch(e){ msg.textContent = 'خطأ'; msg.style.color = 'var(--red)'; }
 };
 $('#acctPasswordSaveBtn').onclick = async () => {
   const cur = $('#acctCurrentPassword').value, nw = $('#acctNewPassword').value; const msg = $('#acctPasswordMsg');
@@ -2287,7 +2546,7 @@ function openDialogSafe(d){ if(d.hasAttribute('open')) return; if(typeof d.showM
 function closeDialogSafe(d){ if(typeof d.close === 'function'){ try { d.close(); } catch(e){} } d.removeAttribute('open'); }
 
 /* ═══ Theme ═══ */
-function getTheme(){ const def = {accent:'#8b5cf6',text:'#f4f4f5',bg:'#08090d'}; try { return Object.assign(def, JSON.parse(localStorage.getItem('aiapp_theme')||'{}')); } catch(e){ return def; } }
+function getTheme(){ const def = {accent:'#00ff9c',text:'#ededed',bg:'#000000'}; try { const saved = JSON.parse(localStorage.getItem('aiapp_theme')||'{}'); const oldDefault = (saved.accent === '#8b5cf6' && saved.text === '#f4f4f5' && saved.bg === '#08090d') || (saved.accent === '#00ff9c' && saved.text === '#dcfff0' && saved.bg === '#030807'); if(oldDefault) return def; return Object.assign(def, saved); } catch(e){ return def; } }
 function applyTheme(){ const th = getTheme(); const r = document.documentElement.style; r.setProperty('--primary', th.accent); r.setProperty('--text', th.text); r.setProperty('--bg', th.bg); }
 applyTheme();
 
@@ -2297,29 +2556,29 @@ applyTheme();
   function fade(ctx,w,h,c){ ctx.fillStyle = c; ctx.fillRect(0,0,w,h); }
   function fxAurora(ctx,w,h,t,S,c){
     if(!S.blobs) S.blobs = Array.from({length:5},()=>({x:rnd(0,w),y:rnd(0,h),r:rnd(180,320),vx:rnd(-.15,.15),vy:rnd(-.1,.1),hue:rnd(0,360)}));
-    fade(ctx,w,h,'rgba(8,9,13,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     S.blobs.forEach(b=>{ b.x+=b.vx; b.y+=b.vy; if(b.x<-b.r)b.x=w+b.r; if(b.x>w+b.r)b.x=-b.r; if(b.y<-b.r)b.y=h+b.r; if(b.y>h+b.r)b.y=-b.r;
       const g=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.r); g.addColorStop(0,`hsla(${(b.hue+t*10)%360},70%,60%,0.08)`); g.addColorStop(1,'transparent');
       ctx.fillStyle=g; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,7); ctx.fill(); });
   }
   function fxParticles(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     if(!S.pp) S.pp = Array.from({length:80},()=>({x:rnd(0,w),y:rnd(0,h),vx:rnd(-.3,.3),vy:rnd(-.3,.3),r:rnd(.5,2),hue:rnd(240,320)}));
     S.pp.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; if(p.x<0)p.x=w; if(p.x>w)p.x=0; if(p.y<0)p.y=h; if(p.y>h)p.y=0;
       ctx.fillStyle=`hsla(${p.hue},70%,70%,.5)`; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill(); });
   }
   function fxGrid(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.25)');
-    ctx.strokeStyle='rgba(139,92,246,0.08)'; ctx.lineWidth=1;
+    fade(ctx,w,h,'rgba(0,0,0,0.25)');
+    ctx.strokeStyle='rgba(0,255,156,0.08)'; ctx.lineWidth=1;
     const gap=48;
     for(let x=0;x<w;x+=gap){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
     for(let y=0;y<h;y+=gap){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
     const cg=ctx.createRadialGradient(w/2,h/2,0,w/2,h/2,Math.min(w,h)/2);
-    cg.addColorStop(0,'rgba(139,92,246,0.06)'); cg.addColorStop(1,'transparent');
+    cg.addColorStop(0,'rgba(0,255,156,0.06)'); cg.addColorStop(1,'transparent');
     ctx.fillStyle=cg; ctx.fillRect(0,0,w,h);
   }
   function fxWave(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     ctx.strokeStyle='rgba(34,211,238,0.15)'; ctx.lineWidth=1.5;
     for(let i=0;i<5;i++){
       ctx.beginPath();
@@ -2332,18 +2591,18 @@ applyTheme();
   }
   function fxNetwork(ctx,w,h,t,S,c){
     if(!S.pts) S.pts = Array.from({length:Math.max(20,Math.floor(w*h/28000))},()=>({x:rnd(0,w),y:rnd(0,h),vx:rnd(-.2,.2),vy:rnd(-.2,.2)}));
-    fade(ctx,w,h,'rgba(8,9,13,0.2)');
+    fade(ctx,w,h,'rgba(0,0,0,0.2)');
     S.pts.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; if(p.x<0||p.x>w)p.vx*=-1; if(p.y<0||p.y>h)p.vy*=-1; });
     for(let i=0;i<S.pts.length;i++) for(let j=i+1;j<S.pts.length;j++){
       const dx=S.pts[i].x-S.pts[j].x, dy=S.pts[i].y-S.pts[j].y, d=Math.sqrt(dx*dx+dy*dy);
-      if(d<130){ ctx.strokeStyle=`rgba(139,92,246,${(1-d/130)*.4})`; ctx.beginPath(); ctx.moveTo(S.pts[i].x,S.pts[i].y); ctx.lineTo(S.pts[j].x,S.pts[j].y); ctx.stroke(); }
+      if(d<130){ ctx.strokeStyle=`rgba(0,255,156,${(1-d/130)*.4})`; ctx.beginPath(); ctx.moveTo(S.pts[i].x,S.pts[i].y); ctx.lineTo(S.pts[j].x,S.pts[j].y); ctx.stroke(); }
     }
     S.pts.forEach(p=>{ ctx.fillStyle='rgba(167,139,250,0.8)'; ctx.beginPath(); ctx.arc(p.x,p.y,1.8,0,7); ctx.fill(); });
   }
   function fxOrb(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.25)');
+    fade(ctx,w,h,'rgba(0,0,0,0.25)');
     const cx=w/2, cy=h/2, R=Math.min(w,h)*0.35;
-    ctx.strokeStyle='rgba(139,92,246,0.35)'; ctx.lineWidth=1.2;
+    ctx.strokeStyle='rgba(0,255,156,0.35)'; ctx.lineWidth=1.2;
     const rot=t*0.4;
     for(let la=-2;la<=2;la++){ ctx.beginPath();
       for(let lo=0;lo<=64;lo++){ const u=lo/64*Math.PI*2+rot; const y=la/2.5*R; const rr=Math.sqrt(Math.max(0,R*R-y*y)); const x=cx+rr*Math.cos(u); const yy=cy+y*0.6;
@@ -2353,7 +2612,7 @@ applyTheme();
         la?ctx.lineTo(x,y):ctx.moveTo(x,y); } ctx.stroke(); }
   }
   function fxCubes(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.2)');
+    fade(ctx,w,h,'rgba(0,0,0,0.2)');
     if(!S.cb) S.cb = Array.from({length:8},()=>({x:rnd(0,w),y:rnd(0,h),s:rnd(18,34),ph:rnd(0,7)}));
     ctx.strokeStyle='rgba(34,211,238,0.5)'; ctx.lineWidth=1;
     S.cb.forEach(cu=>{ const rot=t*.5+cu.ph, s=cu.s;
@@ -2366,15 +2625,15 @@ applyTheme();
   function fxRain(ctx,w,h,t,S,c){
     const fs=16;
     if(!S.drops || S.w !== w){ S.w=w; S.cols=Math.floor(w/fs); S.drops=new Array(S.cols).fill(0).map(()=>Math.random()*h/fs); }
-    fade(ctx,w,h,'rgba(8,9,13,0.08)');
+    fade(ctx,w,h,'rgba(0,0,0,0.08)');
     if(!S.fs){ ctx.font=fs+'px JetBrains Mono, monospace'; S.fs=true; }
-    ctx.fillStyle='rgba(167,139,250,0.7)';
+    ctx.fillStyle='rgba(0,255,156,0.4)';
     const chars='アイウエオカキクケコ01アイウエオ';
     for(let i=0;i<S.cols;i++){ ctx.fillText(chars[Math.floor(Math.random()*chars.length)], i*fs, S.drops[i]*fs);
       if(S.drops[i]*fs > h && Math.random() > 0.975) S.drops[i]=0; S.drops[i]++; }
   }
   function fxLissajous(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     const cx=w/2, cy=h/2, R=Math.min(w,h)*0.4;
     ctx.strokeStyle='rgba(236,72,153,0.25)'; ctx.lineWidth=1.2;
     for(let k=0;k<3;k++){
@@ -2388,14 +2647,14 @@ applyTheme();
   function fxRipples(ctx,w,h,t,S,c){
     if(!S.rips) S.rips=[];
     if(Math.random()<0.04 && S.rips.length<12) S.rips.push({x:rnd(0,w),y:rnd(0,h),r:0});
-    fade(ctx,w,h,'rgba(8,9,13,0.12)');
+    fade(ctx,w,h,'rgba(0,0,0,0.12)');
     S.rips.forEach(r=>{ r.r += 1.8; const op=Math.max(0,1-r.r/300);
-      ctx.strokeStyle=`rgba(139,92,246,${op*0.5})`; ctx.lineWidth=1.5;
+      ctx.strokeStyle=`rgba(0,255,156,${op*0.5})`; ctx.lineWidth=1.5;
       ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,7); ctx.stroke(); });
     S.rips = S.rips.filter(r=>r.r<320);
   }
   function fxComet(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     if(!S.comets) S.comets = Array.from({length:6},()=>({x:rnd(0,w),y:rnd(0,h),vx:rnd(-1.2,1.2),vy:rnd(-.5,.5),len:rnd(40,100)}));
     S.comets.forEach(m=>{ m.x+=m.vx; m.y+=m.vy; if(m.x<-100||m.x>w+100||m.y<-100||m.y>h+100){ m.x=rnd(0,w); m.y=rnd(0,h); m.vx=rnd(-1.2,1.2); m.vy=rnd(-.5,.5); }
       const g=ctx.createLinearGradient(m.x-m.vx*m.len,m.y-m.vy*m.len,m.x,m.y);
@@ -2406,15 +2665,15 @@ applyTheme();
     });
   }
   function fxStars(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.1)');
+    fade(ctx,w,h,'rgba(0,0,0,0.1)');
     if(!S.stars) S.stars = Array.from({length:120},()=>({x:rnd(0,w),y:rnd(0,h),r:rnd(.3,1.2),ph:rnd(0,7)}));
     S.stars.forEach(s=>{ const op=0.3+0.7*Math.abs(Math.sin(t*0.8+s.ph));
       ctx.fillStyle=`rgba(167,139,250,${op*0.7})`; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,7); ctx.fill(); });
   }
   function fxScanline(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     const sp=6;
-    ctx.strokeStyle='rgba(139,92,246,0.06)'; ctx.lineWidth=1;
+    ctx.strokeStyle='rgba(0,255,156,0.06)'; ctx.lineWidth=1;
     for(let y=0;y<h;y+=sp){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
     const scanY = (t*60)%h;
     const g=ctx.createLinearGradient(0,scanY-30,0,scanY+30);
@@ -2422,7 +2681,7 @@ applyTheme();
     ctx.fillStyle=g; ctx.fillRect(0,scanY-30,w,60);
   }
   function fxAurora2(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.12)');
+    fade(ctx,w,h,'rgba(0,0,0,0.12)');
     for(let i=0;i<3;i++){ ctx.beginPath();
       for(let x=0;x<=w;x+=8){ const y=h*(0.25+i*0.25)+Math.sin(x*0.005+t*(0.6+i*0.2))*80; x?ctx.lineTo(x,y):ctx.moveTo(x,y); }
       const g=ctx.createLinearGradient(0,0,w,0);
@@ -2432,16 +2691,16 @@ applyTheme();
     }
   }
   function fxMosaic(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.2)');
+    fade(ctx,w,h,'rgba(0,0,0,0.2)');
     const sz=40;
     for(let x=0;x<w;x+=sz) for(let y=0;y<h;y+=sz){
       const op = 0.02 + 0.08*Math.abs(Math.sin(t*0.5+(x+y)*0.001));
-      ctx.fillStyle=`rgba(139,92,246,${op})`;
+      ctx.fillStyle=`rgba(0,255,156,${op})`;
       ctx.fillRect(x+1,y+1,sz-2,sz-2);
     }
   }
   function fxGalaxy(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.1)');
+    fade(ctx,w,h,'rgba(0,0,0,0.1)');
     const cx=w/2, cy=h/2;
     if(!S.galPts) S.galPts = Array.from({length:220},(_,i)=>{ const ang=rnd(0,Math.PI*2), r=Math.pow(Math.random(),0.6)*Math.min(w,h)*0.45;
       return {x:cx+Math.cos(ang)*r, y:cy+Math.sin(ang)*r*0.6, r:rnd(.3,1.5), ang, orbit:r}; });
@@ -2451,19 +2710,19 @@ applyTheme();
       ctx.fillStyle=`hsla(${h_},70%,70%,0.5)`; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill(); });
   }
   function fxDNA(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     const cx=w/2;
     for(let y=0;y<h;y+=8){
       const off = Math.sin(y*0.02+t*1.5)*120;
       const x1=cx+off, x2=cx-off;
       const op = 0.3+0.4*Math.abs(Math.sin(y*0.02+t*1.5));
-      ctx.fillStyle=`rgba(139,92,246,${op})`; ctx.beginPath(); ctx.arc(x1,y,2,0,7); ctx.fill();
+      ctx.fillStyle=`rgba(0,255,156,${op})`; ctx.beginPath(); ctx.arc(x1,y,2,0,7); ctx.fill();
       ctx.fillStyle=`rgba(34,211,238,${op})`; ctx.beginPath(); ctx.arc(x2,y,2,0,7); ctx.fill();
       if(Math.abs(off)<20){ ctx.strokeStyle=`rgba(255,255,255,0.15)`; ctx.beginPath(); ctx.moveTo(x1,y); ctx.lineTo(x2,y); ctx.stroke(); }
     }
   }
   function fxMatrixGrid(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.2)');
+    fade(ctx,w,h,'rgba(0,0,0,0.2)');
     const cs=24;
     for(let x=0;x<w;x+=cs) for(let y=0;y<h;y+=cs){
       const op = Math.abs(Math.sin(t*0.5+(x*y)*0.00005))*0.15;
@@ -2471,15 +2730,15 @@ applyTheme();
     }
   }
   function fxRings(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     const cx=w/2, cy=h/2;
     if(!S.rr) S.rr = Array.from({length:8},(_,i)=>({r:(i+1)*40, ph:i*0.8}));
     S.rr.forEach(o=>{ const rr=o.r + Math.sin(t*0.8+o.ph)*15;
-      ctx.strokeStyle=`rgba(139,92,246,${0.15+0.15*Math.sin(t+o.ph)})`; ctx.lineWidth=1.5;
+      ctx.strokeStyle=`rgba(0,255,156,${0.15+0.15*Math.sin(t+o.ph)})`; ctx.lineWidth=1.5;
       ctx.beginPath(); ctx.arc(cx,cy,rr,0,7); ctx.stroke(); });
   }
   function fxHelix(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     const cx=w/2;
     for(let i=0;i<8;i++){
       const ph = t*0.5 + i*0.9;
@@ -2490,7 +2749,7 @@ applyTheme();
     }
   }
   function fxAurora3(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.08)');
+    fade(ctx,w,h,'rgba(0,0,0,0.08)');
     ctx.globalCompositeOperation='lighter';
     for(let i=0;i<4;i++){
       const x = w/2 + Math.sin(t*0.3+i*1.7)*w*0.3;
@@ -2504,7 +2763,7 @@ applyTheme();
     ctx.globalCompositeOperation='source-over';
   }
   function fxWaves2(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(8,9,13,0.1)');
+    fade(ctx,w,h,'rgba(0,0,0,0.1)');
     for(let i=0;i<6;i++){
       ctx.beginPath();
       const off = i*30;
@@ -2521,7 +2780,7 @@ applyTheme();
     {id:'network', nameAr:'شبكة ذكية', nameEn:'Neural Network', color:'rgba(139,92,246', fx:fxNetwork},
     {id:'orb', nameAr:'كرة شبكية', nameEn:'Wireframe Orb', color:'rgba(167,139,250', fx:fxOrb},
     {id:'cubes', nameAr:'مكعبات طائرة', nameEn:'Floating Cubes', color:'rgba(34,211,238', fx:fxCubes},
-    {id:'rain', nameAr:'مطر رقمي', nameEn:'Digital Rain', color:'rgba(167,139,250', fx:fxRain},
+    {id:'rain', nameAr:'مطر رقمي', nameEn:'Digital Rain', color:'rgba(0,255,156', fx:fxRain},
     {id:'lissajous', nameAr:'منحنيات مضيئة', nameEn:'Luminous Curves', color:'rgba(236,72,153', fx:fxLissajous},
     {id:'ripples', nameAr:'تموجات', nameEn:'Ripples', color:'rgba(139,92,246', fx:fxRipples},
     {id:'comet', nameAr:'نيازك', nameEn:'Comets', color:'rgba(34,211,238', fx:fxComet},
@@ -2559,7 +2818,7 @@ applyTheme();
     host.classList.add('active');
     mainAnim = makeRunner(canvas, canvas.getContext('2d'), bg, false);
   }
-  function currentChoice(){ return localStorage.getItem('cyberBgChoice') || 'aurora'; }
+  function currentChoice(){ return localStorage.getItem('cyberBgChoice') || 'none'; }
   window.selectCyberBg = id => { localStorage.setItem('cyberBgChoice', id); applyBg(id); if(window.renderBgPicker) window.renderBgPicker(); };
   let thumbRunners = [];
   function stopThumbs(){ thumbRunners.forEach(r => { try { r.stop(); } catch(e){} }); thumbRunners = []; }
@@ -2617,6 +2876,24 @@ const SEC_TOOLS = [
   {id:'ctf', name:'CTF', desc:'تحديات أمنية تعليمية.'}
 ];
 
+// Security operations home: shown while the conversation is empty.
+const socEsc = v => String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const SOC_TILES = [['hashid','HASH'],['jwt','JWT'],['webscan','WEB'],['recon','RECON'],['vt','VT'],['phishing','PHISH'],['breach','LEAKS'],['iprep','IP']];
+function openSecTool(id){ $('#btnSecTools').click(); const b = document.querySelector(`.secToolNavBtn[data-tool="${id}"]`); if(b) b.click(); }
+function renderSocHome(){
+  const ready = SEC_TOOLS.filter(x => !x.desc.startsWith('(معطّلة')).length;
+  const https = location.protocol === 'https:';
+  [['#socHome', 'socTitle'], ['#socPanel', 'socPanelTitle']].forEach(([sel, titleId]) => {
+    const box = $(sel); if(!box) return;
+    box.innerHTML = `<div class="soc-head"><div class="soc-kicker">// SOC · TARYAM</div><h2 id="${titleId}">${socEsc(t('socTitle'))}</h2><p>${socEsc(t('socSub'))}</p></div>
+    <div class="soc-stats"><span class="soc-stat${https ? '' : ' warn'}"><i></i><b>${https ? 'TLS' : 'HTTP'}</b>${socEsc(t(https ? 'socLink' : 'socLinkPlain'))}</span><span class="soc-stat"><i></i><b>${ready}/${SEC_TOOLS.length}</b>${socEsc(t('socTools'))}</span><button type="button" class="btn soc-all" data-soc-all><svg><use href="#i-tools"/></svg> <span>${socEsc(t('socAll'))}</span></button></div>
+    <div class="soc-grid">${SOC_TILES.map(([id, code]) => { const tool = SEC_TOOLS.find(x => x.id === id); return tool ? `<button type="button" class="soc-tile hud" data-soc-tool="${id}"><code>${code}</code><strong>${socEsc(tool.name)}</strong><span>${socEsc(tool.desc)}</span></button>` : ''; }).join('')}</div>`;
+    box.querySelectorAll('[data-soc-tool]').forEach(b => { b.onclick = () => openSecTool(b.dataset.socTool); });
+    box.querySelector('[data-soc-all]').onclick = () => $('#btnSecTools').click();
+  });
+}
+window.renderSocHome = renderSocHome;
+
 function buildSecTools(){
   const nav = $('#secToolsNav'); const panels = $('#secToolPanels');
   nav.innerHTML = SEC_TOOLS.map((t, i) => `<button class="secToolNavBtn ${i===0?'active':''}" data-tool="${t.id}">${t.name}</button>`).join('');
@@ -2635,21 +2912,21 @@ function secToolForm(id){
   switch(id){
     case 'exif': return `<input type="file" id="exifFileInput" accept="image/*"><div id="exifResult" class="secToolAiResult"></div>`;
     case 'crypto': return `<select id="cryptoAlgo"><option value="caesar">Caesar</option><option value="xor">XOR</option><option value="base64">Base64</option><option value="rot13">ROT13</option></select><input type="text" id="cryptoKey" placeholder="المفتاح / الإزاحة" style="${inputStyle}"><textarea id="cryptoInput" placeholder="النص المدخل..." style="min-height:70px"></textarea><div style="display:flex;gap:8px;margin:8px 0"><button class="btn primary" id="btnCryptoEncode">تشفير</button><button class="btn" id="btnCryptoDecode">فك</button></div><textarea id="cryptoOutput" readonly style="min-height:70px"></textarea>`;
-    case 'motion': return `<button class="btn primary" id="btnMotionStart">▶️ تشغيل الكاميرا</button><button class="btn" id="btnMotionStop">⏹️ إيقاف</button><div style="margin-top:10px;max-width:420px"><video id="motionVideo" autoplay playsinline muted style="width:100%;border-radius:10px;display:none"></video><canvas id="motionCanvas" style="display:none"></canvas></div><div id="motionStatus" style="margin-top:8px;font-weight:600"></div>`;
+    case 'motion': return `<button class="btn primary" id="btnMotionStart">▶ تشغيل الكاميرا</button><button class="btn" id="btnMotionStop">إيقاف</button><div style="margin-top:10px;max-width:420px"><video id="motionVideo" autoplay playsinline muted style="width:100%;border-radius:10px;display:none"></video><canvas id="motionCanvas" style="display:none"></canvas></div><div id="motionStatus" style="margin-top:8px;font-weight:600"></div>`;
     case 'portscan': return `<input type="text" id="portscanHost" placeholder="example.com" style="${inputStyle}"><label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px"><input type="checkbox" id="portscanConfirmOwn" style="width:auto"> <span>أؤكد أنني أملك هذا النظام أو مصرّح لي بفحصه</span></label><button class="btn primary" id="btnPortscanRun">ابدأ الفحص</button><div id="portscanResult" class="secToolAiResult"></div>`;
     case 'kali': return `<textarea id="kaliInput" placeholder="مثال: أريد فحص منافذ سيرفري الخاص..." style="min-height:80px"></textarea><button class="btn primary" id="btnKaliAsk" style="margin-top:8px">اسأل DeepSeek</button><div id="kaliResult" class="secToolAiResult"></div>`;
     case 'phishing': return `<textarea id="phishingInput" placeholder="الصق الرابط أو نص الإيميل هنا..." style="min-height:100px"></textarea><button class="btn primary" id="btnPhishingAnalyze" style="margin-top:8px">تحليل بـ DeepSeek</button><div id="phishingResult" class="secToolAiResult"></div>`;
     case 'log': return `<textarea id="logInput" placeholder="الصق محتوى ملف log هنا..." style="min-height:120px"></textarea><button class="btn primary" id="btnLogAnalyze" style="margin-top:8px">تحليل</button><div id="logResult" class="secToolAiResult"></div>`;
     case 'breach': return `<input type="email" id="breachEmail" placeholder="you@example.com" style="${inputStyle}"><button class="btn primary" id="btnBreachCheck">فحص</button><div id="breachResult" class="secToolAiResult"></div>`;
-    case 'darkgpt': return `<div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;line-height:1.6;color:var(--text-2)">⚠️ هذه الأداة للاستخدام القانوني المصرّح به فقط. كل عملية بحث تُسجَّل باسم حسابك.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><select id="darkgptField" style="flex:1"><option value="email">إيميل</option><option value="username">اسم</option><option value="password">كلمة مرور</option><option value="ip_address">IP</option><option value="phone">هاتف</option></select><input type="text" id="darkgptValue" placeholder="القيمة..." style="flex:2"></div><button class="btn primary" id="btnDarkgptSearch">بحث</button><div id="darkgptResult" class="secToolAiResult"></div>`;
-    case 'vt': return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><select id="vtMode" style="flex:1"><option value="file">ملف</option><option value="hash">Hash</option><option value="url">رابط</option></select><input type="text" id="vtValue" placeholder="Hash أو رابط" style="flex:2;display:none"><input type="file" id="vtFile" style="flex:2"></div><p class="hint" id="vtFileNote">🔒 يُحسب SHA-256 محليًا، لا يُرفع الملف.</p><button class="btn primary" id="btnVtRun">فحص</button><div id="vtResult" class="secToolAiResult"></div>`;
+    case 'darkgpt': return `<div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;line-height:1.6;color:var(--text-2)">هذه الأداة للاستخدام القانوني المصرّح به فقط. كل عملية بحث تُسجَّل باسم حسابك.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><select id="darkgptField" style="flex:1"><option value="email">إيميل</option><option value="username">اسم</option><option value="password">كلمة مرور</option><option value="ip_address">IP</option><option value="phone">هاتف</option></select><input type="text" id="darkgptValue" placeholder="القيمة..." style="flex:2"></div><button class="btn primary" id="btnDarkgptSearch">بحث</button><div id="darkgptResult" class="secToolAiResult"></div>`;
+    case 'vt': return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><select id="vtMode" style="flex:1"><option value="file">ملف</option><option value="hash">Hash</option><option value="url">رابط</option></select><input type="text" id="vtValue" placeholder="Hash أو رابط" style="flex:2;display:none"><input type="file" id="vtFile" style="flex:2"></div><p class="hint" id="vtFileNote">يُحسب SHA-256 محليًا، لا يُرفع الملف.</p><button class="btn primary" id="btnVtRun">فحص</button><div id="vtResult" class="secToolAiResult"></div>`;
     case 'recon': return `<input type="text" id="reconDomain" placeholder="example.com" style="${inputStyle}"><button class="btn primary" id="btnReconRun">استطلاع</button><div id="reconResult" class="secToolAiResult"></div>`;
     case 'webscan': return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><select id="webscanMode" style="flex:1"><option value="headers">فحص Headers</option><option value="ssl">فحص SSL</option></select><input type="text" id="webscanValue" placeholder="example.com" style="flex:2"></div><button class="btn primary" id="btnWebscanRun">فحص</button><div id="webscanResult" class="secToolAiResult"></div>`;
     case 'jwt': return `<textarea id="jwtInput" placeholder="eyJhbGci..." style="min-height:70px;font-family:var(--font-mono);font-size:12px"></textarea><input type="text" id="jwtSecret" placeholder="سر اختياري للتحقق" style="margin-top:8px"><button class="btn primary" id="btnJwtRun" style="margin-top:8px">تحليل</button><div id="jwtResult" class="secToolAiResult"></div>`;
     case 'hashid': return `<input type="text" id="hashidInput" placeholder="الصق Hash هنا..." style="font-family:var(--font-mono);${inputStyle}"><button class="btn primary" id="btnHashidRun">تحليل</button><div id="hashidResult" class="secToolAiResult"></div>`;
     case 'iprep': return `<input type="text" id="iprepIp" placeholder="8.8.8.8" style="${inputStyle}"><button class="btn primary" id="btnIprepCheck">فحص</button><div id="iprepResult" class="secToolAiResult"></div>`;
-    case 'probmath': return `<details style="margin-bottom:12px;border:1px solid var(--border);border-radius:12px;padding:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px">🎲 الفرق بين PRNG وCSPRNG</summary><p style="margin-top:8px;line-height:1.8;font-size:12.5px;color:var(--text-2)">مولّد الأرقام العادي (PRNG) يعتمد على معادلة وبذرة، أما CSPRNG فيجمع عشوائية فيزيائية حقيقية.</p></details><details style="margin-bottom:12px;border:1px solid var(--border);border-radius:12px;padding:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px">🔐 Provably Fair</summary><p style="margin-top:8px;line-height:1.8;font-size:12.5px;color:var(--text-2)">hash مسبق يكشفه السيرفر بعد الجولة، وتحقق SHA256(seed) يطابقه.</p></details><details style="margin-bottom:16px;border:1px solid var(--border);border-radius:12px;padding:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px">📊 House Edge & Kelly Criterion</summary><p style="margin-top:8px;line-height:1.8;font-size:12.5px;color:var(--text-2)">كل لعبة مصممة رياضياً لصالح البيت. Kelly يحدد أقصى نسبة رهان آمنة.</p></details><h4 style="margin:0 0 8px;font-size:13px">🧮 حاسبة House Edge</h4><div class="rtp-inputs"><input type="number" id="pmBet" placeholder="الرهان"><input type="number" id="pmWinProb" placeholder="احتمال %"><input type="number" id="pmPayout" placeholder="مضاعف الربح"></div><button class="btn primary" id="btnPmHouseCalc">احسب</button><div id="pmHouseResult" class="secToolAiResult"></div><h4 style="margin:20px 0 8px;font-size:13px">📈 حاسبة Kelly</h4><div class="rtp-inputs"><input type="number" id="pmBankroll" placeholder="رأس المال"><input type="number" id="pmKellyProb" placeholder="احتمال %"><input type="number" id="pmKellyOdds" placeholder="مضاعف"></div><button class="btn primary" id="btnPmKellyCalc">احسب</button><div id="pmKellyResult" class="secToolAiResult"></div><h4 style="margin:20px 0 8px;font-size:13px">🔐 فاحص Provably Fair</h4><input type="text" id="pmSeedInput" placeholder="Server Seed" style="font-family:var(--font-mono);margin-bottom:8px"><input type="text" id="pmHashInput" placeholder="Hash المعلن" style="font-family:var(--font-mono);margin-bottom:8px"><button class="btn primary" id="btnPmFairCheck">تحقّق</button><div id="pmFairResult" class="secToolAiResult"></div>`;
-    case 'rtpcalc': return `<input type="text" id="rtpSearchInput" placeholder="ابحث عن لعبة..." style="${inputStyle}"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><select id="rtpProviderFilter" style="flex:1"><option value="">كل المزودين</option></select><select id="rtpBuyBonusFilter" style="flex:1"><option value="">كل الألعاب</option><option value="yes">💰 فيها Buy Bonus</option><option value="no">🚫 بدون Buy Bonus</option></select></div><div id="rtpGameList" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;background:rgba(0,0,0,.2)"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">🧮 حاسبة الخسارة المتوقعة</h4><div class="rtp-inputs"><input type="number" id="rtpSelectedRtp" placeholder="RTP %"><input type="number" id="rtpBetSize" placeholder="حجم الرهان"><input type="number" id="rtpNumSpins" placeholder="عدد الجولات"><input type="number" id="rtpBankroll" placeholder="رصيدك (اختياري)"></div><button class="btn primary" id="btnRtpCalc">احسب</button><div id="rtpCalcResult" class="secToolAiResult"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">🎯 اقتراح أفضل لعبة</h4><div class="rtp-inputs"><input type="number" id="rtpSuggestBankroll" placeholder="رصيدك"><select id="rtpSuggestGoal" style="flex:1"><option value="safe">🛡️ متحفظ</option><option value="balanced">⚖️ متوازن</option><option value="bold">🎲 جريء</option></select><input type="number" id="rtpSuggestSpins" placeholder="عدد الجولات"></div><button class="btn primary" id="btnRtpSuggest">اقترح</button><div id="rtpSuggestResult" class="secToolAiResult"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">🧪 محاكاة مونت كارلو (10,000 جلسة)</h4><div class="rtp-inputs"><input type="number" id="mcRtp" placeholder="RTP %"><input type="number" id="mcVolatility" placeholder="تباين 1-5"><input type="number" id="mcBankroll" placeholder="رصيد"><input type="number" id="mcBet" placeholder="رهان"><input type="number" id="mcSpins" placeholder="جولات"></div><button class="btn primary" id="btnMcRun">🚀 شغّل المحاكاة</button><div id="mcResult" class="secToolAiResult"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">🧭 محاكي القرارات (Stop-Loss vs Take-Profit)</h4><div class="rtp-inputs"><input type="number" id="dsRtp" placeholder="RTP %"><input type="number" id="dsVolatility" placeholder="تباين 1-5"><input type="number" id="dsBankroll" placeholder="رصيد الجلسة"><input type="number" id="dsBet" placeholder="رهان"><input type="number" id="dsStopLoss" placeholder="سقف الخسارة"><input type="number" id="dsTakeProfit" placeholder="هدف الربح"><input type="number" id="dsMaxSpins" placeholder="أقصى عدد جولات"></div><button class="btn primary" id="btnDsRun">🧭 شغّل المحاكي</button><div id="dsResult" class="secToolAiResult"></div>`;
+    case 'probmath': return `<details style="margin-bottom:12px;border:1px solid var(--border);border-radius:12px;padding:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px">الفرق بين PRNG وCSPRNG</summary><p style="margin-top:8px;line-height:1.8;font-size:12.5px;color:var(--text-2)">مولّد الأرقام العادي (PRNG) يعتمد على معادلة وبذرة، أما CSPRNG فيجمع عشوائية فيزيائية حقيقية.</p></details><details style="margin-bottom:12px;border:1px solid var(--border);border-radius:12px;padding:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px">Provably Fair</summary><p style="margin-top:8px;line-height:1.8;font-size:12.5px;color:var(--text-2)">hash مسبق يكشفه السيرفر بعد الجولة، وتحقق SHA256(seed) يطابقه.</p></details><details style="margin-bottom:16px;border:1px solid var(--border);border-radius:12px;padding:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px">House Edge & Kelly Criterion</summary><p style="margin-top:8px;line-height:1.8;font-size:12.5px;color:var(--text-2)">كل لعبة مصممة رياضياً لصالح البيت. Kelly يحدد أقصى نسبة رهان آمنة.</p></details><h4 style="margin:0 0 8px;font-size:13px">حاسبة House Edge</h4><div class="rtp-inputs"><input type="number" id="pmBet" placeholder="الرهان"><input type="number" id="pmWinProb" placeholder="احتمال %"><input type="number" id="pmPayout" placeholder="مضاعف الربح"></div><button class="btn primary" id="btnPmHouseCalc">احسب</button><div id="pmHouseResult" class="secToolAiResult"></div><h4 style="margin:20px 0 8px;font-size:13px">حاسبة Kelly</h4><div class="rtp-inputs"><input type="number" id="pmBankroll" placeholder="رأس المال"><input type="number" id="pmKellyProb" placeholder="احتمال %"><input type="number" id="pmKellyOdds" placeholder="مضاعف"></div><button class="btn primary" id="btnPmKellyCalc">احسب</button><div id="pmKellyResult" class="secToolAiResult"></div><h4 style="margin:20px 0 8px;font-size:13px">فاحص Provably Fair</h4><input type="text" id="pmSeedInput" placeholder="Server Seed" style="font-family:var(--font-mono);margin-bottom:8px"><input type="text" id="pmHashInput" placeholder="Hash المعلن" style="font-family:var(--font-mono);margin-bottom:8px"><button class="btn primary" id="btnPmFairCheck">تحقّق</button><div id="pmFairResult" class="secToolAiResult"></div>`;
+    case 'rtpcalc': return `<input type="text" id="rtpSearchInput" placeholder="ابحث عن لعبة..." style="${inputStyle}"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><select id="rtpProviderFilter" style="flex:1"><option value="">كل المزودين</option></select><select id="rtpBuyBonusFilter" style="flex:1"><option value="">كل الألعاب</option><option value="yes">فيها Buy Bonus</option><option value="no">بدون Buy Bonus</option></select></div><div id="rtpGameList" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;background:rgba(0,0,0,.2)"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">حاسبة الخسارة المتوقعة</h4><div class="rtp-inputs"><input type="number" id="rtpSelectedRtp" placeholder="RTP %"><input type="number" id="rtpBetSize" placeholder="حجم الرهان"><input type="number" id="rtpNumSpins" placeholder="عدد الجولات"><input type="number" id="rtpBankroll" placeholder="رصيدك (اختياري)"></div><button class="btn primary" id="btnRtpCalc">احسب</button><div id="rtpCalcResult" class="secToolAiResult"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">اقتراح أفضل لعبة</h4><div class="rtp-inputs"><input type="number" id="rtpSuggestBankroll" placeholder="رصيدك"><select id="rtpSuggestGoal" style="flex:1"><option value="safe">متحفظ</option><option value="balanced">متوازن</option><option value="bold">جريء</option></select><input type="number" id="rtpSuggestSpins" placeholder="عدد الجولات"></div><button class="btn primary" id="btnRtpSuggest">اقترح</button><div id="rtpSuggestResult" class="secToolAiResult"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">محاكاة مونت كارلو (10,000 جلسة)</h4><div class="rtp-inputs"><input type="number" id="mcRtp" placeholder="RTP %"><input type="number" id="mcVolatility" placeholder="تباين 1-5"><input type="number" id="mcBankroll" placeholder="رصيد"><input type="number" id="mcBet" placeholder="رهان"><input type="number" id="mcSpins" placeholder="جولات"></div><button class="btn primary" id="btnMcRun">شغّل المحاكاة</button><div id="mcResult" class="secToolAiResult"></div><hr style="border:none;border-top:1px solid var(--border);margin:18px 0"><h4 style="margin:0 0 10px;font-size:13px">محاكي القرارات (Stop-Loss vs Take-Profit)</h4><div class="rtp-inputs"><input type="number" id="dsRtp" placeholder="RTP %"><input type="number" id="dsVolatility" placeholder="تباين 1-5"><input type="number" id="dsBankroll" placeholder="رصيد الجلسة"><input type="number" id="dsBet" placeholder="رهان"><input type="number" id="dsStopLoss" placeholder="سقف الخسارة"><input type="number" id="dsTakeProfit" placeholder="هدف الربح"><input type="number" id="dsMaxSpins" placeholder="أقصى عدد جولات"></div><button class="btn primary" id="btnDsRun">شغّل المحاكي</button><div id="dsResult" class="secToolAiResult"></div>`;
     case 'ctf': return `<div id="ctfList"></div>`;
     default: return '';
   }
@@ -2660,8 +2937,8 @@ function wireSecTools(){
   $('#exifFileInput')?.addEventListener('change', async e => {
     const f = e.target.files[0]; const box = $('#exifResult');
     if(!f){ box.textContent = ''; return; }
-    if(typeof window.ExifParser === 'undefined'){ box.textContent = '⚠️ محرّك EXIF لم يُحمَّل.'; return; }
-    box.textContent = '⏳ تحليل محلي (الصورة لا تُرفع لأي خادم)...';
+    if(typeof window.ExifParser === 'undefined'){ box.textContent = 'محرّك EXIF لم يُحمَّل.'; return; }
+    box.textContent = 'تحليل محلي (الصورة لا تُرفع لأي خادم)...';
     try {
       const buf = await f.arrayBuffer();
       const r = window.ExifParser.parse(buf);
@@ -2682,22 +2959,22 @@ function wireSecTools(){
       };
 
       let html = '<div style="white-space:normal">';
-      html += sec('📄 الملف');
+      html += sec('الملف');
       html += row('الاسم', f.name) + row('الحجم', kb) + row('النوع', r.mime + (r.format!=='unknown'?' ('+r.format+')':''));
       if(r.dimensions && r.dimensions.width) html += row('الأبعاد', r.dimensions.width+' × '+r.dimensions.height+' px');
       if(r.colorType) html += row('نوع الألوان', r.colorType + (r.bitDepth?(' / '+r.bitDepth+'-bit'):''));
       if(r.byteOrder) html += row('ترتيب البايتات', r.byteOrder);
 
-      if(r.camera && Object.keys(r.camera).length){ html += sec('📷 الكاميرا'); html += rows(r.camera); }
-      if(r.datetime && Object.keys(r.datetime).length){ html += sec('🕐 التواريخ'); html += rows(r.datetime); }
-      if(r.exposure && Object.keys(r.exposure).length){ html += sec('⚙️ إعدادات التصوير'); html += rows(r.exposure); }
+      if(r.camera && Object.keys(r.camera).length){ html += sec('الكاميرا'); html += rows(r.camera); }
+      if(r.datetime && Object.keys(r.datetime).length){ html += sec('التواريخ'); html += rows(r.datetime); }
+      if(r.exposure && Object.keys(r.exposure).length){ html += sec('إعدادات التصوير'); html += rows(r.exposure); }
 
       if(r.gps){
-        html += sec('📍 الموقع الجغرافي (GPS)');
+        html += sec('الموقع الجغرافي (GPS)');
         html += row('خط العرض', r.gps.latitude) + row('خط الطول', r.gps.longitude);
         if(r.gps.altitude!=null) html += row('الارتفاع', r.gps.altitude+' م');
         if(r.gps.timeStamp) html += row('وقت GPS', (r.gps.dateStamp?r.gps.dateStamp+' ':'')+r.gps.timeStamp);
-        html += `<div style="margin:6px 0"><a href="${esc(r.gps.openStreetMapUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">🗺️ افتح على OpenStreetMap</a> · <a href="${esc(r.gps.googleMapsUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">Google Maps</a></div>`;
+        html += `<div style="margin:6px 0"><a href="${esc(r.gps.openStreetMapUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">افتح على OpenStreetMap</a> · <a href="${esc(r.gps.googleMapsUrl)}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:underline">Google Maps</a></div>`;
       }
 
       // Raw tags the summaries above leave out but that still identify a place, a person or a device.
@@ -2710,8 +2987,8 @@ function wireSecTools(){
 
       const gpsKeys = Object.keys(gpsTags).filter(k => k !== 'GPSVersionID' && tagText(gpsTags[k]));
       if(!r.gps && gpsKeys.length){
-        html += sec('📍 الموقع الجغرافي (GPS)');
-        html += `<div style="color:#fbbf24;font-size:12px;margin:2px 0 4px">⚠️ توجد حقول GPS لكن تعذّر تحويلها إلى إحداثيات — قد تكشف مكان التصوير.</div>`;
+        html += sec('الموقع الجغرافي (GPS)');
+        html += `<div style="color:#fbbf24;font-size:12px;margin:2px 0 4px">توجد حقول GPS لكن تعذّر تحويلها إلى إحداثيات — قد تكشف مكان التصوير.</div>`;
         gpsKeys.forEach(k => { const v = gpsTags[k]; html += row(k, Array.isArray(v) ? v.map(fmt).join(', ') : fmt(v)); });
       }
 
@@ -2722,12 +2999,12 @@ function wireSecTools(){
         ['اسم المالك (CameraOwnerName)', exifIfd.CameraOwnerName], ['الرقم التسلسلي للعدسة (LensSerialNumber)', exifIfd.LensSerialNumber],
         ['معرّف الصورة الفريد (ImageUniqueID)', exifIfd.ImageUniqueID], ['تعليق المستخدم (UserComment)', userComment(exifIfd.UserComment)],
       ].map(([k, v]) => [k, tagText(v)]).filter(([, v]) => v);
-      if(identity.length){ html += sec('🪪 بيانات تعريفية (المؤلف/المالك/الأرقام التسلسلية)'); identity.forEach(([k, v]) => html += row(k, v)); }
+      if(identity.length){ html += sec('بيانات تعريفية (المؤلف/المالك/الأرقام التسلسلية)'); identity.forEach(([k, v]) => html += row(k, v)); }
 
       const txtKeys = Object.keys(r.text||{});
-      if(txtKeys.length){ html += sec('🏷️ حقول نصية'); txtKeys.forEach(k => html += row(k, r.text[k])); }
-      if(r.comments && r.comments.length){ html += sec('💬 تعليقات'); r.comments.forEach((c,i)=> html += row('#'+(i+1), c)); }
-      if(r.xmp){ html += sec('📝 XMP'); html += `<pre style="white-space:pre-wrap;word-break:break-word;margin:0;font-size:11px;color:var(--text-2)">${esc(r.xmp.slice(0,800))}</pre>`; }
+      if(txtKeys.length){ html += sec('حقول نصية'); txtKeys.forEach(k => html += row(k, r.text[k])); }
+      if(r.comments && r.comments.length){ html += sec('تعليقات'); r.comments.forEach((c,i)=> html += row('#'+(i+1), c)); }
+      if(r.xmp){ html += sec('XMP'); html += `<pre style="white-space:pre-wrap;word-break:break-word;margin:0;font-size:11px;color:var(--text-2)">${esc(r.xmp.slice(0,800))}</pre>`; }
 
       const warnings = r.warnings || [];
       if(warnings.length){
@@ -2745,18 +3022,18 @@ function wireSecTools(){
           : r.format === 'unknown' ? 'صيغة الملف غير معروفة، فلم تُفحص بياناته الوصفية.'
           : undecoded ? 'في الملف بيانات وصفية مضغوطة أو مقطوعة لم يستطع الفحص فكّها.'
           : 'كتلة البيانات الوصفية (EXIF) موجودة لكن تعذّرت قراءتها.';
-        html += `<div class="exif-unchecked" style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.35);border-radius:10px;padding:10px 12px;margin:12px 0 2px;font-size:12px;line-height:1.7;color:#fbbf24">⚠️ ${why} لا يمكن الجزم بخلوّ الملف من البيانات المخفية — قد يكشف الجهاز أو الموقع.${unsupported ? ' حوّله إلى JPEG أو PNG ثم أعد الفحص.' : ''}</div>`;
+        html += `<div class="exif-unchecked" style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.35);border-radius:10px;padding:10px 12px;margin:12px 0 2px;font-size:12px;line-height:1.7;color:#fbbf24">${why} لا يمكن الجزم بخلوّ الملف من البيانات المخفية — قد يكشف الجهاز أو الموقع.${unsupported ? ' حوّله إلى JPEG أو PNG ثم أعد الفحص.' : ''}</div>`;
       } else if(!hasAnyData){
-        html += `<div style="color:var(--text-2);margin-top:10px">✅ لم يُعثر على بيانات وصفية مخفية (EXIF/XMP) تكشف الجهاز أو الموقع أو صاحب الصورة. (حقول IPTC لا تُفحص.)</div>`;
+        html += `<div class="exif-clean" style="color:var(--text-2);margin-top:10px">لم يُعثر على بيانات وصفية مخفية (EXIF/XMP) تكشف الجهاز أو الموقع أو صاحب الصورة. (حقول IPTC لا تُفحص.)</div>`;
       }
       const notes = (r.notes||[]).filter(n => !/not supported yet/.test(n)); // shown above in Arabic
       if(notes.length) html += `<div style="color:var(--text-2);font-size:11px;margin-top:8px">${notes.map(esc).join(' · ')}</div>`;
 
       const rawJson = JSON.stringify(r.tags && Object.keys(r.tags).length ? r.tags : {text:r.text, comments:r.comments}, null, 2);
-      html += `<details style="margin-top:12px"><summary style="cursor:pointer;color:var(--text-2);font-size:12px">🔍 عرض كل الحقول الخام (JSON)</summary><pre style="white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font-size:11px;color:var(--text-2)">${esc(rawJson)}</pre></details>`;
+      html += `<details style="margin-top:12px"><summary style="cursor:pointer;color:var(--text-2);font-size:12px">عرض كل الحقول الخام (JSON)</summary><pre style="white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font-size:11px;color:var(--text-2)">${esc(rawJson)}</pre></details>`;
       html += '</div>';
       box.innerHTML = html;
-    } catch(err){ box.textContent = '⚠️ '+err.message; }
+    } catch(err){ box.textContent = ''+err.message; }
   });
   // Crypto
   function caesar(str, shift, dec){ const s = dec ? (26-(((shift%26)+26)%26))%26 : ((shift%26)+26)%26; return str.replace(/[a-zA-Z]/g, c => { const b = c <= 'Z' ? 65 : 97; return String.fromCharCode(((c.charCodeAt(0)-b+s)%26)+b); }); }
@@ -2771,7 +3048,7 @@ function wireSecTools(){
       else if(algo === 'rot13') out = caesar(input, 13, false);
       else if(algo === 'xor'){ if(mode === 'encode') out = bytesToB64(xorBytes(input, key||'secret')); else out = new TextDecoder().decode(xorBytes(new TextDecoder().decode(b64ToBytes(input)), key||'secret')); }
       else if(algo === 'base64') out = mode === 'encode' ? btoa(unescape(encodeURIComponent(input))) : decodeURIComponent(escape(atob(input)));
-    } catch(e){ out = '⚠️ '+e.message; }
+    } catch(e){ out = ''+e.message; }
     $('#cryptoOutput').value = out;
   }
   $('#btnCryptoEncode')?.addEventListener('click', () => runCrypto('encode'));
@@ -2782,63 +3059,63 @@ function wireSecTools(){
     const video = $('#motionVideo'), canvas = $('#motionCanvas'), status = $('#motionStatus');
     try { motionStream = await navigator.mediaDevices.getUserMedia({video:true}); video.srcObject = motionStream; video.style.display = 'block'; await video.play();
       canvas.width = 160; canvas.height = 120; const ctx = canvas.getContext('2d'); prevFrame = null;
-      status.textContent = '🟢 المراقبة نشطة...';
+      status.textContent = 'المراقبة نشطة...';
       function loop(now){ if(now - lastCheck > 200){ lastCheck = now; ctx.drawImage(video, 0, 0, canvas.width, canvas.height); const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
           if(prevFrame){ let diff = 0; for(let i=0;i<frame.data.length;i+=4) diff += Math.abs(frame.data[i]-prevFrame.data[i]);
-            const avg = diff/(frame.data.length/4); if(avg > 18) status.textContent = '🔴 حركة! ' + new Date().toLocaleTimeString(); }
+            const avg = diff/(frame.data.length/4); if(avg > 18) status.textContent = 'حركة! ' + new Date().toLocaleTimeString(); }
           prevFrame = frame; } motionRAF = requestAnimationFrame(loop); }
       loop(performance.now());
-    } catch(e){ status.textContent = '⚠️ '+e.message; }
+    } catch(e){ status.textContent = ''+e.message; }
   });
-  $('#btnMotionStop')?.addEventListener('click', () => { if(motionRAF) cancelAnimationFrame(motionRAF); if(motionStream) motionStream.getTracks().forEach(t => t.stop()); $('#motionVideo').style.display = 'none'; $('#motionStatus').textContent = '⏹️'; });
+  $('#btnMotionStop')?.addEventListener('click', () => { if(motionRAF) cancelAnimationFrame(motionRAF); if(motionStream) motionStream.getTracks().forEach(t => t.stop()); $('#motionVideo').style.display = 'none'; $('#motionStatus').textContent = isAr() ? 'متوقف' : 'Stopped'; });
   // Port scan
   $('#btnPortscanRun')?.addEventListener('click', async () => {
     const host = $('#portscanHost').value.trim(); const box = $('#portscanResult');
-    if(!host) return; if(!$('#portscanConfirmOwn').checked){ box.textContent = '⚠️ أكد الملكية أولاً'; return; }
-    box.textContent = '⏳ فحص...';
+    if(!host) return; if(!$('#portscanConfirmOwn').checked){ box.textContent = 'أكد الملكية أولاً'; return; }
+    box.textContent = 'فحص...';
     try { const res = await fetch('/api/portscan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host})}); const data = await res.json();
-      if(data.error){ box.textContent = '⚠️ '+data.error; return; } box.textContent = data.results.map(r => `${r.port}\t${r.status}${r.service ? ' ('+r.service+')' : ''}`).join('\n');
-    } catch(e){ box.textContent = '⚠️ '+e.message; }
+      if(data.error){ box.textContent = ''+data.error; return; } box.textContent = data.results.map(r => `${r.port}\t${r.status}${r.service ? ' ('+r.service+')' : ''}`).join('\n');
+    } catch(e){ box.textContent = ''+e.message; }
   });
   // AI tools
-  $('#btnKaliAsk')?.addEventListener('click', async () => { const input = $('#kaliInput').value.trim(); if(!input) return; const box = $('#kaliResult'); box.textContent = '⏳ '+PROVIDERS.deepseek.name+' يفكر...'; try { const reply = await callProvider('deepseek',[{role:'user',content:'أنت خبير Kali Linux. اقترح الأمر المناسب وشرحه:\n'+input}]); box.textContent = reply; } catch(e){ box.textContent = '⚠️ '+e.message; } });
-  $('#btnPhishingAnalyze')?.addEventListener('click', async () => { const input = $('#phishingInput').value.trim(); if(!input) return; const box = $('#phishingResult'); box.textContent = '⏳ '+PROVIDERS.deepseek.name+'...'; try { const reply = await callProvider('deepseek',[{role:'user',content:'حلّل هذا الرابط/الإيميل وهل هو تصيّد:\n'+input}]); box.textContent = reply; } catch(e){ box.textContent = '⚠️ '+e.message; } });
-  $('#btnLogAnalyze')?.addEventListener('click', async () => { const input = $('#logInput').value.trim(); if(!input) return; const box = $('#logResult'); box.textContent = '⏳...'; try { const reply = await callProvider('deepseek',[{role:'user',content:'حلّل هذا log وابحث عن أنشطة مشبوهة:\n'+input.slice(0,6000)}]); box.textContent = reply; } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnKaliAsk')?.addEventListener('click', async () => { const input = $('#kaliInput').value.trim(); if(!input) return; const box = $('#kaliResult'); box.textContent = ''+PROVIDERS.deepseek.name+' يفكر...'; try { const reply = await callProvider('deepseek',[{role:'user',content:'أنت خبير Kali Linux. اقترح الأمر المناسب وشرحه:\n'+input}]); box.textContent = reply; } catch(e){ box.textContent = ''+e.message; } });
+  $('#btnPhishingAnalyze')?.addEventListener('click', async () => { const input = $('#phishingInput').value.trim(); if(!input) return; const box = $('#phishingResult'); box.textContent = ''+PROVIDERS.deepseek.name+'...'; try { const reply = await callProvider('deepseek',[{role:'user',content:'حلّل هذا الرابط/الإيميل وهل هو تصيّد:\n'+input}]); box.textContent = reply; } catch(e){ box.textContent = ''+e.message; } });
+  $('#btnLogAnalyze')?.addEventListener('click', async () => { const input = $('#logInput').value.trim(); if(!input) return; const box = $('#logResult'); box.textContent = '...'; try { const reply = await callProvider('deepseek',[{role:'user',content:'حلّل هذا log وابحث عن أنشطة مشبوهة:\n'+input.slice(0,6000)}]); box.textContent = reply; } catch(e){ box.textContent = ''+e.message; } });
   // Breach
-  $('#btnBreachCheck')?.addEventListener('click', async () => { const email = $('#breachEmail').value.trim(); if(!email) return; const box = $('#breachResult'); box.textContent = '⏳...'; try { const res = await fetch('/api/hibp?email='+encodeURIComponent(email)); const data = await res.json(); if(data.notConfigured){ box.textContent = '🚧 قريبًا'; return; } if(data.error){ box.textContent = '⚠️ '+data.error; return; } if(!data.breaches?.length) box.textContent = '✅ لا تسريبات معروفة'; else box.textContent = '⚠️ '+data.breaches.length+' تسريب:\n'+data.breaches.map(b => '• '+b.Name+' ('+b.BreachDate+')').join('\n'); } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnBreachCheck')?.addEventListener('click', async () => { const email = $('#breachEmail').value.trim(); if(!email) return; const box = $('#breachResult'); box.textContent = '...'; try { const res = await fetch('/api/hibp?email='+encodeURIComponent(email)); const data = await res.json(); if(data.notConfigured){ box.textContent = 'قريبًا'; return; } if(data.error){ box.textContent = ''+data.error; return; } if(!data.breaches?.length) box.textContent = 'لا تسريبات معروفة'; else box.textContent = ''+data.breaches.length+' تسريب:\n'+data.breaches.map(b => '• '+b.Name+' ('+b.BreachDate+')').join('\n'); } catch(e){ box.textContent = ''+e.message; } });
   // DarkGPT
-  $('#btnDarkgptSearch')?.addEventListener('click', async () => { const field = $('#darkgptField').value, value = $('#darkgptValue').value.trim(); if(!value) return; const box = $('#darkgptResult'); const token = authGet('aiapp_auth_token'); if(!token){ box.textContent = '🔒 سجّل دخول أولاً'; return; } box.textContent = '⏳...'; try { const res = await fetch('/api/dehashed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,field,value})}); const data = await res.json(); if(data.notConfigured){ box.textContent = '🚧 قريبًا'; return; } if(data.error){ box.textContent = '⚠️ '+(data.message||data.error); return; } if(!data.entries?.length) box.textContent = '✅ لا نتائج'; else box.textContent = '⚠️ '+data.total+' نتيجة:\n'+data.entries.slice(0,20).map(e=>JSON.stringify(e).slice(0,200)).join('\n'); } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnDarkgptSearch')?.addEventListener('click', async () => { const field = $('#darkgptField').value, value = $('#darkgptValue').value.trim(); if(!value) return; const box = $('#darkgptResult'); const token = authGet('aiapp_auth_token'); if(!token){ box.textContent = 'سجّل دخول أولاً'; return; } box.textContent = '...'; try { const res = await fetch('/api/dehashed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,field,value})}); const data = await res.json(); if(data.notConfigured){ box.textContent = 'قريبًا'; return; } if(data.error){ box.textContent = ''+(data.message||data.error); return; } if(!data.entries?.length) box.textContent = 'لا نتائج'; else box.textContent = ''+data.total+' نتيجة:\n'+data.entries.slice(0,20).map(e=>JSON.stringify(e).slice(0,200)).join('\n'); } catch(e){ box.textContent = ''+e.message; } });
   // VT
   $('#vtMode')?.addEventListener('change', () => { const isFile = $('#vtMode').value === 'file'; $('#vtValue').style.display = isFile ? 'none' : 'block'; $('#vtFile').style.display = isFile ? 'block' : 'none'; $('#vtFileNote').style.display = isFile ? 'block' : 'none'; });
   $('#vtMode')?.dispatchEvent(new Event('change'));
   $('#btnVtRun')?.addEventListener('click', async () => {
     const mode = $('#vtMode').value, box = $('#vtResult');
     let value; let prefix = '';
-    if(mode === 'file'){ const file = $('#vtFile').files[0]; if(!file){ box.textContent = '⚠️ اختر ملف'; return; } box.textContent = '⏳ SHA-256...';
+    if(mode === 'file'){ const file = $('#vtFile').files[0]; if(!file){ box.textContent = 'اختر ملف'; return; } box.textContent = 'SHA-256...';
       const buf = await file.arrayBuffer(); value = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buf))).map(b => b.toString(16).padStart(2,'0')).join('');
-      prefix = `📄 ${file.name}\n🔑 SHA-256: ${value}\n\n`;
+      prefix = `${file.name}\nSHA-256: ${value}\n\n`;
     } else value = $('#vtValue').value.trim();
-    if(!value) return; box.textContent = prefix + '⏳...';
+    if(!value) return; box.textContent = prefix + '...';
     try { const res = await fetch('/api/virustotal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode: mode === 'file' ? 'hash' : mode, value, guestId: window.getGuestId(), token: authGet('aiapp_auth_token')})}); const data = await res.json();
-      if(data.notConfigured){ box.textContent = prefix+'🚧 قريبًا'; return; } if(data.error){ box.textContent = prefix+'⚠️ '+data.error; return; }
-      const icon = data.verdict === 'malicious' ? '🚨' : data.verdict === 'clean' ? '✅' : '⚠️'; const s = data.stats || {};
+      if(data.notConfigured){ box.textContent = prefix+'قريبًا'; return; } if(data.error){ box.textContent = prefix+''+data.error; return; }
+      const icon = data.verdict === 'malicious' ? '✕' : data.verdict === 'clean' ? '✓' : '!'; const s = data.stats || {};
       box.textContent = prefix+`${icon} ${data.verdict}\nخبيث: ${s.malicious||0} | نظيف: ${s.harmless||0}`;
-    } catch(e){ box.textContent = '⚠️ '+e.message; }
+    } catch(e){ box.textContent = ''+e.message; }
   });
   // Recon
-  $('#btnReconRun')?.addEventListener('click', async () => { const domain = $('#reconDomain').value.trim(); if(!domain) return; const box = $('#reconResult'); box.textContent = '⏳...'; try { const res = await fetch('/api/recon',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.error){ box.textContent = '⚠️ '+data.error; return; } const lines = [`🌍 ${data.domain}\n📡 DNS:`]; Object.entries(data.dns||{}).forEach(([k,v]) => { if(v?.length) lines.push(`  ${k}: ${v.map(x => typeof x === 'object' ? x.exchange||JSON.stringify(x) : x).join(', ')}`); }); lines.push(`\n🔍 Subdomains (${data.subdomainCount}):`); (data.subdomains||[]).slice(0,100).forEach(s => lines.push('  • '+s)); box.textContent = lines.join('\n'); } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnReconRun')?.addEventListener('click', async () => { const domain = $('#reconDomain').value.trim(); if(!domain) return; const box = $('#reconResult'); box.textContent = '...'; try { const res = await fetch('/api/recon',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.error){ box.textContent = ''+data.error; return; } const lines = [`${data.domain}\nDNS:`]; Object.entries(data.dns||{}).forEach(([k,v]) => { if(v?.length) lines.push(`  ${k}: ${v.map(x => typeof x === 'object' ? x.exchange||JSON.stringify(x) : x).join(', ')}`); }); lines.push(`\nSubdomains (${data.subdomainCount}):`); (data.subdomains||[]).slice(0,100).forEach(s => lines.push('  • '+s)); box.textContent = lines.join('\n'); } catch(e){ box.textContent = ''+e.message; } });
   // WebScan
-  $('#btnWebscanRun')?.addEventListener('click', async () => { const mode = $('#webscanMode').value, value = $('#webscanValue').value.trim(); if(!value) return; const box = $('#webscanResult'); box.textContent = '⏳...'; try { const res = await fetch('/api/webscan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode,value,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.error){ box.textContent = '⚠️ '+data.error; return; } if(mode === 'headers'){ const lines = [`🛡️ Grade: ${data.grade} (${data.score}/100)`, '']; (data.details||[]).forEach(d => lines.push((d.present ? '✅' : '❌')+' '+d.label)); box.textContent = lines.join('\n'); } else { box.textContent = `🔒 ${data.host}\nIssuer: ${data.issuer||'—'}\nValid until: ${data.validTo||'—'}\nDays left: ${data.daysLeft}\nProtocol: ${data.protocol||'—'}`; } } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnWebscanRun')?.addEventListener('click', async () => { const mode = $('#webscanMode').value, value = $('#webscanValue').value.trim(); if(!value) return; const box = $('#webscanResult'); box.textContent = '...'; try { const res = await fetch('/api/webscan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode,value,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.error){ box.textContent = ''+data.error; return; } if(mode === 'headers'){ const lines = [`Grade: ${data.grade} (${data.score}/100)`, '']; (data.details||[]).forEach(d => lines.push((d.present ? '✓' : '✕')+' '+d.label)); box.textContent = lines.join('\n'); } else { box.textContent = `${data.host}\nIssuer: ${data.issuer||'—'}\nValid until: ${data.validTo||'—'}\nDays left: ${data.daysLeft}\nProtocol: ${data.protocol||'—'}`; } } catch(e){ box.textContent = ''+e.message; } });
   // JWT
-  $('#btnJwtRun')?.addEventListener('click', async () => { const token = $('#jwtInput').value.trim(); if(!token) return; const box = $('#jwtResult'); box.textContent = '⏳...'; try { const parts = token.split('.'); if(parts.length !== 3){ box.textContent = '⚠️ JWT غير صالح'; return; } const header = JSON.parse(atob(parts[0].replace(/-/g,'+').replace(/_/g,'/'))); const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/'))); const lines = ['📋 Header:', JSON.stringify(header, null, 2), '', '📦 Payload:', JSON.stringify(payload, null, 2)]; if(payload.exp) lines.push('', '⏰ Expires: ' + new Date(payload.exp*1000).toISOString()); box.textContent = lines.join('\n'); } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnJwtRun')?.addEventListener('click', async () => { const token = $('#jwtInput').value.trim(); if(!token) return; const box = $('#jwtResult'); box.textContent = '...'; try { const parts = token.split('.'); if(parts.length !== 3){ box.textContent = 'JWT غير صالح'; return; } const header = JSON.parse(atob(parts[0].replace(/-/g,'+').replace(/_/g,'/'))); const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/'))); const lines = ['Header:', JSON.stringify(header, null, 2), '', 'Payload:', JSON.stringify(payload, null, 2)]; if(payload.exp) lines.push('', 'Expires: ' + new Date(payload.exp*1000).toISOString()); box.textContent = lines.join('\n'); } catch(e){ box.textContent = ''+e.message; } });
   // Hash ID
-  $('#btnHashidRun')?.addEventListener('click', () => { const hash = $('#hashidInput').value.trim(); if(!hash) return; const box = $('#hashidResult'); const guesses = []; if(/^[a-f0-9]{32}$/i.test(hash)) guesses.push('MD5'); if(/^[a-f0-9]{40}$/i.test(hash)) guesses.push('SHA-1'); if(/^[a-f0-9]{64}$/i.test(hash)) guesses.push('SHA-256'); if(/^\$2[aby]\$/.test(hash)) guesses.push('bcrypt'); box.textContent = guesses.length ? `🔎 ${guesses.join(', ')}` : '⚠️ نوع غير معروف'; });
+  $('#btnHashidRun')?.addEventListener('click', () => { const hash = $('#hashidInput').value.trim(); if(!hash) return; const box = $('#hashidResult'); const guesses = []; if(/^[a-f0-9]{32}$/i.test(hash)) guesses.push('MD5'); if(/^[a-f0-9]{40}$/i.test(hash)) guesses.push('SHA-1'); if(/^[a-f0-9]{64}$/i.test(hash)) guesses.push('SHA-256'); if(/^\$2[aby]\$/.test(hash)) guesses.push('bcrypt'); box.textContent = guesses.length ? `${guesses.join(', ')}` : 'نوع غير معروف'; });
   // IP Rep
-  $('#btnIprepCheck')?.addEventListener('click', async () => { const ip = $('#iprepIp').value.trim(); if(!ip) return; const box = $('#iprepResult'); box.textContent = '⏳...'; try { const res = await fetch('/api/iprep',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.notConfigured){ box.textContent = '🚧 قريبًا'; return; } if(data.error){ box.textContent = '⚠️ '+data.error; return; } const score = data.abuseScore || 0; const icon = score >= 75 ? '🚨' : score >= 25 ? '⚠️' : '✅'; box.textContent = `${icon} ${data.ip}\nAbuse Score: ${score}%\nReports: ${data.totalReports||0}\nISP: ${data.isp||'—'}\nCountry: ${data.countryName||'—'}`; } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnIprepCheck')?.addEventListener('click', async () => { const ip = $('#iprepIp').value.trim(); if(!ip) return; const box = $('#iprepResult'); box.textContent = '...'; try { const res = await fetch('/api/iprep',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.notConfigured){ box.textContent = 'قريبًا'; return; } if(data.error){ box.textContent = ''+data.error; return; } const score = data.abuseScore || 0; const icon = score >= 75 ? '✕' : score >= 25 ? '!' : '✓'; box.textContent = `${icon} ${data.ip}\nAbuse Score: ${score}%\nReports: ${data.totalReports||0}\nISP: ${data.isp||'—'}\nCountry: ${data.countryName||'—'}`; } catch(e){ box.textContent = ''+e.message; } });
   // Probmath
-  $('#btnPmHouseCalc')?.addEventListener('click', () => { const box = $('#pmHouseResult'); const bet = parseFloat($('#pmBet').value), wp = parseFloat($('#pmWinProb').value)/100, po = parseFloat($('#pmPayout').value); if(!(bet>0)||!(wp>=0&&wp<=1)||!(po>0)){ box.textContent = '⚠️ أرقام غير صحيحة'; return; } const winAmt = bet*(po-1), lp = 1-wp, ev = wp*winAmt - lp*bet, he = -ev/bet*100; box.textContent = `💰 القيمة المتوقعة: ${ev.toFixed(4)}\n📊 حافة البيت: ${he.toFixed(2)}%\n${ev < 0 ? '🔴 لصالح البيت' : '🟢 لصالحك'}`; });
-  $('#btnPmKellyCalc')?.addEventListener('click', () => { const box = $('#pmKellyResult'); const bank = parseFloat($('#pmBankroll').value), p = parseFloat($('#pmKellyProb').value)/100, odds = parseFloat($('#pmKellyOdds').value); if(!(bank>0)||!(p>=0&&p<=1)||!(odds>0)){ box.textContent = '⚠️ أرقام غير صحيحة'; return; } const b = odds-1, q = 1-p, k = b > 0 ? ((b*p-q)/b) : -1; if(k <= 0) box.textContent = '🔴 لا ميزة رياضية — 0%'; else box.textContent = `📈 Kelly: ${(k*100).toFixed(2)}%\n💵 المقترح: ${(bank*k).toFixed(2)}`; });
-  $('#btnPmFairCheck')?.addEventListener('click', async () => { const box = $('#pmFairResult'); const seed = $('#pmSeedInput').value.trim(), expected = $('#pmHashInput').value.trim().toLowerCase(); if(!seed||!expected){ box.textContent = '⚠️ املأ الحقلين'; return; } try { const h = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seed)))).map(b => b.toString(16).padStart(2,'0')).join(''); box.textContent = h === expected ? `✅ متطابق!\n${h}` : `❌ غير متطابق\nالمحسوب: ${h}\nالمعلن: ${expected}`; } catch(e){ box.textContent = '⚠️ '+e.message; } });
+  $('#btnPmHouseCalc')?.addEventListener('click', () => { const box = $('#pmHouseResult'); const bet = parseFloat($('#pmBet').value), wp = parseFloat($('#pmWinProb').value)/100, po = parseFloat($('#pmPayout').value); if(!(bet>0)||!(wp>=0&&wp<=1)||!(po>0)){ box.textContent = 'أرقام غير صحيحة'; return; } const winAmt = bet*(po-1), lp = 1-wp, ev = wp*winAmt - lp*bet, he = -ev/bet*100; box.textContent = `القيمة المتوقعة: ${ev.toFixed(4)}\nحافة البيت: ${he.toFixed(2)}%\n${ev < 0 ? 'لصالح البيت' : 'لصالحك'}`; });
+  $('#btnPmKellyCalc')?.addEventListener('click', () => { const box = $('#pmKellyResult'); const bank = parseFloat($('#pmBankroll').value), p = parseFloat($('#pmKellyProb').value)/100, odds = parseFloat($('#pmKellyOdds').value); if(!(bank>0)||!(p>=0&&p<=1)||!(odds>0)){ box.textContent = 'أرقام غير صحيحة'; return; } const b = odds-1, q = 1-p, k = b > 0 ? ((b*p-q)/b) : -1; if(k <= 0) box.textContent = 'لا ميزة رياضية — 0%'; else box.textContent = `Kelly: ${(k*100).toFixed(2)}%\nالمقترح: ${(bank*k).toFixed(2)}`; });
+  $('#btnPmFairCheck')?.addEventListener('click', async () => { const box = $('#pmFairResult'); const seed = $('#pmSeedInput').value.trim(), expected = $('#pmHashInput').value.trim().toLowerCase(); if(!seed||!expected){ box.textContent = 'املأ الحقلين'; return; } try { const h = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seed)))).map(b => b.toString(16).padStart(2,'0')).join(''); box.textContent = h === expected ? `متطابق!\n${h}` : `غير متطابق\nالمحسوب: ${h}\nالمعلن: ${expected}`; } catch(e){ box.textContent = ''+e.message; } });
 
   // RTP
   const HKS_GAMES = [
@@ -2872,15 +3149,15 @@ function wireSecTools(){
     const pFilter = $('#rtpProviderFilter').value; const bFilter = $('#rtpBuyBonusFilter').value;
     const list = HKS_GAMES.filter(g => { if(f && !g.name.toLowerCase().includes(f)) return false; if(pFilter && g.provider !== pFilter) return false; if(bFilter === 'yes' && !g.buy) return false; if(bFilter === 'no' && g.buy) return false; return true; });
     if(!list.length){ box.innerHTML = '<div style="padding:12px;color:var(--text-3);font-size:12px">لا توجد نتائج</div>'; return; }
-    box.innerHTML = list.map(g => `<div class="hks-row" data-rtp="${g.rtp}"><div><div style="font-weight:600;font-size:13px">${g.name} ${g.buy ? '💰' : ''}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px">${g.provider} · ${volLabel(g.vol)} · ${g.maxWin}</div></div><div style="font-weight:700;color:var(--primary-2);font-family:var(--font-mono);font-size:12px">${g.rtp}%</div></div>`).join('');
+    box.innerHTML = list.map(g => `<div class="hks-row" data-rtp="${g.rtp}"><div><div style="font-weight:600;font-size:13px">${g.name} ${g.buy ? '· Bonus Buy' : ''}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px">${g.provider} · ${volLabel(g.vol)} · ${g.maxWin}</div></div><div style="font-weight:700;color:var(--primary-2);font-family:var(--font-mono);font-size:12px">${g.rtp}%</div></div>`).join('');
     box.querySelectorAll('.hks-row').forEach(row => { row.onclick = () => { $('#rtpSelectedRtp').value = row.getAttribute('data-rtp'); }; });
   }
   const pf = $('#rtpProviderFilter');
   if(pf){ const providers = [...new Set(HKS_GAMES.map(g => g.provider))]; pf.innerHTML = '<option value="">كل المزودين</option>' + providers.map(p => `<option value="${p}">${p}</option>`).join(''); renderRtpList(''); $('#rtpSearchInput').addEventListener('input', e => renderRtpList(e.target.value)); pf.addEventListener('change', () => renderRtpList($('#rtpSearchInput').value)); $('#rtpBuyBonusFilter').addEventListener('change', () => renderRtpList($('#rtpSearchInput').value)); }
-  $('#btnRtpCalc')?.addEventListener('click', () => { const box = $('#rtpCalcResult'); const rtp = parseFloat($('#rtpSelectedRtp').value), bet = parseFloat($('#rtpBetSize').value), spins = parseFloat($('#rtpNumSpins').value), bank = parseFloat($('#rtpBankroll').value); if(!(rtp>0&&rtp<=100)||!(bet>0)||!(spins>0)){ box.textContent = '⚠️ املأ الحقول'; return; } const total = bet*spins, he = (100-rtp)/100, loss = total*he, ret = total-loss; const lines = [`💰 إجمالي المراهنات: ${total.toFixed(2)}`, `📉 حافة البيت: ${(he*100).toFixed(2)}%`, `⬇️ الخسارة المتوقعة: ${loss.toFixed(2)}`, `↩️ العائد المتوقع: ${ret.toFixed(2)}`]; if(bank>0) lines.push('', `🛑 وقف الخسارة الموصى به: ${(bank*0.2).toFixed(2)} (20%)`); box.textContent = lines.join('\n'); });
-  $('#btnRtpSuggest')?.addEventListener('click', () => { const box = $('#rtpSuggestResult'); const bank = parseFloat($('#rtpSuggestBankroll').value), goal = $('#rtpSuggestGoal').value; if(!(bank>0)){ box.textContent = '⚠️ أدخل رصيدك'; return; } const target = goal === 'safe' ? 2 : goal === 'bold' ? 5 : 3.5; const w = goal === 'safe' ? 3 : goal === 'bold' ? 0.6 : 1.6; const betPct = goal === 'safe' ? 0.005 : goal === 'bold' ? 0.02 : 0.01; const slPct = goal === 'safe' ? 0.1 : goal === 'bold' ? 0.3 : 0.2; const scored = HKS_GAMES.map(g => { const diff = Math.abs(g.volN - target); let score = g.rtp - diff*w; if(goal === 'bold') score += Math.log10((parseInt(g.maxWin)||0)+1)*2.2; if(goal === 'safe') score += (5-g.volN)*0.8; return {...g, score}; }).sort((a,b) => b.score-a.score).slice(0,3); const lines = [`🎯 بناءً على رصيدك (${bank.toFixed(2)}) وهدفك:`, '']; scored.forEach((g, i) => lines.push(`${i+1}️⃣ ${g.name} — RTP ${g.rtp}% · ${volLabel(g.vol)} · ${g.maxWin}`)); lines.push('', `💵 الرهان المقترح: ${(bank*betPct).toFixed(2)}`, `🛑 وقف الخسارة: ${(bank*slPct).toFixed(2)}`); box.textContent = lines.join('\n'); });
-  $('#btnMcRun')?.addEventListener('click', () => { const box = $('#mcResult'); const rtp = parseFloat($('#mcRtp').value), volN = Math.min(5, Math.max(1, parseFloat($('#mcVolatility').value)||3)), bank = parseFloat($('#mcBankroll').value), bet = parseFloat($('#mcBet').value), spins = parseInt($('#mcSpins').value, 10); if(!(rtp>0&&rtp<=100)||!(bank>0)||!(bet>0)||!(spins>0)){ box.textContent = '⚠️ املأ الحقول'; return; } box.textContent = '⏳ 10,000 جلسة...'; setTimeout(() => { const N=10000, rtpF=rtp/100, hitRate=0.40-(volN-1)*0.045, jp=0.0004*volN*volN, jm=40*volN, jpEV=jp*jm, normHR=Math.max(0.01,hitRate-jp), normEV=Math.max(0.01,rtpF-jpEV), avgMN=normEV/normHR; const finals=[]; let bust=0, prof=0, sum=0, peak=0; for(let s=0;s<N;s++){ let bal=bank; for(let i=0;i<spins;i++){ if(bal<bet)break; bal-=bet; const r=Math.random(); if(r<jp)bal+=bet*jm*(0.4+Math.random()*1.2); else if(r<jp+normHR)bal+=bet*(-avgMN*Math.log(1-Math.random())); if(bal<0)bal=0; } finals.push(bal); sum+=bal; if(bal<=bet)bust++; if(bal>bank)prof++; if(bal>peak)peak=bal; } finals.sort((a,b)=>a-b); const pct=p=>finals[Math.min(finals.length-1,Math.floor(finals.length*p))]; box.textContent = [`🧪 10,000 جلسة (${spins} جولة، رهان ${bet}):`, '', `📈 احتمال الربح: ${(prof/N*100).toFixed(1)}%`, `💀 احتمال الإفلاس: ${(bust/N*100).toFixed(1)}%`, '', `📊 التوزيع:`, `  أسوأ 10%: ${pct(0.10).toFixed(2)}`, `  الوسيط: ${pct(0.50).toFixed(2)}`, `  أفضل 10%: ${pct(0.90).toFixed(2)}`, `  الأفضل: ${peak.toFixed(2)}`, `  المتوسط: ${(sum/N).toFixed(2)}`].join('\n'); }, 50); });
-  $('#btnDsRun')?.addEventListener('click', () => { const box = $('#dsResult'); const rtp = parseFloat($('#dsRtp').value), volN = Math.min(5, Math.max(1, parseFloat($('#dsVolatility').value)||3)), bank = parseFloat($('#dsBankroll').value), bet = parseFloat($('#dsBet').value), sl = parseFloat($('#dsStopLoss').value), tp = parseFloat($('#dsTakeProfit').value), ms = parseInt($('#dsMaxSpins').value, 10)||300; if(!(rtp>0&&rtp<=100)||!(bank>0)||!(bet>0)||!(sl>0)||!(tp>0)){ box.textContent = '⚠️ املأ الحقول'; return; } if(sl>=bank){ box.textContent = '⚠️ سقف الخسارة أكبر من الرصيد'; return; } box.textContent = '⏳ 10,000 جلسة...'; setTimeout(() => { const N=10000, rtpF=rtp/100, hitRate=0.40-(volN-1)*0.045, jp=0.0004*volN*volN, jm=40*volN, jpEV=jp*jm, normHR=Math.max(0.01,hitRate-jp), normEV=Math.max(0.01,rtpF-jpEV), avgMN=normEV/normHR; const floor=Math.max(0,bank-sl), ceil=bank+tp; let hitTP=0, hitSL=0, ranOut=0, sumF=0, sumS=0; for(let s=0;s<N;s++){ let bal=bank, used=0, out='ran'; for(let i=0;i<ms;i++){ if(bal<bet){ out='sl'; break; } bal-=bet; const r=Math.random(); if(r<jp)bal+=bet*jm*(0.4+Math.random()*1.2); else if(r<jp+normHR)bal+=bet*(-avgMN*Math.log(1-Math.random())); used=i+1; if(bal<=floor){ bal=Math.max(0,bal); out='sl'; break; } if(bal>=ceil){ out='tp'; break; } } if(out==='tp')hitTP++; else if(out==='sl')hitSL++; else ranOut++; sumF+=bal; sumS+=used; } const tpP=hitTP/N*100, slP=hitSL/N*100, roP=ranOut/N*100; box.textContent = [`🧭 10,000 جلسة:`, '', `🎯 هدف الربح أولاً: ${tpP.toFixed(1)}%`, `🛑 سقف الخسارة أولاً: ${slP.toFixed(1)}%`, `⏱️ انتهت الجولات: ${roP.toFixed(1)}%`, '', `📊 متوسط الرصيد النهائي: ${(sumF/N).toFixed(2)}`, `📊 متوسط الجولات: ${(sumS/N).toFixed(0)}`, '', slP > tpP ? '💡 التوصية: قلّل هدف الربح أو الرهان' : '💡 التوصية: نسبة جيدة لكن التزم بسقف الخسارة'].join('\n'); }, 50); });
+  $('#btnRtpCalc')?.addEventListener('click', () => { const box = $('#rtpCalcResult'); const rtp = parseFloat($('#rtpSelectedRtp').value), bet = parseFloat($('#rtpBetSize').value), spins = parseFloat($('#rtpNumSpins').value), bank = parseFloat($('#rtpBankroll').value); if(!(rtp>0&&rtp<=100)||!(bet>0)||!(spins>0)){ box.textContent = 'املأ الحقول'; return; } const total = bet*spins, he = (100-rtp)/100, loss = total*he, ret = total-loss; const lines = [`إجمالي المراهنات: ${total.toFixed(2)}`, `حافة البيت: ${(he*100).toFixed(2)}%`, `الخسارة المتوقعة: ${loss.toFixed(2)}`, `↩ العائد المتوقع: ${ret.toFixed(2)}`]; if(bank>0) lines.push('', `وقف الخسارة الموصى به: ${(bank*0.2).toFixed(2)} (20%)`); box.textContent = lines.join('\n'); });
+  $('#btnRtpSuggest')?.addEventListener('click', () => { const box = $('#rtpSuggestResult'); const bank = parseFloat($('#rtpSuggestBankroll').value), goal = $('#rtpSuggestGoal').value; if(!(bank>0)){ box.textContent = 'أدخل رصيدك'; return; } const target = goal === 'safe' ? 2 : goal === 'bold' ? 5 : 3.5; const w = goal === 'safe' ? 3 : goal === 'bold' ? 0.6 : 1.6; const betPct = goal === 'safe' ? 0.005 : goal === 'bold' ? 0.02 : 0.01; const slPct = goal === 'safe' ? 0.1 : goal === 'bold' ? 0.3 : 0.2; const scored = HKS_GAMES.map(g => { const diff = Math.abs(g.volN - target); let score = g.rtp - diff*w; if(goal === 'bold') score += Math.log10((parseInt(g.maxWin)||0)+1)*2.2; if(goal === 'safe') score += (5-g.volN)*0.8; return {...g, score}; }).sort((a,b) => b.score-a.score).slice(0,3); const lines = [`بناءً على رصيدك (${bank.toFixed(2)}) وهدفك:`, '']; scored.forEach((g, i) => lines.push(`${i+1}⃣ ${g.name} — RTP ${g.rtp}% · ${volLabel(g.vol)} · ${g.maxWin}`)); lines.push('', `الرهان المقترح: ${(bank*betPct).toFixed(2)}`, `وقف الخسارة: ${(bank*slPct).toFixed(2)}`); box.textContent = lines.join('\n'); });
+  $('#btnMcRun')?.addEventListener('click', () => { const box = $('#mcResult'); const rtp = parseFloat($('#mcRtp').value), volN = Math.min(5, Math.max(1, parseFloat($('#mcVolatility').value)||3)), bank = parseFloat($('#mcBankroll').value), bet = parseFloat($('#mcBet').value), spins = parseInt($('#mcSpins').value, 10); if(!(rtp>0&&rtp<=100)||!(bank>0)||!(bet>0)||!(spins>0)){ box.textContent = 'املأ الحقول'; return; } box.textContent = '10,000 جلسة...'; setTimeout(() => { const N=10000, rtpF=rtp/100, hitRate=0.40-(volN-1)*0.045, jp=0.0004*volN*volN, jm=40*volN, jpEV=jp*jm, normHR=Math.max(0.01,hitRate-jp), normEV=Math.max(0.01,rtpF-jpEV), avgMN=normEV/normHR; const finals=[]; let bust=0, prof=0, sum=0, peak=0; for(let s=0;s<N;s++){ let bal=bank; for(let i=0;i<spins;i++){ if(bal<bet)break; bal-=bet; const r=Math.random(); if(r<jp)bal+=bet*jm*(0.4+Math.random()*1.2); else if(r<jp+normHR)bal+=bet*(-avgMN*Math.log(1-Math.random())); if(bal<0)bal=0; } finals.push(bal); sum+=bal; if(bal<=bet)bust++; if(bal>bank)prof++; if(bal>peak)peak=bal; } finals.sort((a,b)=>a-b); const pct=p=>finals[Math.min(finals.length-1,Math.floor(finals.length*p))]; box.textContent = [`10,000 جلسة (${spins} جولة، رهان ${bet}):`, '', `احتمال الربح: ${(prof/N*100).toFixed(1)}%`, `احتمال الإفلاس: ${(bust/N*100).toFixed(1)}%`, '', `التوزيع:`, `  أسوأ 10%: ${pct(0.10).toFixed(2)}`, `  الوسيط: ${pct(0.50).toFixed(2)}`, `  أفضل 10%: ${pct(0.90).toFixed(2)}`, `  الأفضل: ${peak.toFixed(2)}`, `  المتوسط: ${(sum/N).toFixed(2)}`].join('\n'); }, 50); });
+  $('#btnDsRun')?.addEventListener('click', () => { const box = $('#dsResult'); const rtp = parseFloat($('#dsRtp').value), volN = Math.min(5, Math.max(1, parseFloat($('#dsVolatility').value)||3)), bank = parseFloat($('#dsBankroll').value), bet = parseFloat($('#dsBet').value), sl = parseFloat($('#dsStopLoss').value), tp = parseFloat($('#dsTakeProfit').value), ms = parseInt($('#dsMaxSpins').value, 10)||300; if(!(rtp>0&&rtp<=100)||!(bank>0)||!(bet>0)||!(sl>0)||!(tp>0)){ box.textContent = 'املأ الحقول'; return; } if(sl>=bank){ box.textContent = 'سقف الخسارة أكبر من الرصيد'; return; } box.textContent = '10,000 جلسة...'; setTimeout(() => { const N=10000, rtpF=rtp/100, hitRate=0.40-(volN-1)*0.045, jp=0.0004*volN*volN, jm=40*volN, jpEV=jp*jm, normHR=Math.max(0.01,hitRate-jp), normEV=Math.max(0.01,rtpF-jpEV), avgMN=normEV/normHR; const floor=Math.max(0,bank-sl), ceil=bank+tp; let hitTP=0, hitSL=0, ranOut=0, sumF=0, sumS=0; for(let s=0;s<N;s++){ let bal=bank, used=0, out='ran'; for(let i=0;i<ms;i++){ if(bal<bet){ out='sl'; break; } bal-=bet; const r=Math.random(); if(r<jp)bal+=bet*jm*(0.4+Math.random()*1.2); else if(r<jp+normHR)bal+=bet*(-avgMN*Math.log(1-Math.random())); used=i+1; if(bal<=floor){ bal=Math.max(0,bal); out='sl'; break; } if(bal>=ceil){ out='tp'; break; } } if(out==='tp')hitTP++; else if(out==='sl')hitSL++; else ranOut++; sumF+=bal; sumS+=used; } const tpP=hitTP/N*100, slP=hitSL/N*100, roP=ranOut/N*100; box.textContent = [`10,000 جلسة:`, '', `هدف الربح أولاً: ${tpP.toFixed(1)}%`, `سقف الخسارة أولاً: ${slP.toFixed(1)}%`, `انتهت الجولات: ${roP.toFixed(1)}%`, '', `متوسط الرصيد النهائي: ${(sumF/N).toFixed(2)}`, `متوسط الجولات: ${(sumS/N).toFixed(0)}`, '', slP > tpP ? 'التوصية: قلّل هدف الربح أو الرهان' : 'التوصية: نسبة جيدة لكن التزم بسقف الخسارة'].join('\n'); }, 50); });
 
   // CTF
   const CTF_FLAGS = {1:'TARYAM{base64_is_easy}', 2:'TARYAM{caesar_is_fun}', 3:'TARYAM{rot13_classic}', 4:'TARYAM{hex}'};
@@ -2891,8 +3168,8 @@ function wireSecTools(){
     const box = $('#ctfList'); if(!box) return;
     const solved = JSON.parse(localStorage.getItem('taryam_ctf_solved') || '[]');
     const items = await Promise.all([1,2,3,4].map(async id => ({id, title: CTF_TITLES[id], clue: CTF_CLUES[id], flagHash: await sha256(CTF_FLAGS[id])})));
-    box.innerHTML = items.map(ch => `<div class="ctf-item ${solved.includes(ch.id) ? 'solved' : ''}"><h4>${ch.title} ${solved.includes(ch.id) ? '✅' : ''}</h4><div style="font-family:var(--font-mono);font-size:12px;margin-bottom:10px;word-break:break-all;color:var(--text-2)">${ch.clue}</div><div style="display:flex;gap:6px"><input type="text" placeholder="TARYAM{...}" data-id="${ch.id}" style="flex:1;font-family:var(--font-mono)"><button class="btn ctf-btn" data-id="${ch.id}">تحقق</button></div></div>`).join('');
-    box.querySelectorAll('.ctf-btn').forEach(btn => { btn.onclick = async () => { const id = parseInt(btn.getAttribute('data-id'), 10); const input = box.querySelector(`input[data-id="${id}"]`); const h = await sha256(input.value.trim()); const item = items.find(x => x.id === id); if(h === item.flagHash){ const arr = JSON.parse(localStorage.getItem('taryam_ctf_solved') || '[]'); if(!arr.includes(id)) arr.push(id); localStorage.setItem('taryam_ctf_solved', JSON.stringify(arr)); window.renderCTF(); toast('🎉 تحدي مُنجز!', 'success'); } else toast('❌ غير صحيح', 'error'); }; });
+    box.innerHTML = items.map(ch => `<div class="ctf-item ${solved.includes(ch.id) ? 'solved' : ''}"><h4>${ch.title} ${solved.includes(ch.id) ? '✓' : ''}</h4><div style="font-family:var(--font-mono);font-size:12px;margin-bottom:10px;word-break:break-all;color:var(--text-2)">${ch.clue}</div><div style="display:flex;gap:6px"><input type="text" placeholder="TARYAM{...}" data-id="${ch.id}" style="flex:1;font-family:var(--font-mono)"><button class="btn ctf-btn" data-id="${ch.id}">تحقق</button></div></div>`).join('');
+    box.querySelectorAll('.ctf-btn').forEach(btn => { btn.onclick = async () => { const id = parseInt(btn.getAttribute('data-id'), 10); const input = box.querySelector(`input[data-id="${id}"]`); const h = await sha256(input.value.trim()); const item = items.find(x => x.id === id); if(h === item.flagHash){ const arr = JSON.parse(localStorage.getItem('taryam_ctf_solved') || '[]'); if(!arr.includes(id)) arr.push(id); localStorage.setItem('taryam_ctf_solved', JSON.stringify(arr)); window.renderCTF(); toast('تحدي مُنجز!', 'success'); } else toast('غير صحيح', 'error'); }; });
   };
   window.renderCTF();
 }
@@ -2910,7 +3187,7 @@ function updateClockDialog(){
   const now = new Date();
   $('#clockGregorianTime').textContent = new Intl.DateTimeFormat('en-US', {hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(now);
   $('#clockGregorianDate').textContent = new Intl.DateTimeFormat(isAr()?'ar-SA-u-nu-latn':'en-US', {weekday:'long',year:'numeric',month:'long',day:'numeric'}).format(now);
-  try { $('#clockHijriDate').textContent = '🕌 ' + new Intl.DateTimeFormat(isAr()?'ar-SA-u-ca-islamic-umalqura-nu-latn':'en-US-u-ca-islamic-umalqura', {year:'numeric',month:'long',day:'numeric'}).format(now); } catch(e){ $('#clockHijriDate').textContent = '🕌 —'; }
+  try { $('#clockHijriDate').textContent = '' + new Intl.DateTimeFormat(isAr()?'ar-SA-u-ca-islamic-umalqura-nu-latn':'en-US-u-ca-islamic-umalqura', {year:'numeric',month:'long',day:'numeric'}).format(now); } catch(e){ $('#clockHijriDate').textContent = '—'; }
   const tz = $('#clockTZSelect').value;
   if(tz){ $('#clockSelectedTime').textContent = new Intl.DateTimeFormat('en-US', {timeZone:tz, hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(now); const meta = TZS.find(x => x.tz === tz); $('#clockSelectedMeta').textContent = meta ? (isAr() ? meta.ar : meta.en) : tz; }
 }
@@ -2918,17 +3195,68 @@ $('#btnClock').onclick = () => { const sel = $('#clockTZSelect'); sel.innerHTML 
 $('#btnCloseClock').onclick = () => { closeDialogSafe($('#clockDialog')); if(clockTimer){ clearInterval(clockTimer); clockTimer = null; } };
 
 /* ═══ Resizers ═══ */
-function setupResizer(res, panel, {min, max, key}){
-  const saved = parseInt(localStorage.getItem(key)||'', 10);
-  if(saved >= min && saved <= max) panel.style.width = saved + 'px';
+// Drag bars on both sides of the chat. Each sizes the panel next to it (the projects
+// sidebar, the operations panel) and can push it all the way in: past `snap` it
+// collapses to 0, and a double-click (or Enter) collapses / restores it. `after` marks
+// a panel that sits after its bar in the DOM, so the drag direction flips.
+function setupResizer(res, panel, {min, max, key, snap = 140, after = false, fallback}){
+  const apply = w => { panel.style.width = w + 'px'; panel.classList.toggle('collapsed', w === 0); res.classList.toggle('edge', w === 0); };
+  const limit = () => typeof max === 'function' ? max() : max;
+  let last = fallback;
+  const saved = parseInt(localStorage.getItem(key) || '', 10);
+  if(saved === 0 || (saved >= min && saved <= limit())){ apply(saved); if(saved) last = saved; }
+  const store = w => { localStorage.setItem(key, w); if(w) last = w; };
+  const toggle = () => { const w = panel.getBoundingClientRect().width > 1 ? 0 : Math.min(last || fallback, limit()); apply(w); store(w); };
   let sX = 0, sW = 0, drag = false;
-  function mm(x){ const rtl = document.documentElement.dir === 'rtl'; let d = x - sX; if(rtl) d = -d; panel.style.width = Math.max(min, Math.min(max, sW+d)) + 'px'; }
-  function up(){ if(!drag) return; drag = false; localStorage.setItem(key, parseInt(panel.style.width, 10)); window.removeEventListener('mousemove', onM); window.removeEventListener('mouseup', up); }
-  function onM(e){ mm(e.clientX); }
-  res.addEventListener('mousedown', e => { if(window.innerWidth <= 860) return; drag = true; sX = e.clientX; sW = panel.getBoundingClientRect().width; window.addEventListener('mousemove', onM); window.addEventListener('mouseup', up); });
+  function move(e){
+    if(!drag) return;
+    let d = e.clientX - sX;
+    if(document.documentElement.dir === 'rtl') d = -d;
+    if(after) d = -d;
+    let w = sW + d;
+    w = w < snap ? 0 : Math.max(min, Math.min(limit(), w));
+    apply(w);
+  }
+  function up(){ if(!drag) return; drag = false; res.classList.remove('dragging'); document.body.classList.remove('resizing'); store(parseInt(panel.style.width, 10) || 0); }
+  res.addEventListener('pointerdown', e => {
+    if(e.target.closest('.rz-btn')) return;
+    if(window.innerWidth <= 860 || document.documentElement.classList.contains('mobile-ui')) return;
+    drag = true; sX = e.clientX; sW = panel.getBoundingClientRect().width;
+    res.setPointerCapture(e.pointerId); res.classList.add('dragging'); document.body.classList.add('resizing');
+  });
+  res.addEventListener('pointermove', move);
+  res.addEventListener('pointerup', up);
+  res.addEventListener('pointercancel', up);
+  res.addEventListener('dblclick', e => { if(!e.target.closest('.rz-btn')) toggle(); });
+  const btn = res.querySelector('.rz-btn');
+  if(btn) btn.addEventListener('click', e => { e.stopPropagation(); toggle(); });
+  return { toggle, isOpen: () => panel.getBoundingClientRect().width > 1 };
+  res.addEventListener('keydown', e => {
+    const step = (e.key === 'ArrowLeft' ? 1 : e.key === 'ArrowRight' ? -1 : 0) * (document.documentElement.dir === 'rtl' ? 1 : -1) * (after ? -1 : 1);
+    if(e.key === 'Enter'){ e.preventDefault(); toggle(); return; }
+    if(!step) return;
+    e.preventDefault();
+    const cur = panel.getBoundingClientRect().width;
+    let w = cur + step * 32;
+    w = w < snap ? 0 : Math.max(min, Math.min(limit(), w));
+    apply(w); store(w);
+  });
 }
-setupResizer($('#resizer1'), $('#sidebar'), {min:200, max:420, key:'panelWidthSidebar'});
-setupResizer($('#resizer2'), $('#chatcol'), {min:320, max:640, key:'panelWidthChat'});
+// The chat keeps at least 320px; the operations panel may take the rest or nothing.
+const socPanelMax = () => Math.max(0, $('main').getBoundingClientRect().width - $('#sidebar').getBoundingClientRect().width - 330);
+const panelSizer = setupResizer($('#resizer2'), $('#workarea'), {min:300, max:socPanelMax, key:'panelWidthSoc', after:true, fallback:560});
+const sideSizer = setupResizer($('#resizer1'), $('#sidebar'), {min:200, max:420, key:'panelWidthSidebar', snap:120, fallback:260});
+// Header buttons show / hide the same panels: on wide screens they collapse in place,
+// on phones (no drag bars) they open the panel as a drawer.
+function bindPanelToggle(btn, sizer, panel){
+  const sync = () => btn.setAttribute('aria-expanded', String(window.innerWidth <= 860 ? panel.classList.contains('open') : sizer.isOpen()));
+  btn.onclick = () => { if(window.innerWidth <= 860) openDrawer(panel); else sizer.toggle(); sync(); };
+  sync();
+}
+bindPanelToggle($('#btnToggleSide'), sideSizer, $('#sidebar'));
+bindPanelToggle($('#btnTogglePanel'), panelSizer, $('#workarea'));
+// The bar buttons report their panel's state too.
+[[$('#rzSide'), sideSizer], [$('#rzPanel'), panelSizer]].forEach(([b, z]) => { const sync = () => b.setAttribute('aria-expanded', String(z.isOpen())); b.addEventListener('click', sync); sync(); });
 
 /* ═══ Command Palette ═══ */
 const CMD_ITEMS = [
@@ -2938,8 +3266,6 @@ const CMD_ITEMS = [
   {id:'clock', label:'التقويم والوقت', labelEn:'Calendar & Time', icon:'i-clock', action:()=>{ $('#btnClock').click(); }},
   {id:'projects', label:'قائمة المشاريع', labelEn:'Projects list', icon:'i-folder', action:()=>{ $('#btnToggleProjects').click(); }},
   {id:'install', label:'تثبيت التطبيق', labelEn:'Install App', icon:'i-install', action:()=>{ $('#btnInstall').click(); }},
-  {id:'preview', label:'تبويب المعاينة', labelEn:'Preview tab', icon:'i-preview', action:()=>{ document.querySelector('.tab[data-tab="preview"]')?.click(); }},
-  {id:'code', label:'تبويب الكود', labelEn:'Code tab', icon:'i-code', action:()=>{ document.querySelector('.tab[data-tab="code"]')?.click(); }},
   {id:'askall', label:'تفعيل اسأل الكل', labelEn:'Toggle Ask All', icon:'i-shield', action:()=>{ $('#chkAskAll').checked = !$('#chkAskAll').checked; updateChipStates(); localStorage.setItem('aiapp_askall', $('#chkAskAll').checked?'true':'false'); }},
   {id:'lang', label:'تبديل اللغة', labelEn:'Toggle language', icon:'i-shield', action:()=>{ setLang(isAr()?'en':'ar'); }},
   {id:'logout', label:'تسجيل الخروج', labelEn:'Log out', icon:'i-logout', action:()=>{ $('#btnLogout').click(); }}
@@ -2974,10 +3300,12 @@ $('#cmdInput').addEventListener('keydown', e => {
 });
 document.addEventListener('keydown', e => {
   if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k'){ e.preventDefault(); openCmdPalette(); }
+  if((e.ctrlKey || e.metaKey) && e.key === ','){ e.preventDefault(); $('#btnSettings').click(); }
   if(e.key === 'Escape' && $('#cmdPalette').classList.contains('show')) closeCmdPalette();
 });
 
 /* ═══ Offline / PWA ═══ */
+(function(){ const chip = $('#sysChip'), text = $('#sysChipText'); function sync(){ const on = navigator.onLine; chip.classList.toggle('off', !on); text.textContent = on ? 'ONLINE' : 'OFFLINE'; } window.addEventListener('online', sync); window.addEventListener('offline', sync); sync(); })();
 (function(){ const banner = $('#offlineBanner'); function setO(){ banner.style.background = 'linear-gradient(90deg,#d97706,#b45309)'; banner.style.display = 'block'; } function setOn(){ banner.style.background = 'linear-gradient(90deg,#059669,#047857)'; banner.querySelector('span').textContent = t('backOnlineBanner'); setTimeout(() => banner.style.display = 'none', 2500); } window.addEventListener('offline', setO); window.addEventListener('online', setOn); if(!navigator.onLine) setO(); })();
 if('serviceWorker' in navigator){ window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {})); }
 let deferredPrompt = null;
@@ -2987,6 +3315,8 @@ $('#btnInstall').onclick = async () => { if(deferredPrompt){ deferredPrompt.prom
 /* ═══ Boot ═══ */
 applyLanguage();
 buildSecTools();
+renderSocHome();
+renderAcct();
 if(!state.projects.length){
   const id = 'p_' + Date.now();
   state.projects.push({id, title: t('defaultProjectTitle'), messages: [], code:''});
@@ -2994,7 +3324,7 @@ if(!state.projects.length){
   saveState();
 } else if(!state.currentId) state.currentId = state.projects[state.projects.length - 1].id;
 renderAll();
-console.log('%c🛡️ TARYAM Cyber — Aether Edition v4', 'color:#8b5cf6;font-size:16px;font-weight:bold');
+console.log('%c🛡️ TARYAM Cyber — Aether Edition v4', 'color:#00ff9c;font-size:16px;font-weight:bold');
 console.log('%c⚡ 9 providers • 18 tools • 20 backgrounds • Command Palette (Ctrl+K)', 'color:#22d3ee');
 </script>
 </body>

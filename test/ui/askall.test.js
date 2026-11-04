@@ -199,7 +199,7 @@ test('failure bubbles offer no "continue with this provider"; tapping the chosen
   const bubbles = () => page.evaluate(() => [...document.querySelectorAll('#messages .msg.assistant')].map((m) => {
     const wrap = m.parentElement;
     const choose = wrap.id === 'messages' ? null : [...wrap.children].find((c) => c.tagName === 'BUTTON');
-    return { label: m.querySelector('.provider-tag')?.textContent, failed: /⚠️/.test(m.textContent), choose: choose ? choose.textContent : null };
+    return { label: m.querySelector('.provider-tag')?.textContent, failed: m.classList.contains('failed'), choose: choose ? choose.textContent : null };
   }));
 
   await send(page, server, 'سؤال 1');

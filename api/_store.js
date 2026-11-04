@@ -26,6 +26,36 @@ function secretPath(namespace, id) {
   return 'taryam/s/' + namespace + '/' + name + '.json';
 }
 
+// Directory prefix for per-caller quota markers. Derived the same way as secretPath so
+// the caller address never appears in a path, but returned without the filename so a
+// day's markers can be listed and counted.
+function quotaPrefix(namespace, id) {
+  const name = crypto.createHmac('sha256', requireKey('blob-path')).update(namespace + '\0' + id).digest('hex');
+  return 'taryam/q/' + namespace + '/' + name + '/';
+}
+
+// Lists blob paths under a prefix through the authenticated Blob API rather than the
+// public CDN. This matters for counters: public reads are CDN-cached and eventually
+// consistent, so a read-modify-write counter built on readPublicJson can serve a stale
+// count and stop counting. The list endpoint reflects what we just wrote.
+async function listUnder(prefix, limit = 500) {
+  const found = [];
+  let cursor;
+  for (let page = 0; page < 10; page++) {
+    const url = new URL(BLOB_BASE + '/');
+    url.searchParams.set('prefix', prefix);
+    url.searchParams.set('limit', String(Math.min(1000, limit)));
+    if (cursor) url.searchParams.set('cursor', cursor);
+    const res = await fetch(url.toString(), { headers: { Authorization: 'Bearer ' + process.env.BLOB_READ_WRITE_TOKEN } });
+    if (!res.ok) throw new Error('Blob list failed (' + res.status + ')');
+    const data = await res.json();
+    for (const b of data.blobs || []) found.push(b.pathname || b.url);
+    if (!data.hasMore || !data.cursor || found.length >= limit) break;
+    cursor = data.cursor;
+  }
+  return found;
+}
+
 // The path is bound in as associated data, so a record copied to another path won't decrypt.
 function encrypt(obj, path) {
   const iv = crypto.randomBytes(12);
@@ -85,4 +115,4 @@ async function writeSecret(path, obj) {
   await writePublicJson(path, encrypt(obj, path));
 }
 
-module.exports = { secretPath, readSecret, writeSecret, readPublicJson, writePublicJson, config };
+module.exports = { secretPath, quotaPrefix, listUnder, readSecret, writeSecret, readPublicJson, writePublicJson, config };
