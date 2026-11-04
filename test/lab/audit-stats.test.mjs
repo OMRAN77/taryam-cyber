@@ -11,6 +11,7 @@ import {
   classifyRounds, logResolution, poolCells, goodnessOfFit, frequencyTest, holm, identifyVersion, runSprt,
   runMatrixSprt, sprtPlan, bettingTest, roundsMeanTest, roundsInterval, roundsEProcess, roundsRate,
   roundsLikelihoodRatio, roundsToSee, planSampleSize, auditDistribution, examplePmf, pmfCsv, samplePmfLog, uniform01,
+  latticeStep, saddlepointLowerTail,
 } from '../../lab/core/audit-stats.js';
 import { parsePlayLog } from '../../lab/core/actual.js';
 import { Xoshiro128ss, prngFromSeed } from '../../lab/core/prng.js';
@@ -558,6 +559,37 @@ test('e-process: anytime upper bound covers the true RTP on fair runs; M is enfo
   assert.ok(r.rejected && r.upperBound <= 0.9, `upper ${r.upperBound}`);
   assert.throws(() => bettingTest([0, 25], { mu0: 0.96, M: 20 }), (e) => Boolean(e.ar && /25/.test(e.en)));
   assert.throws(() => bettingTest([0, 1], { mu0: 0.96, M: 0.5 }), (e) => Boolean(e.ar && e.en));
+});
+
+// ---------- total of the log: saddlepoint ----------
+test('saddlepoint lower tail: research values, and exact lattice sums by dynamic programming', () => {
+  assert.strictEqual(latticeStep([0, 0.2, 0.5, 1, 5000]), 0.1);
+  assert.strictEqual(latticeStep([0, 0.05, 1.25]), 0.05);
+  assert.strictEqual(latticeStep([0, 1 / 3]), null);
+  // The research's synthetic 96% game (its saddle.mjs, printed to 4 decimals): P(S_n <= s) for
+  // n = 1000, s = 500 -> 0.0917; n = 1e4, s = 7000 -> 0.0490; s = 8500 -> 0.3805; n = 1e5, s = 90000 -> 0.2070.
+  const e = makePmf({ entries: examplePmf(0.96) }).entries;
+  near(saddlepointLowerTail(e, 1000, 500, 0.1), 0.0917, 6e-5);
+  near(saddlepointLowerTail(e, 10000, 7000, 0.1), 0.0490, 6e-5);
+  near(saddlepointLowerTail(e, 10000, 8500, 0.1), 0.3805, 6e-5);
+  near(saddlepointLowerTail(e, 100000, 90000, 0.1), 0.2070, 6e-5);
+  // Exact P(S_1000 <= 500) by convolving the pmf 1,000 times on the 0.1 lattice (truncated at
+  // s, since wins are >= 0). The fact-check's own dynamic programme gave 0.08576.
+  const units = e.map((x) => Math.round(x.x * 10));
+  let f = new Float64Array(5001);
+  f[0] = 1;
+  for (let i = 0; i < 1000; i++) {
+    const g = new Float64Array(5001);
+    units.forEach((u, k) => { for (let v = u; v <= 5000; v++) g[v] += e[k].p * f[v - u]; });
+    f = g;
+  }
+  const exact = f.reduce((a, b) => a + b, 0);
+  near(exact, 0.08576, 1e-5);
+  // The approximation is labelled "a few percent" at 1,000 rounds: here +6.9%.
+  rel(saddlepointLowerTail(e, 1000, 500, 0.1), exact, 0.08);
+  // Out of range: below the smallest possible total, above the largest.
+  assert.strictEqual(saddlepointLowerTail([{ x: 1, p: 0.5 }, { x: 2, p: 0.5 }], 10, 5, 1), 0);
+  assert.strictEqual(saddlepointLowerTail([{ x: 1, p: 0.5 }, { x: 2, p: 0.5 }], 10, 20, 1), 1);
 });
 
 // ---------- planner ----------

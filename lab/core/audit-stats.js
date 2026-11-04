@@ -16,7 +16,7 @@
 //
 // Passing never certifies anything: it means "not rejected with this many rounds",
 // and every result carries the smallest effect the data could have detected.
-import { lgamma, chiSquareP, normalQuantile } from './specfun.js';
+import { lgamma, chiSquareP, normalQuantile, normalCdf } from './specfun.js';
 import { forEachCsvRow, findColumn, detectDelimiter } from './csv.js';
 import { makeNumberReader } from './actual.js';
 import { Fraction } from './fraction.js';
@@ -647,6 +647,53 @@ export function bettingTest(xs, { mu0, M, alpha = 0.05, sigma = null, k0 = 1000,
   };
 }
 
+// ---------- how unusual is the log's total? ----------
+
+// Step of the lattice the pmf's values sit on (0.05 when every value is a multiple
+// of 0.05), or null when they do not share a decimal step.
+export function latticeStep(values) {
+  const gcd = (a, b) => { while (b) [a, b] = [b, a % b]; return a; };
+  for (let d = 0; d <= 6; d++) {
+    const s = 10 ** d;
+    const ints = values.map((x) => x * s);
+    if (ints.some((v) => Math.abs(v - Math.round(v)) > 1e-6 || Math.abs(v) > 1e12)) continue;
+    const g = ints.reduce((a, v) => gcd(a, Math.round(v)), 0);
+    return g > 0 ? g / s : null;
+  }
+  return null;
+}
+
+// P(S <= s) for S the sum of n independent draws from a pmf on a lattice of step
+// delta (s on the lattice): Lugannani-Rice saddlepoint with Daniels' continuity
+// correction. An approximation: against exact lattice sums it is off by a few percent
+// (relative) at 1,000 rounds and about 1% at 10,000 (research, actual-rtp-stats).
+export function saddlepointLowerTail(entries, n, s, delta) {
+  const xs = entries.map((e) => e.x), lp = entries.map((e) => Math.log(e.p));
+  const target = (s + delta / 2) / n;
+  const lo0 = Math.min(...xs), hi0 = Math.max(...xs);
+  if (target <= lo0) return 0;
+  if (target >= hi0) return 1;
+  const cgf = (t) => {
+    let m = -Infinity;
+    for (let k = 0; k < xs.length; k++) m = Math.max(m, lp[k] + t * xs[k]);
+    let z = 0, z1 = 0, z2 = 0;
+    for (let k = 0; k < xs.length; k++) { const w = Math.exp(lp[k] + t * xs[k] - m); z += w; z1 += w * xs[k]; z2 += w * xs[k] * xs[k]; }
+    const k1 = z1 / z;
+    return { K: m + Math.log(z), K1: k1, K2: Math.max(0, z2 / z - k1 * k1) };
+  };
+  const mean = entries.reduce((a, e) => a + e.x * e.p, 0);
+  let lo, hi;
+  if (target < mean) { hi = 0; lo = -1; while (cgf(lo).K1 > target) lo *= 2; } else { lo = 0; hi = 1; while (cgf(hi).K1 < target) hi *= 2; }
+  for (let i = 0; i < 200; i++) { const mid = (lo + hi) / 2; if (cgf(mid).K1 < target) lo = mid; else hi = mid; }
+  const t = (lo + hi) / 2, c = cgf(t);
+  const w = Math.sign(t) * Math.sqrt(Math.max(0, 2 * n * (t * target - c.K)));
+  const u = (2 / delta) * Math.sinh((t * delta) / 2) * Math.sqrt(n * c.K2);
+  const phi = (z) => Math.exp(-z * z / 2) / Math.sqrt(2 * Math.PI);
+  // At the mean (t ~ 0) the formula is 0/0: use the normal value there.
+  if (Math.abs(w) < 1e-7 || Math.abs(u) < 1e-12) return normalCdf((s + delta / 2 - n * mean) / Math.sqrt(n * cgf(0).K2));
+  return Math.min(1, Math.max(0, normalCdf(w) + phi(w) * (1 / w - 1 / u)));
+}
+
 // ---------- planner ----------
 
 const zq = (p) => normalQuantile(p);
@@ -827,6 +874,15 @@ export function auditDistribution(log, pmfs, options = {}, rng, onProgress = () 
     const above = maxObs * (1 + 1e-9) + (resolution ? resolution / 2 / minBet : 0);
     for (const e of ref.entries) if (e.x > above) unseen += e.x * e.p;
     fit.unseen = { maxObserved: maxObs, rtpAbove: unseen, share: ref.mean > 0 ? unseen / ref.mean : null };
+    // How unusual the log's total (sum of win / bet) is under the pmf, lower tail.
+    // Approximate, so shown for information and kept out of the verdict.
+    const delta = latticeStep(ref.entries.map((e) => e.x));
+    if (delta) {
+      let sum = 0;
+      for (const v of xs) sum += v;
+      const s = Math.round(sum / delta) * delta;
+      fit.total = { sum, expected: n * ref.mean, lattice: delta, pLower: saddlepointLowerTail(ref.entries, n, s, delta), method: 'saddlepoint' };
+    }
   }
   const rejected = holm(fit.tests.map((t) => t.p), alpha);
   fit.tests.forEach((t, i) => { t.rejected = rejected[i]; });

@@ -411,6 +411,7 @@ function renderDist() {
   (f.tails || []).forEach((t, i) => rows.push([`${tr('distTailRow')} ${times(t.threshold)}`, mono(t.observed.toLocaleString('en-US')), mono(fmt(t.expected, 2)), mono(fmtP(t.pValue)), status(inFamily('tail', i))]));
   if (rows.length) box.append(sub('distTests'), table(['test', 'distObserved', 'distExpected', 'pValue', 'result'], rows));
   if (f.tails && f.tails.length) box.append(el('p', { class: 'muted small' }, tr('distTailNote')));
+  if (f.total) box.append(el('p', { class: 'muted', id: 'dist-total' }, `${tr('distTotal')}: ≈ ${fmtP(f.total.pLower)} (${tr('distObserved')} ${fmt(f.total.sum, 2)} · ${tr('distExpected')} ${fmt(f.total.expected, 2)}). ${tr('distTotalNote')}`));
   if (f.hit) box.append(el('p', { class: 'muted small' }, `${tr('distMdeRate')} (${tr('distHit')}): ${pct(f.hit.mde.absolute, 3)}` + (f.trigger ? ` · (${tr('distTrigger')}): ${pct(f.trigger.mde.absolute, 4)}` : '')));
 
   if (f.topPrize) {

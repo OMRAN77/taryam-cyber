@@ -422,6 +422,10 @@ function distSection(L, dt) {
     if (tp.rtpShare !== null) L.kv('distTopShare', pct(tp.rtpShare, 2));
     L.kv('distTopFor95', rounds(tp.roundsFor95));
   }
+  if (f.total) {
+    L.kv('distTotalShort', `≈ ${fmtP(f.total.pLower)}   (${num(f.total.sum, 2)} / ${num(f.total.expected, 2)})`);
+    L.note('distTotalNote');
+  }
   if (f.unseen) L.kv('distUnseenShort', `${pct(f.unseen.rtpAbove, 3)}  (max ${x(f.unseen.maxObserved)})`);
 
   const v = r.versions;
@@ -609,7 +613,8 @@ function asciiSummary(payload, reportId, digest) {
     lines.push(`  Distribution tests (reference "${d.distributions[d.refIndex].label}", ${d.rounds} rounds, alpha ${d.alpha}, seed "${d.seed}"): ${f.verdict}`
       + (g && g.applicable ? `; G-test P = ${g.pValue.toPrecision(4)} (Monte Carlo), minimum detectable w = ${g.mde.w.toPrecision(3)}` : '')
       + (f.hit ? `; hit ${(f.hit.rate * 100).toFixed(3)}% vs ${(f.hit.expected * 100).toFixed(3)}%` : '')
-      + (f.trigger ? `; trigger ${(f.trigger.rate * 100).toFixed(4)}% vs ${(f.trigger.expected * 100).toFixed(4)}%` : ''));
+      + (f.trigger ? `; trigger ${(f.trigger.rate * 100).toFixed(4)}% vs ${(f.trigger.expected * 100).toFixed(4)}%` : '')
+      + (f.total ? `; P(total <= observed) ~ ${f.total.pLower.toPrecision(3)} (saddlepoint)` : ''));
     const v = d.versions;
     if (v && v.models) lines.push(`  Versions: posterior ${v.models.map((m) => `${m.label} ${(m.posterior * 100).toFixed(1)}%`).join(', ')}; SPRT ${v.sequential.decision === null ? 'undecided' : `chose ${v.models[v.sequential.decision].label} at round ${v.sequential.at}`}`);
     const b = d.betting;
