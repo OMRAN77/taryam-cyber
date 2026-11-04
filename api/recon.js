@@ -5,13 +5,7 @@
 const dns = require('dns').promises;
 
 const DAILY_LIMIT = 30;
-const { quotaEnabled, isOwnerToken } = require('./_quota');
-const { clientIp } = require('./_client');
-const store = require('./_store');
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
+const scanQuota = require('./_scancounter');
 
 function isValidDomain(d) {
   return /^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63})+$/.test(d);
@@ -84,31 +78,17 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // Keyed on the platform-verified caller address, never on a body field, and kept
-    // at an HMAC-derived encrypted path (see _store.js) like the other counters.
-    const today = todayStr();
-    // Daily per-tool limit; never for the owner's account or a QUOTA=off deployment (api/_quota.js).
-    const limited = quotaEnabled() && !isOwnerToken(body.token);
-    let usage = { date: today, count: 0 };
-    if (limited) {
-      const id = clientIp(req);
-      if (!id) { res.status(403).json({ error: 'Cannot determine caller address' }); return; }
-      let counterPath;
-      try {
-        counterPath = store.secretPath('recon-usage', 'ip:' + id);
-        usage = await store.readSecret(counterPath);
-      } catch (e) {
-        res.status(503).json({ error: 'الخدمة غير مهيأة للمحاسبة (AUTH_SECRET)' });
-        return;
-      }
-      if (!usage || usage.date !== today) usage = { date: today, count: 0 };
-      if (usage.count >= DAILY_LIMIT) {
-        res.status(429).json({ error: 'limit', message: 'وصلت للحد اليومي المسموح لهذه الأداة (' + DAILY_LIMIT + ' فحوصات/يوم). حاول غدًا.' });
-        return;
-      }
-      usage.count += 1;
-      try { await store.writeSecret(counterPath, usage); } catch (e) {}
+    // Daily per-tool limit keyed on the caller address; never for the owner's account
+    // or a QUOTA=off deployment (see _scancounter.js).
+    let quota;
+    try {
+      quota = await scanQuota.consume(req, { namespace: 'recon', limit: DAILY_LIMIT, token: body.token });
+    } catch (e) {
+      res.status(503).json({ error: 'الخدمة غير مهيأة للمحاسبة (AUTH_SECRET)' });
+      return;
     }
+    if (quota.noAddress) { res.status(403).json({ error: 'Cannot determine caller address' }); return; }
+    if (!quota.allowed) { scanQuota.limitResponse(res, DAILY_LIMIT); return; }
 
     const [subdomains, dnsRecords] = await Promise.all([getSubdomains(raw), getDnsRecords(raw)]);
 
@@ -117,7 +97,7 @@ module.exports = async (req, res) => {
       subdomains,
       subdomainCount: subdomains.length,
       dns: dnsRecords,
-      remaining: limited ? DAILY_LIMIT - usage.count : null,
+      remaining: quota.remaining,
     });
   } catch (e) {
     res.status(500).json({ error: 'Recon error: ' + (e && e.message ? e.message : String(e)) });
