@@ -823,12 +823,28 @@ export function exactMomentsOf(result) {
 export function attachRoundDistribution(result, model, spins, opts = {}) {
   result.round = null;
   result.roundError = null;
+  // A ways game whose per-spin distribution was too large keeps only closed-form
+  // moments (ways-exact.js): no entries, so the round is left to Monte Carlo, and says so.
+  if (!spins && result.distribution && result.distribution.closedForm) {
+    result.roundError = {
+      ar: 'توزيع اللفة الواحدة لهذه اللعبة أكبر من الحساب الدقيق (RTP والتباين فقط بالصيغة المغلقة)، فلا يُبنى منه توزيع الجولة الكاملة ولا سقف الربح ولا قمع الجلسة',
+      en: 'the per-spin distribution of this game is too large for the exact engine (RTP and variance come from the closed form only), so the whole-round distribution, the max-win cap and the session funnel cannot be built from it',
+      tooLarge: true, internal: false,
+    };
+    return result;
+  }
   if (!spins || !result.distribution) return result;
   try {
     result.round = roundDistribution(model, spins, exactMomentsOf(result), opts);
   } catch (e) {
     const internal = !e.ar;
     result.roundError = { ar: e.ar || 'فشل فحص داخلي في توزيع الجولة الكاملة: ' + e.message, en: e.en || e.message, tooLarge: Boolean(e.tooLarge), internal };
+  }
+  // A cascading game is computed for its first drop only (slot-exact.js, scope
+  // 'firstDrop'): so is every spin of its round, and its pmf is not a round of the game.
+  if (result.round && result.scope === 'firstDrop') {
+    result.round.scope = 'firstDrop';
+    result.round.pmf.scope = 'firstDrop';
   }
   return result;
 }

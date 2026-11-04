@@ -569,10 +569,14 @@ export function waysEntries(model, src, { cap, maxStates = 300000, maxWork = 600
 // Hit frequency and variance from the closed-form moments, when the full distribution
 // is too large. The free-spin part is the same branching-process closed form as in
 // analyzeExact (slot-exact.js), from the moments instead of the entries.
-export function waysMomentSummary(model, b, x, total, fsTotal, ev) {
+// feature: { EFv, EFv2 }, the feature's own first two moments (units, multiplier
+// included) when free-spin caps make them come from slot-exact.js's state sweep.
+export function waysMomentSummary(model, b, x, total, fsTotal, ev, feature = null) {
   const fs = model.freeSpins, tb = model.totalBetUnits;
   let ew2 = new Fraction(b.s2, total);
-  if (fs) {
+  if (fs && feature) {
+    ew2 = ew2.add(new Fraction(b.sXJ, total).mul(feature.EFv).mul(2n)).add(new Fraction(b.sJ, total).mul(feature.EFv2));
+  } else if (fs) {
     const m = fs.multiplier, F = BigInt(fs.spins);
     const EX = new Fraction(x.s1, fsTotal).mul(m);
     const EX2 = new Fraction(x.s2, fsTotal).mul(m).mul(m);

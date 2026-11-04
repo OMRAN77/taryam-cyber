@@ -353,11 +353,14 @@ function renderRound() {
   if (x.roundError) {
     const e = x.roundError;
     box.append(el('div', { class: 'verdict ' + (e.internal ? 'fail' : 'warn'), id: 'round-error' }, tr('roundUnavailable') + ': ' + pick([e.ar, e.en])));
-    if (e.tooLarge) box.append(el('p', { class: 'muted small' }, tr('roundUseMc')));
+    // A ways game with closed-form moments only has no paid-spin pmf either.
+    if (e.tooLarge) box.append(el('p', { class: 'muted small', id: 'round-use-mc' }, tr(x.distribution && x.distribution.closedForm ? 'roundUseMcClosed' : 'roundUseMc')));
     return;
   }
   const r = x.round;
   const worst = Math.max(...Object.values(r.checks).map((c) => c.relativeError));
+  // A cascading game: the round adds up first drops only (same label as its RTP).
+  if (r.scope === 'firstDrop') box.append(el('div', { class: 'verdict warn', id: 'round-first-drop' }, tr('roundFirstDropNote')));
   box.append(cards([
     { k: 'roundMethod', v: tr('roundMethod_' + r.method), s: r.caps ? capsText(r.caps) : null },
     r.maxWin.bounded
@@ -393,7 +396,7 @@ function renderRoundCap() {
     const upTo = typeof k.lost.upper === 'number' && pctSmall(k.lost.upper, 4) !== pctSmall(k.lost.value, 4) ? `${tr('roundUpTo')} ${pctSmall(k.lost.upper, 4)}` : null;
     box.append(cards([
       { k: 'roundCapM', v: iso(fmt(k.M, 4) + '×') },
-      { k: 'roundCapped', v: (k.rtpCapped.value * 100).toFixed(4) + '%', title: k.rtpCapped.fraction, cls: 'accent' },
+      { k: 'roundCapped', v: (k.rtpCapped.value * 100).toFixed(4) + '%', s: th.result.scope === 'firstDrop' ? tr('firstDropShort') : null, title: k.rtpCapped.fraction, cls: 'accent' },
       { k: 'roundLost', v: pctSmall(k.lost.value, 4), s: upTo },
       { k: 'roundReach', v: probText(k.reach), s: `${tr('roundOneInCol')}: ${oneInText(k.reach)}` },
     ]));
@@ -462,7 +465,11 @@ async function runSession() {
     // The bet and budget as read (a decimal comma becomes a point), so every figure,
     // the report and report.json use the same numbers.
     const asRead = (s) => s.replace(',', '.');
-    session.results.session = { inputId: 'model', modelSha256: th.modelSha256, options: { rounds, bet: asRead(betText), budget: budgetText ? asRead(budgetText) : null, budgetInBets: budget, seed }, result };
+    session.results.session = {
+      inputId: 'model', modelSha256: th.modelSha256, options: { rounds, bet: asRead(betText), budget: budgetText ? asRead(budgetText) : null, budgetInBets: budget, seed }, result,
+      // A cascading game's funnel is built on first drops only (P0-6 label).
+      ...(th.result.scope === 'firstDrop' ? { scope: 'firstDrop' } : {}),
+    };
     renderSession();
     renderReportSections();
   });
@@ -512,6 +519,7 @@ function renderSession() {
     r.nStar && { k: 'sessNStar', v: r.nStar.rounds.toLocaleString('en-US'), s: tr('sessNStarNote') },
   ]));
   box.firstChild.id = 'sess-cards';
+  if (s.scope === 'firstDrop') box.prepend(el('div', { class: 'verdict warn', id: 'sess-first-drop' }, tr('sessFirstDropNote')));
   // One statement per method: the range (and the chance to finish ahead), then the budget.
   const mc = r.sessions ? ` (${tr('sessSessions')}: ${r.sessions.toLocaleString('en-US')} · ${tr('seed')}: ${s.options.seed})` : '';
   box.append(el('p', { class: 'muted small', id: 'sess-method' }, `${tr('sessMethodRange')}: ${tr('sessMethod_' + r.method)}` + (r.method === 'mc' ? mc : '')
@@ -1438,8 +1446,8 @@ function figureText(f) {
   if (f.section === 'distTests') return [f.value ? tr('distB_' + f.value) : null, f.rounds !== null ? `${tr('roundsChecked')}: ${n(f.rounds)}` : null].filter(Boolean).join(' · ') || '—';
   if (f.section === 'montecarlo') return [f.value, f.scope === 'firstDrop' ? tr('firstDropShort') : null, f.spins !== null ? `${tr('spins')}: ${n(f.spins)}` : null].filter(Boolean).join(' · ');
   if (f.section === 'theoretical') return [f.value, f.scope === 'firstDrop' ? tr('firstDropShort') : null].filter(Boolean).join(' · ');
-  if (f.section === 'round') return [f.value ? `${tr('figRoundTop')}: ${f.value}` : null, f.oneIn ? `${tr('lutOneIn')} ${f.oneIn}` : null].filter(Boolean).join(' · ') || '—';
-  if (f.section === 'session') return [`${tr('figSessAhead')}: ${f.value}`, `${tr('sessRounds')}: ${n(f.rounds)}`].join(' · ');
+  if (f.section === 'round') return [f.value ? `${tr('figRoundTop')}: ${f.value}` : null, f.oneIn ? `${tr('lutOneIn')} ${f.oneIn}` : null, f.scope === 'firstDrop' ? tr('firstDropShort') : null].filter(Boolean).join(' · ') || '—';
+  if (f.section === 'session') return [`${tr('figSessAhead')}: ${f.value}`, `${tr('sessRounds')}: ${n(f.rounds)}`, f.scope === 'firstDrop' ? tr('firstDropShort') : null].filter(Boolean).join(' · ');
   return f.value ?? '—';
 }
 function renderVerify() {

@@ -702,7 +702,8 @@ function normalizeWaysModel(raw) {
       fsSets.forEach((set) => set.strips.forEach((s) => s.forEach(idOf)));
     }
     const sameReels = !fsSets && f.heights === undefined && f.topReel === undefined;
-    freeSpins = { trigger, spins, multiplier: mult, retrigger: Boolean(f.retrigger), sameReels };
+    // Caps on the feature (maxSpins, maxRetriggers) as for lines (P0-8).
+    freeSpins = { trigger, spins, multiplier: mult, retrigger: Boolean(f.retrigger), sameReels, ...freeSpinCaps(f, spins) };
   }
 
   // Window shapes and top reels.

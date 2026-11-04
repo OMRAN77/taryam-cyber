@@ -265,6 +265,11 @@ export function makePmf({ label = 'pmf', scope = 'round', source = 'csv', entrie
 // mass and where they can lie (multiples of the lattice step, up to the largest win),
 // so that a round there is counted in a cell of its own and never called impossible.
 export function pmfFromExact(exact, label = 'model') {
+  // The first drop of a cascading game (round-dist.js) is not a round of the game.
+  if (exact.scope === 'firstDrop') {
+    throw Object.assign(new Error('this pmf covers the first drop of a cascading game only, not its rounds; it cannot be compared with a log of real rounds'),
+      { ar: 'هذا التوزيع لأول سقوط فقط في لعبة cascades وليس لجولاتها، فلا يُقارن بسجل جولات حقيقية', en: 'this pmf covers the first drop of a cascading game only, not its rounds; it cannot be compared with a log of real rounds' });
+  }
   const total = exact.total ? BigInt(exact.total) : null;
   const pmf = makePmf({
     label, scope: exact.scope, source: 'model',

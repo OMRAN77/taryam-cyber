@@ -562,7 +562,9 @@ export function analyzeExact(model, opts = {}) {
   // exact from the closed-form moments; the distribution itself is left to Monte Carlo.
   if (ways && !result.distribution) {
     const x = fs && (fs.sameReels ? { ...base.moments, sJ: fs.retrigger ? base.moments.sJ : 0n, sXJ: fs.retrigger ? base.moments.sXJ : 0n } : fsSrc.moments);
-    const m = waysMomentSummary(model, base.moments, x, total, fsTotal, ev);
+    // Free-spin caps: the feature's moments from the exact sweep over its states.
+    const c = fs && hasCaps(fs) ? cappedFeatureOrError(fs, { D: fsTotal, c1: x.sJ, sums: { sx: x.s1, sx2: x.s2, sxj: x.sXJ } }) : null;
+    const m = waysMomentSummary(model, base.moments, x, total, fsTotal, ev, c && { EFv: c.ez.mul(fs.multiplier), EFv2: c.ez2.mul(fs.multiplier).mul(fs.multiplier) });
     const sdev = Math.sqrt(m.variance.toNumber());
     result.distribution = {
       hitFrequency: m.hits && frac(m.hits), variance: frac(m.variance), sd: sdev,

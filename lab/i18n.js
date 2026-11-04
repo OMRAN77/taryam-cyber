@@ -956,6 +956,11 @@ const S = {
   sessNone95: ['لم يقع في أي جلسة محاكاة: حدّ أعلى بثقة 95٪', 'in no simulated session: a 95% upper bound'],
   sessAll95: ['وقع في كل الجلسات المحاكاة: حدّ أدنى بثقة 95٪', 'in every simulated session: a 95% lower bound'],
   distRestCell: ['قيم أخرى تحت أرضية الضجيج', 'other values under the noise floor'],
+
+  // ---- Ways + whole-round distribution (integration of P0-6 and P0-8) ----
+  roundFirstDropNote: ['أول سقوط فقط: هذه اللعبة تُسقط رموزًا جديدة بعد كل ربح (cascades)، وهذا التوزيع يجمع أول سقوط في كل لفة، المدفوعة والمجانية، فهو ليس توزيع جولات اللعبة. وكذلك «1 من N» وسقف الربح المبنيّان عليه، ولا يُقارن بسجل جولات حقيقية.', 'First drop only: this game drops new symbols after each win (cascades), and this distribution adds up the first drop of each spin, paid and free, so it is not the distribution of the game\'s rounds. The same holds for the 1-in-N figures and the max-win cap built on it, and it is not compared with a log of real rounds.'],
+  roundUseMcClosed: ['استخدم تبويب مونت كارلو لهذه اللعبة؛ ولاختبارات التوزيع ارفع ملف توزيع، إذ لا يتوفر لها توزيع كامل من النموذج.', 'Use the Monte Carlo tab for this game; for the distribution tests upload a distribution file, as the model gives no full distribution for it.'],
+  sessFirstDropNote: ['أول سقوط فقط: هذا القمع مبني على توزيع أول سقوط في لعبة cascades، لا على جولاتها الكاملة، فالخسارة المتوقعة فيه من RTP أول سقوط.', 'First drop only: this funnel is built on the first-drop distribution of a cascading game, not on its full rounds, so its expected loss comes from the first-drop RTP.'],
 };
 
 export function getLang() {

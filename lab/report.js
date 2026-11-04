@@ -264,6 +264,8 @@ export function reportPayload(session, createdAt) {
       pAheadBelow: x.pAheadBelow ?? null, pAheadUpper95: x.pAheadUpper95 ?? null, pAheadLower95: x.pAheadLower95 ?? null, precision: x.precision ?? null,
       pEven: x.pEven, normalApproximation: x.normal, nStar: x.nStar, ruin: x.ruin, sessions: x.sessions ?? null, generator: x.generator ?? null,
       grid: x.grid ?? null, funnelBets: x.funnel, droppedMassPerRound: x.droppedMass,
+      // A cascading game's funnel covers first drops only (P0-6).
+      ...(ss.scope ? { scope: ss.scope } : {}),
     };
   }
   if (r.actual) {
@@ -336,10 +338,12 @@ function roundSection(L, th) {
   if (x.roundError) {
     L.badge('roundUnavailable', x.roundError.internal ? C.fail : C.warn);
     L.note(null, [x.roundError.ar, x.roundError.en]);
-    if (x.roundError.tooLarge) L.note('roundUseMc');
+    if (x.roundError.tooLarge) L.note(x.distribution && x.distribution.closedForm ? 'roundUseMcClosed' : 'roundUseMc');
     return;
   }
   const r = x.round;
+  // A cascading game: first drops only, as its RTP says (P0-6).
+  if (r.scope === 'firstDrop') { L.badge('firstDropBadge', C.warn); L.note('roundFirstDropNote'); }
   L.kv('roundMethod', pair('roundMethod_' + r.method)[1]);
   if (r.caps) L.kv('roundCapsCard', capsLine(r.caps), { mono: true });
   if (!r.exact) {
@@ -395,6 +399,7 @@ function sessionSection(L, ss) {
   const r = ss.result, bet = betOf(ss.options);
   const money = (v) => (v > 0 ? '+' : '') + num(v * bet, 2);
   L.section('sessTitle');
+  if (ss.scope === 'firstDrop') { L.badge('firstDropBadge', C.warn); L.note('sessFirstDropNote'); }
   L.kv('modelHash', ss.modelSha256, { mono: true });
   L.kv('sessRounds', r.rounds.toLocaleString('en-US'));
   L.kv('sessBet', ss.options.bet);
@@ -1054,14 +1059,14 @@ function roundAscii(lines, r) {
     const head = rd.exact ? 'exact fractions' : `${rd.method === 'capsDp' ? 'FFT, cap-state sweep' : 'FFT, free-spin fixed point'}, grid ${rd.grid.size}, wrapped mass < ${upper2(rd.aliasBound)}, noise floor ${upper2(rd.floor)}; mass/mean/variance match the closed forms to ${worst.toExponential(1)}`;
     const big = rd.thresholds.map((x) => `>= ${x.x}x ${roundProb(x)}${x.method === 'bound' ? ' (bound)' : x.value > 0 ? ` (1 in ${roundOneIn(x)})` : ''}`).join('; ');
     const top = rd.maxWin.bounded ? `top win ${rd.maxWin.x}x, P ${roundProb(rd.maxWin)}` : `no top win (uncapped retriggers; largest above the floor ${rd.maxWin.largestAboveFloor}x)`;
-    lines.push(`  Whole-round distribution (${head}${rd.caps ? '; caps ' + capsLine(rd.caps) : ''}): ${big}; ${top}`);
+    lines.push(`  Whole-round distribution${rd.scope === 'firstDrop' ? ' (FIRST DROP ONLY: each spin\'s first drop, not the game\'s rounds)' : ''} (${head}${rd.caps ? '; caps ' + capsLine(rd.caps) : ''}): ${big}; ${top}`);
   }
   const c = t && t.maxWinCap;
   if (c && c.cap) {
     // What the cap removes, with the upper bound the cells under the noise floor allow.
     const k = c.cap;
     const up = typeof k.lost.upper === 'number' && smallPct(k.lost.upper, 4) !== smallPct(k.lost.value, 4) ? ` to ${smallPct(k.lost.upper, 4)}` : '';
-    lines.push(`  Max-win cap ${k.M}x per round: RTP ${pct(k.rtpCapped.value, 4)} (the cap removes ${smallPct(k.lost.value, 4)}${up}${k.aboveMax ? '; the cap is above the top possible win' : ''}); P(a round reaches the cap) ${roundProb(k.reach)}`);
+    lines.push(`  Max-win cap ${k.M}x per round: RTP ${pct(k.rtpCapped.value, 4)}${rd && rd.scope === 'firstDrop' ? ' (first drop only)' : ''} (the cap removes ${smallPct(k.lost.value, 4)}${up}${k.aboveMax ? '; the cap is above the top possible win' : ''}); P(a round reaches the cap) ${roundProb(k.reach)}`);
   }
   if (c && c.oddsChecks && c.top) {
     const w = (p) => (p === true ? 'meets' : p === false ? 'does not meet' : 'undecided');
@@ -1074,7 +1079,7 @@ function roundAscii(lines, r) {
     const say = (v) => v.text + (v.key ? tag[v.key] : '');
     const mc = `seeded Monte Carlo, seed "${s.options.seed}"`;
     const ruin = s.ruin && sessText(s.ruin.p, s.ruin, ' +/- ');
-    lines.push(`  Session funnel: ${s.rounds} rounds at ${s.options.bet}${s.options.budget ? `, budget ${s.options.budget}` : ''} (${s.method === 'fft' ? 'FFT, no simulation' : mc}): expected loss ${num(s.expectedLossBets.value * bet, 2)}, median ${num(s.medianBets * bet, 2)}, P(finish ahead) ${say(aheadOf(s, ' +/- '))} (normal approximation ${s.normalApproximation ? smallPct(s.normalApproximation.pAhead) : '-'})`
+    lines.push(`  Session funnel${s.scope === 'firstDrop' ? ' (FIRST DROP ONLY)' : ''}: ${s.rounds} rounds at ${s.options.bet}${s.options.budget ? `, budget ${s.options.budget}` : ''} (${s.method === 'fft' ? 'FFT, no simulation' : mc}): expected loss ${num(s.expectedLossBets.value * bet, 2)}, median ${num(s.medianBets * bet, 2)}, P(finish ahead) ${say(aheadOf(s, ' +/- '))} (normal approximation ${s.normalApproximation ? smallPct(s.normalApproximation.pAhead) : '-'})`
       + (ruin ? `, P(budget runs out) ${say(ruin)} (${s.ruin.method === 'dp' ? 'DP over the bankroll, no simulation' : mc})` : '')
       + (s.nStar ? `, N* = ${s.nStar.rounds} (normal approximation, z = 1.645)` : '') + '. Range and P(finish ahead) assume every round is played. Describes cost, not advice.');
   }

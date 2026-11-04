@@ -130,6 +130,8 @@ function roundParameters(th) {
     aliasBound: rd ? rd.aliasBound : null, noiseFloor: rd ? rd.floor : null, checkTolerance: 1e-9,
     error: x.roundError ? x.roundError.en : null,
     maxWinCap: th.cap ? th.cap.M : null, oddsChecks: th.cap ? !!th.cap.odds : false,
+    // A cascading game's round covers first drops only (P0-6).
+    ...(rd && rd.scope ? { scope: rd.scope } : {}),
   };
 }
 

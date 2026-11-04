@@ -137,7 +137,7 @@ function figures(report) {
   if (r.lut && Array.isArray(r.lut.modes)) out.push({ section: 'lut', value: r.lut.modes.map((m) => `${m.name}: ${m.rtp && m.rtp.percent}%`).join(' · ') || null });
   // Whole-round distribution (P0-8): the top win and how often it happens; the session funnel.
   const rd = r.theoretical && r.theoretical.roundDistribution;
-  if (rd && rd.maxWin) out.push({ section: 'round', value: rd.maxWin.bounded ? rd.maxWin.x + '×' : '∞', oneIn: rd.maxWin.bounded ? oneInOf(rd.maxWin) : null });
+  if (rd && rd.maxWin) out.push({ section: 'round', value: rd.maxWin.bounded ? rd.maxWin.x + '×' : '∞', oneIn: rd.maxWin.bounded ? oneInOf(rd.maxWin) : null, ...(rd.scope ? { scope: rd.scope } : {}) });
   // A probability under the precision floor (pAhead null) is stated by its bound; a
   // Monte Carlo count of 0 by its 95% bound.
   if (r.session) {
@@ -145,7 +145,7 @@ function figures(report) {
     const value = typeof s.pAheadBelow === 'number' && s.pAhead === null ? '< ' + upperPct(s.pAheadBelow)
       : typeof s.pAheadUpper95 === 'number' ? '< ' + upperPct(s.pAheadUpper95) + ' (95%)'
         : typeof s.pAhead === 'number' ? pct(s.pAhead) : null;
-    if (value) out.push({ section: 'session', value, rounds: s.rounds ?? null });
+    if (value) out.push({ section: 'session', value, rounds: s.rounds ?? null, ...(s.scope ? { scope: s.scope } : {}) });
   }
   return out;
 }
