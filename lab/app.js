@@ -55,7 +55,9 @@ function stopWorker() {
 const session = { inputs: new Map(), results: {}, extra: {} };
 async function registerInput(id, name, kind, bytes, mime) {
   const sha256 = await sha256Hex(bytes);
+  const old = session.inputs.get(id);
   session.inputs.set(id, { id, name, kind, size: bytes.length, sha256, bytes, mime });
+  if (old && old.sha256 !== sha256) dropDistTestsUsing([id]);
   return sha256;
 }
 
@@ -280,15 +282,17 @@ function renderActual() {
 }
 
 // ---------- distribution tests (core/audit-stats.js) ----------
-// Uploaded distribution CSVs: { inputId, label }. The theoretical tab's model joins
-// them as the first candidate when its box is ticked.
-let distFiles = [];
+// Uploaded distribution CSVs: { inputId, label, key }. The theoretical tab's model
+// joins them as the first candidate when its box is ticked. A key names one upload
+// for good (input ids pmf-0... are reused by the next upload), so the chosen
+// reference never slides to another file when the list changes.
+let distFiles = [], distUploads = 0;
 const optNum = (s) => (String(s).trim() === '' ? null : Number(String(s).trim().replace(',', '.')));
 function distCandidates() {
   const th = session.results.theoretical;
   const list = [];
-  if ($('#d-useTheory').checked && th) list.push({ kind: 'exact', label: th.raw.name || 'model', inputId: 'model', th });
-  for (const f of distFiles) list.push({ kind: 'csv', label: f.label, inputId: f.inputId });
+  if ($('#d-useTheory').checked && th) list.push({ kind: 'exact', label: th.raw.name || 'model', inputId: 'model', key: 'model', th });
+  for (const f of distFiles) list.push({ kind: 'csv', label: f.label, inputId: f.inputId, key: f.key });
   return list;
 }
 function renderDistCandidates() {
@@ -297,8 +301,28 @@ function renderDistCandidates() {
   box.textContent = list.length ? tr('distLoaded') + ': ' + list.map((c, i) => `${i + 1}. ${c.label}`).join(' · ') : tr('distNone');
   $('#clear-pmf').hidden = !distFiles.length;
   const sel = $('#d-ref'), keep = sel.value;
-  sel.replaceChildren(...list.map((c, i) => el('option', { value: String(i) }, `${i + 1}. ${c.label}`)));
-  if (keep && Number(keep) < list.length) sel.value = keep;
+  sel.replaceChildren(...list.map((c, i) => el('option', { value: c.key }, `${i + 1}. ${c.label}`)));
+  if (list.some((c) => c.key === keep)) sel.value = keep;
+}
+// A distribution-test result names its inputs by id. When one of them is replaced or
+// removed, the report would attach other files than the ones tested: drop the result.
+function dropDistTestsUsing(ids) {
+  const d = session.results.distTests;
+  if (!d || ![d.inputId, ...d.inputIds].some((id) => ids.includes(id))) return;
+  delete session.results.distTests;
+  renderDist();
+  renderReportSections();
+}
+function replacePmfFiles() {
+  const ids = [...session.inputs.keys()].filter((id) => id.startsWith('pmf-'));
+  for (const id of ids) session.inputs.delete(id);
+  dropDistTestsUsing(ids);
+  distFiles = [];
+  distUploads++;
+}
+async function addPmfFile(i, name, label, bytes, mime) {
+  await registerInput('pmf-' + i, name, 'csv', bytes, mime);
+  distFiles.push({ inputId: 'pmf-' + i, label, key: `pmf-${i}@${distUploads}` });
 }
 
 async function runDist() {
@@ -314,17 +338,21 @@ async function runDist() {
       if (!d || !d.pmf) throw { ar: t('distNoModelPmf', 'ar'), en: t('distNoModelPmf', 'en') };
       return { kind: 'exact', label: c.label, pmf: d.pmf };
     });
-    const th = list.find((c) => c.kind === 'exact');
-    const thd = th && th.th.result.distribution;
-    let sigma = optNum($('#a-sigma').value);
-    if (sigma === null && thd) sigma = thd.sd;
-    let maxWin = optNum($('#d-maxWin').value);
-    if (maxWin === null && thd && !thd.maxWin.unbounded) maxWin = thd.maxWin.withFeature ?? thd.maxWin.base;
+    const refIndex = Math.max(0, list.findIndex((c) => c.key === $('#d-ref').value));
+    // The theoretical model gives sigma, M and the RTP only when it is the reference:
+    // another game's values would size the planner and bound the e-process wrongly.
+    const ref = list[refIndex];
+    const thd = ref.kind === 'exact' ? ref.th.result.distribution : null;
+    let sigma = optNum($('#a-sigma').value), sigmaSource = 'input';
+    if (sigma === null && thd) { sigma = thd.sd; sigmaSource = 'model'; }
+    let maxWin = optNum($('#d-maxWin').value), maxWinSource = 'input';
+    if (maxWin === null && thd && !thd.maxWin.unbounded) { maxWin = thd.maxWin.withFeature ?? thd.maxWin.base; maxWinSource = 'model'; }
     const declared = optNum($('#a-declared').value);
     const gap = optNum($('#d-gap').value);
     const options = {
-      refIndex: Number($('#d-ref').value) || 0, alpha: Number($('#d-alpha').value), seed: $('#d-seed').value,
-      declaredRtp: declared === null ? null : declared / 100, sigma, maxWin, gap: gap > 0 ? gap / 100 : 0.02, mode: $('#d-mode').value.trim(),
+      refIndex, alpha: Number($('#d-alpha').value), seed: $('#d-seed').value,
+      declaredRtp: declared === null ? null : declared / 100, referenceRtp: ref.kind === 'exact' ? ref.th.result.rtp.value : null,
+      sigma, sigmaSource, maxWin, maxWinSource, gap: gap > 0 ? gap / 100 : 0.02, mode: $('#d-mode').value.trim(),
     };
     const result = await runTask('distTests', { bytes: input.bytes, candidates, options }, progress);
     session.results.distTests = { inputId: 'playlog', inputIds: list.map((c) => c.inputId), candidates: list.map((c) => ({ label: c.label, kind: c.kind, inputId: c.inputId })), options, result };
@@ -742,28 +770,22 @@ function init() {
   $('#pmfFile').addEventListener('change', async (e) => {
     const files = [...e.target.files];
     if (!files.length) return;
-    for (const id of [...session.inputs.keys()]) if (id.startsWith('pmf-')) session.inputs.delete(id);
-    distFiles = [];
+    replacePmfFiles();
     for (const [i, file] of files.entries()) {
-      await registerInput('pmf-' + i, file.name, 'csv', new Uint8Array(await file.arrayBuffer()), file.type || 'text/csv');
-      distFiles.push({ inputId: 'pmf-' + i, label: file.name.replace(/\.csv$/i, '') });
+      await addPmfFile(i, file.name, file.name.replace(/\.csv$/i, ''), new Uint8Array(await file.arrayBuffer()), file.type || 'text/csv');
     }
     e.target.value = '';
     renderDistCandidates();
   });
   $('#clear-pmf').addEventListener('click', () => {
-    for (const id of [...session.inputs.keys()]) if (id.startsWith('pmf-')) session.inputs.delete(id);
-    distFiles = [];
+    replacePmfFiles();
     renderDistCandidates();
   });
   $('#sample-dist').addEventListener('click', () => withTask('dist', async () => {
     const ex = await runTask('sampleVersions', { rounds: 200000, seed: 'sample-versions' });
-    for (const id of [...session.inputs.keys()]) if (id.startsWith('pmf-')) session.inputs.delete(id);
-    distFiles = [];
+    replacePmfFiles();
     for (const [i, v] of ex.versions.entries()) {
-      const name = `example-version-${Math.round(v.rtp * 100)}.csv`;
-      await registerInput('pmf-' + i, name, 'csv', v.csv, 'text/csv');
-      distFiles.push({ inputId: 'pmf-' + i, label: `RTP ${Math.round(v.rtp * 100)}%` });
+      await addPmfFile(i, `example-version-${Math.round(v.rtp * 100)}.csv`, `RTP ${Math.round(v.rtp * 100)}%`, v.csv, 'text/csv');
     }
     await registerInput('playlog', 'sample-playlog-3-versions.csv', 'csv', ex.log, 'text/csv');
     fileNames.actual = 'sample-playlog-3-versions.csv · ' + ex.log.length.toLocaleString('en-US') + ' ' + tr('bytes');
@@ -772,7 +794,7 @@ function init() {
     $('#d-maxWin').value = String(ex.maxWin);
     $('#d-useTheory').checked = false;
     renderDistCandidates();
-    $('#d-ref').value = '0';
+    $('#d-ref').selectedIndex = 0;
   }));
   $('#run-dist').addEventListener('click', runDist);
 

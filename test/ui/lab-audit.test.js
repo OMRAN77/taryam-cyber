@@ -37,7 +37,7 @@ test('RTP lab: distribution tests, version identification, e-process and report'
   assert.match(await page.textContent('#dist-candidates'), /1\. RTP 96% · 2\. RTP 94% · 3\. RTP 92%/);
   assert.strictEqual(await page.inputValue('#d-maxWin'), '5000');
   assert.strictEqual(await page.inputValue('#a-declared'), '96');
-  assert.strictEqual(await page.inputValue('#d-ref'), '0');
+  assert.strictEqual(await page.$eval('#d-ref', (s) => s.selectedOptions[0].textContent), '1. RTP 96%');
   const runDist = async () => {
     await page.click('#run-dist');
     await page.waitForFunction(() => !document.querySelector('#run-dist').disabled);
@@ -125,4 +125,99 @@ test('RTP lab: distribution tests, version identification, e-process and report'
   assert.deepStrictEqual(errors, []);
   const outside = requests.filter((r) => !r.url.startsWith('blob:') && !(r.method === 'GET' && /\/(lab|icons)\//.test(new URL(r.url).pathname)));
   assert.deepStrictEqual(outside, [], 'requests other than the lab\'s own static files');
+});
+
+// Review findings: the reference choice, where sigma / M / the tested RTP come from,
+// stale results in the report, probabilities that do not add up to 1, a mode typed for a
+// log without a mode column.
+test('RTP lab: distribution tests keep the chosen reference and take sigma, M and RTP from it', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  page.setDefaultTimeout(120000);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(server.url + '/lab/index.html');
+  const selected = () => page.$eval('#d-ref', (s) => s.selectedOptions[0].textContent);
+  const runDist = async () => {
+    await page.click('#run-dist');
+    await page.waitForFunction(() => !document.querySelector('#run-dist').disabled);
+  };
+  const noError = async () => assert.ok(await page.isHidden('#err-dist'), 'no error: ' + await page.textContent('#err-dist'));
+
+  // Another game in the Theoretical tab: European roulette (sigma ~ 1, M = 2).
+  await page.click('[data-sample="rouletteEuropean"]');
+  await page.click('#run-theory');
+  await page.waitForFunction(() => !document.querySelector('#run-theory').disabled && document.querySelector('#res-theory .card'));
+  await page.click('#tab-actual');
+  await page.click('#sample-dist');
+  await page.waitForFunction(() => document.querySelector('#name-actual').textContent.includes('sample-playlog-3-versions'));
+
+  // Ticking the model adds a candidate in front: the chosen version stays chosen.
+  await page.selectOption('#d-ref', { label: '3. RTP 92%' });
+  await page.check('#d-useTheory');
+  assert.match(await page.textContent('#dist-candidates'), /1\. European roulette.* · 2\. RTP 96% · 3\. RTP 94% · 4\. RTP 92%/);
+  assert.strictEqual(await selected(), '4. RTP 92%');
+  await page.uncheck('#d-useTheory');
+  assert.strictEqual(await selected(), '3. RTP 92%');
+  await page.check('#d-useTheory');
+
+  // A CSV reference with the roulette model loaded: sigma and M are the reference's own
+  // (sigma of the example 96% pmf is 22.685; M its 5,000x top prize), not roulette's 1 and 2x.
+  await page.selectOption('#d-ref', { label: '2. RTP 96%' });
+  await page.fill('#d-maxWin', '');
+  await page.fill('#a-sigma', '');
+  await runDist();
+  await noError();
+  assert.ok(await page.$('#dist-bet.pass'), await page.textContent('#res-dist'));
+  let res = await page.textContent('#res-dist');
+  assert.match(res, /M = 5,000× \(من التوزيع المرجعي\)/);
+  assert.match(await page.textContent('#dist-plan-grid'), /σ: 22\.685 من التوزيع المرجعي/);
+  assert.doesNotMatch(res, /M = 2×/);
+  assert.ok(!(await page.$('#dist-declared-differs')), 'declared 96% = the reference');
+
+  // The 94% version as the declared one: the e-process tests 94%, and says the field differs.
+  await page.selectOption('#d-ref', { label: '3. RTP 94%' });
+  await runDist();
+  await noError();
+  res = await page.textContent('#res-dist');
+  assert.match(res, /RTP الإصدار المرجعي94\.000%/);
+  assert.match(await page.textContent('#dist-declared-differs'), /96\.000% ≠ 94\.000%/);
+
+  // New files replace pmf-0...: the result that used the old ones is dropped, so the report
+  // cannot pair it with other files.
+  await page.click('#tab-report');
+  assert.match(await page.textContent('#rep-sections'), /اختبارات التوزيع/);
+  await page.click('#tab-actual');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-dist-'));
+  const short = path.join(dir, 'short.csv'), weights = path.join(dir, 'weights.csv');
+  fs.writeFileSync(short, 'multiplier,probability\n0,0.5\n1,0.3\n2,0.1\n');
+  fs.writeFileSync(weights, 'multiplier,weight\n0,3\n1,1\n');
+  await page.setInputFiles('#pmfFile', [weights, short]);
+  await page.waitForFunction(() => document.querySelector('#dist-candidates').textContent.includes('short'));
+  assert.strictEqual(await page.textContent('#res-dist'), '');
+  await page.click('#tab-report');
+  assert.doesNotMatch(await page.textContent('#rep-sections'), /اختبارات التوزيع/);
+  await page.click('#tab-actual');
+
+  // Probabilities adding up to 0.9: an error naming the file, not a silent renormalization.
+  await page.uncheck('#d-useTheory');
+  await runDist();
+  const err = await page.textContent('#err-dist');
+  assert.match(err, /"short"/);
+  assert.match(err, /0\.9/);
+  // A weight column is divided by its total, and the page says so.
+  await page.setInputFiles('#pmfFile', weights);
+  await page.waitForFunction(() => !document.querySelector('#dist-candidates').textContent.includes('short'));
+  await runDist();
+  await noError();
+  assert.match(await page.textContent('#dist-normalized'), /weights \(المجموع: 4\)/);
+
+  // A mode typed for a log without a mode column is an error, not a label.
+  await page.fill('#d-mode', 'bonus');
+  await runDist();
+  assert.match(await page.textContent('#err-dist'), /لا يحتوي السجل على عمود للنمط.*"bonus"/);
+
+  assert.deepStrictEqual(errors, []);
 });
