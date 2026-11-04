@@ -69,9 +69,8 @@ test('header buttons wired at the end of the script respond', async (t) => {
   assert.ok(await page.evaluate(() => document.querySelector('#secToolsDialog').open), 'security tools did not open');
   await page.click('#btnCloseSecTools');
 
-  // The code / preview pane is retired: no menu entry, and the pane stays hidden.
+  // The code / preview labels and their menu entry are gone.
   assert.strictEqual(await page.$('#btnToggleHistory'), null);
-  assert.strictEqual(await page.evaluate(() => getComputedStyle(document.querySelector('#workarea')).display), 'none');
 });
 
 test('security operations home: shown on an empty chat, its tiles open the matching tool', async (t) => {
@@ -139,4 +138,22 @@ test('a formal console: no emoji anywhere on the page, icon-only send, phone acc
   await page.click('#miSettings');
   assert.ok(await page.evaluate(() => document.querySelector('#settingsDialog').open), 'settings did not open');
   assert.deepStrictEqual(await emojiIn(), [], 'settings');
+});
+
+test('desktop: the side panel stays, without Preview / Code / Download, and holds the operations center', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const page = await browser.newPage({ viewport: { width: 1366, height: 820 } });
+  page.setDefaultTimeout(5000);
+  await page.goto(server.url + '/');
+  await page.click('#btnGuestMode');
+  assert.ok(await page.isVisible('#workarea'), 'the panel is still there');
+  for (const sel of ['#tabs', '#btnDownload', '#previewFrame', '#code']) assert.ok(!(await page.isVisible(sel)), sel + ' is hidden');
+  assert.strictEqual(await page.$$eval('#socPanel [data-soc-tool]', (b) => b.length), 8);
+  assert.ok(!(await page.isVisible('#socHome')), 'the chat copy is for phones only');
+  assert.ok(await page.isVisible('#chatHint'), 'the empty chat shows a hint');
+  assert.strictEqual(await page.textContent('#projCount'), '01');
+  await page.click('#socPanel [data-soc-tool="hashid"]');
+  assert.strictEqual(await page.getAttribute('.secToolNavBtn.active', 'data-tool'), 'hashid');
 });

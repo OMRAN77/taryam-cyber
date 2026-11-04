@@ -1,6 +1,7 @@
-// Browser test for the off-canvas projects drawer (#sidebar) used at widths of 860px
-// or less and whenever html.mobile-ui is set. (The #workarea code / preview drawer is
-// retired: it must stay hidden.)
+// Browser test for the off-canvas drawers (#sidebar = projects, #workarea = side panel)
+// used at widths of 860px or less and whenever html.mobile-ui is set. On phones the
+// side panel has no menu entry (its operations center shows in the empty chat), so it
+// must simply stay closed.
 // In Arabic (RTL, the default) the closed drawers used to be pinned to the left
 // edge and slid right by only their own width, so they stayed on screen over the
 // chat and swallowed taps on the dock: the attach button, the Ask-all / Merge
@@ -44,7 +45,7 @@ function geometry(page) {
         open: b.left >= -0.5 && b.right <= iw + 0.5 && (rtl ? Math.abs(b.right - iw) <= 0.5 : Math.abs(b.left) <= 0.5),
       };
     };
-    return { iw, rtl, scrollWidth: document.documentElement.scrollWidth, sidebar: rect('#sidebar'), workareaHidden: getComputedStyle(document.querySelector('#workarea')).display === 'none' };
+    return { iw, rtl, scrollWidth: document.documentElement.scrollWidth, sidebar: rect('#sidebar'), workarea: rect('#workarea') };
   });
 }
 
@@ -75,10 +76,10 @@ for (const { lang, width, height, mobileUi } of CASES) {
     await page.click('#btnGuestMode');
     if (mobileUi) await page.evaluate(() => document.documentElement.classList.add('mobile-ui'));
 
-    let g = await settle(page, { '#sidebar': 'closed' });
+    let g = await settle(page, { '#sidebar': 'closed', '#workarea': 'closed' });
     assert.strictEqual(g.rtl, lang === 'ar', 'page direction follows the language');
     assert.ok(g.sidebar.closed, `closed sidebar is off-screen (${JSON.stringify(g.sidebar)}, viewport ${g.iw})`);
-    assert.ok(g.workareaHidden, 'the retired code / preview pane stays hidden');
+    assert.ok(g.workarea.closed, `closed side panel is off-screen (${JSON.stringify(g.workarea)}, viewport ${g.iw})`);
     assert.ok(g.scrollWidth <= g.iw, `no horizontal scroll (${g.scrollWidth} > ${g.iw})`);
 
     // Nothing sits on top of the dock controls (hit-test at each control's centre).

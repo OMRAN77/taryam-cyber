@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>TARYAM Cyber — أدوات الأمن السيبراني</title>
 <meta name="description" content="منصة احترافية لأدوات الأمن السيبراني بالذكاء الاصطناعي — 9 مزوّدين، دمج ذكي، 18 أداة.">
-<meta name="theme-color" content="#030807">
+<meta name="theme-color" content="#000000">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,18 +14,18 @@
 <style>
 /* ═══════════════ AETHER DESIGN SYSTEM ═══════════════ */
 :root{
-  --bg:#030807;
-  --bg-2:#06100d;
-  --surface:rgba(0,255,156,.03);
-  --surface-2:rgba(0,255,156,.06);
-  --surface-3:rgba(0,255,156,.09);
-  --border:rgba(0,255,156,.12);
-  --border-2:rgba(0,255,156,.2);
-  --border-3:rgba(0,255,156,.32);
-  --text:#dcfff0;
-  --text-2:#8fb8a6;
-  --text-3:#5f8575;
-  --text-4:#3f5c50;
+  --bg:#000000;
+  --bg-2:#0a0a0a;
+  --surface:rgba(255,255,255,.03);
+  --surface-2:rgba(255,255,255,.055);
+  --surface-3:rgba(255,255,255,.08);
+  --border:rgba(255,255,255,.08);
+  --border-2:rgba(255,255,255,.13);
+  --border-3:rgba(255,255,255,.22);
+  --text:#ededed;
+  --text-2:#a3a3a3;
+  --text-3:#737373;
+  --text-4:#525252;
   --primary:#00ff9c;
   --primary-2:#5cffbe;
   --cyan:#00e5ff;
@@ -70,18 +70,16 @@ code,pre,kbd,.mono{font-family:var(--font-mono)}
 #auroraHost::before{
   content:'';position:absolute;inset:0;
   background:
-    radial-gradient(ellipse 60% 50% at 20% 15%, rgba(0,255,156,.12), transparent 60%),
-    radial-gradient(ellipse 50% 40% at 85% 25%, rgba(0,229,255,.10), transparent 60%),
-    radial-gradient(ellipse 50% 50% at 50% 95%, rgba(255,59,92,.06), transparent 60%);
+    radial-gradient(ellipse 60% 45% at 50% 0%, rgba(0,255,156,.035), transparent 70%);
   filter:blur(40px);opacity:.9;
   animation:auroraShift 22s ease-in-out infinite;
 }
 #auroraHost::after{
   content:'';position:absolute;inset:0;
   background-image:
-    repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px),
-    linear-gradient(rgba(0,255,156,.045) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(0,255,156,.045) 1px,transparent 1px);
+    repeating-linear-gradient(0deg,rgba(0,0,0,.25) 0 1px,transparent 1px 3px),
+    linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);
   background-size:auto,40px 40px,40px 40px;
   mask-image:radial-gradient(ellipse at center,#000 30%,transparent 80%);
   -webkit-mask-image:radial-gradient(ellipse at center,#000 30%,transparent 80%);
@@ -766,7 +764,7 @@ html.mobile-ui .resizer{display:none}
   background:transparent;border:1px solid transparent;color:var(--text);cursor:pointer;text-align:start;font-family:inherit;transition:all var(--transition)}
 .acct-btn:hover,.acct-btn[aria-expanded="true"]{background:var(--surface-2);border-color:var(--border)}
 .acct-avatar{width:30px;height:30px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;
-  background:#02140d;border:1px solid var(--border-3);color:var(--primary);font:700 13px var(--font-mono)}
+  background:#0d0d0d;border:1px solid var(--border-3);color:var(--primary);font:700 13px var(--font-mono)}
 .acct-avatar svg{width:15px;height:15px}
 .acct-text{display:flex;flex-direction:column;min-width:0;line-height:1.3}
 .acct-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -777,7 +775,7 @@ html.mobile-ui .resizer{display:none}
 .acct-gear:hover{background:var(--surface-2);border-color:var(--border);color:var(--primary)}
 .acct-gear svg{width:17px;height:17px}
 #acctMenu{position:absolute;bottom:calc(100% + 6px);inset-inline:10px;z-index:40;display:none;flex-direction:column;padding:6px;
-  background:rgba(4,12,10,.97);border:1px solid var(--border-2);border-radius:10px;box-shadow:var(--shadow-3),0 0 24px rgba(0,255,156,.08)}
+  background:rgba(14,14,14,.98);border:1px solid var(--border-2);border-radius:10px;box-shadow:var(--shadow-3),0 0 24px rgba(0,255,156,.08)}
 #acctMenu.show{display:flex;animation:cmdIn .18s ease}
 #acctMenu .acct-who{padding:8px 10px 6px;font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #acctMenu .mi{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border-radius:6px;background:none;border:0;
@@ -868,10 +866,10 @@ html.mobile-ui .resizer{display:none}
 html[dir="rtl"] .msg.assistant.failed{box-shadow:inset -3px 0 0 var(--red)}
 /* Terminal face for chrome and labels, neon on near-black, HUD corner brackets. */
 header h1 .subtitle{font-family:var(--font-mono);color:var(--primary);opacity:.75;letter-spacing:.08em}
-header{background:rgba(3,8,7,.78);border-bottom-color:var(--border-2);box-shadow:0 1px 0 rgba(0,255,156,.06),0 8px 30px rgba(0,0,0,.35)}
-header h1 .brand{background:#02140d;border:1px solid var(--border-3);box-shadow:0 0 18px rgba(0,255,156,.25)}
+header{background:rgba(0,0,0,.82);border-bottom-color:var(--border-2);box-shadow:0 1px 0 rgba(0,255,156,.06),0 8px 30px rgba(0,0,0,.35)}
+header h1 .brand{background:#0a0a0a;border:1px solid var(--border-3);box-shadow:0 0 18px rgba(0,255,156,.25)}
 .sys-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;border:1px solid var(--border-2);
-  background:rgba(0,255,156,.06);font:600 10px/1.4 var(--font-mono);letter-spacing:.12em;color:var(--primary);direction:ltr;white-space:nowrap}
+  background:rgba(0,255,156,.05);font:600 10px/1.4 var(--font-mono);letter-spacing:.12em;color:var(--primary);direction:ltr;white-space:nowrap}
 .sys-chip i{width:7px;height:7px;border-radius:50%;background:var(--primary);box-shadow:0 0 8px var(--primary);animation:sysBlink 2s ease-in-out infinite}
 .sys-chip.off{color:var(--red);border-color:rgba(248,113,113,.4);background:rgba(248,113,113,.08)}
 .sys-chip.off i{background:var(--red);box-shadow:0 0 8px var(--red)}
@@ -883,8 +881,8 @@ header h1 .brand{background:#02140d;border:1px solid var(--border-3);box-shadow:
 .btn.primary,#btnSend{color:#00150c;font-weight:700;border-radius:8px;box-shadow:0 0 20px rgba(0,255,156,.3)}
 .btn.primary:hover,#btnSend:hover{box-shadow:0 0 30px rgba(0,255,156,.5)}
 .btn.primary svg,#btnSend svg{stroke:#00150c}
-#inputbar{background:rgba(3,10,8,.82);border-color:var(--border-2);box-shadow:0 0 0 1px rgba(0,255,156,.04),0 10px 40px rgba(0,0,0,.5)}
-#chatcol,#sidebar{background:rgba(3,10,8,.45)}
+#inputbar{background:rgba(14,14,14,.92);border-color:var(--border-2);box-shadow:0 0 0 1px rgba(0,255,156,.04),0 10px 40px rgba(0,0,0,.5)}
+#chatcol,#sidebar{background:rgba(6,6,6,.7)}
 .hist-item.active{box-shadow:inset 3px 0 0 var(--primary)}
 html[dir="rtl"] .hist-item.active{box-shadow:inset -3px 0 0 var(--primary)}
 
@@ -900,10 +898,10 @@ html[dir="rtl"] .hist-item.active{box-shadow:inset -3px 0 0 var(--primary)}
   background-size:16px 2px,2px 16px,16px 2px,2px 16px,16px 2px,2px 16px,16px 2px,2px 16px;
   background-position:top left,top left,top right,top right,bottom left,bottom left,bottom right,bottom right;
 }
-dialog{background-color:rgba(4,12,10,.95);border-radius:6px;border-color:var(--border-2)}
+dialog{background-color:rgba(12,12,12,.97);border-radius:6px;border-color:var(--border-2)}
 dialog>h3::before{content:'// ';color:var(--primary)}
 dialog input:focus,dialog select:focus,dialog textarea:focus{box-shadow:0 0 0 3px rgba(0,255,156,.14),0 0 18px rgba(0,255,156,.12)}
-dialog::backdrop{background:rgba(0,6,4,.72)}
+dialog::backdrop{background:rgba(0,0,0,.75)}
 
 /* Security tools: tabs read like terminal commands */
 .secToolNavBtn{border-radius:6px;font-size:11.5px;letter-spacing:.03em}
@@ -912,16 +910,18 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
 .secToolNavBtn.active::before{content:'>';color:var(--primary)}
 
 /* Empty preview pane */
-.empty .icon{border-radius:14px;background:#02140d;border:1px solid var(--border-3);box-shadow:0 0 30px rgba(0,255,156,.25)}
+.empty .icon{border-radius:14px;background:#0a0a0a;border:1px solid var(--border-3);box-shadow:0 0 30px rgba(0,255,156,.25)}
 .empty .icon svg{stroke:var(--primary)}
 .empty .icon::after{background:radial-gradient(circle,rgba(0,255,156,.35),transparent 70%)}
 
 /* Security operations home, over the empty chat */
 #socHome{display:none}
-#messages:empty ~ #socHome{
-  display:flex;flex-direction:column;gap:14px;position:absolute;inset:0 0 auto 0;
-  max-height:calc(100% - var(--dock-h, 128px) - 24px);overflow-y:auto;padding:22px 18px 10px;
+@media (max-width:860px){
+  #messages:empty ~ #socHome{display:flex;position:absolute;inset:0 0 auto 0;max-height:calc(100% - var(--dock-h, 128px) - 24px);overflow-y:auto;padding:22px 18px 10px}
+  #messages:empty ~ .chat-hint{display:none}
 }
+html.mobile-ui #messages:empty ~ #socHome{display:flex;position:absolute;inset:0 0 auto 0;max-height:calc(100% - var(--dock-h, 128px) - 24px);overflow-y:auto;padding:22px 18px 10px}
+html.mobile-ui #messages:empty ~ .chat-hint{display:none}
 .soc-head{display:flex;flex-direction:column;gap:6px}
 .soc-kicker{font:600 10.5px var(--font-mono);letter-spacing:.18em;color:var(--primary);direction:ltr;text-align:start}
 .soc-head h2{margin:0;font-size:19px;font-weight:700;line-height:1.3;color:var(--text)}
@@ -943,13 +943,13 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
 .soc-all{margin-inline-start:auto;padding:4px 10px;font-size:11.5px}
 
 /* Login: a secure terminal */
-#authOverlay{background:radial-gradient(circle at 50% 25%,rgba(0,255,156,.10),transparent 60%),var(--bg)}
+#authOverlay{background:radial-gradient(circle at 50% 25%,rgba(0,255,156,.05),transparent 60%),var(--bg)}
 #authOverlay::before{content:'';position:absolute;inset:0;pointer-events:none;
   background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.25) 0 1px,transparent 1px 3px),
-    linear-gradient(rgba(0,255,156,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,156,.04) 1px,transparent 1px);
+    linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);
   background-size:auto,40px 40px,40px 40px}
-#authOverlay .card{background-color:rgba(3,12,9,.9);border-radius:8px;border-color:var(--border-2);box-shadow:0 0 50px rgba(0,255,156,.08),var(--shadow-3)}
-#authOverlay .logo{border-radius:14px;background:#02140d;border:1px solid var(--border-3)}
+#authOverlay .card{background-color:rgba(10,10,10,.94);border-radius:8px;border-color:var(--border-2);box-shadow:0 0 50px rgba(0,255,156,.08),var(--shadow-3)}
+#authOverlay .logo{border-radius:14px;background:#0a0a0a;border:1px solid var(--border-3)}
 #authOverlay .logo svg{stroke:var(--primary)}
 #authOverlay label{display:block;margin:12px 0 6px;font-size:12.5px;color:var(--text-2)}
 #authOverlay input[type="text"],#authOverlay input[type="password"]{
@@ -967,12 +967,18 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
   .sys-chip{padding:2px 7px;font-size:9px}
   #messages:empty ~ #socHome{padding:16px 14px 8px}
 }
-/* Full-width console: the preview / code pane is retired, answers live in the chat */
-#workarea{display:none!important}
-#chatcol{flex:1;width:auto;min-width:0}
-#messages{padding-inline:max(18px,calc((100% - 920px) / 2))}
-#messages:empty ~ #socHome{padding-inline:max(18px,calc((100% - 980px) / 2))}
-.soc-grid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+/* Side panel: the security operations center in place of preview / code (labels and download hidden) */
+#workarea #tabs,#workarea #panels{display:none}
+#workarea{background:rgba(4,4,4,.55)}
+#socPanel{flex:1;overflow-y:auto;padding:26px 28px 24px}
+.soc-home{display:flex;flex-direction:column;gap:14px}
+#socHome{display:none}
+#socPanel .soc-grid{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.chat-hint{display:none}
+#messages:empty ~ .chat-hint{display:flex;align-items:center;justify-content:center;gap:8px;position:absolute;inset:0 18px calc(var(--dock-h, 128px) + 30px);
+  text-align:center;font-size:13px;color:var(--text-3);pointer-events:none}
+.chat-hint span{font:700 13px var(--font-mono);color:var(--primary);direction:ltr}
+.chat-hint b{font-weight:400;max-width:300px;line-height:1.7}
 
 /* Composer: a command line, one control row, icon send */
 #inputbar{inset-inline:max(14px,calc((100% - 920px) / 2));bottom:34px;gap:0;padding:0;border-radius:12px;overflow:hidden}
@@ -1003,6 +1009,22 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
 
 /* Phones: the account menu drops from the header, no drawer */
 #acctMenu.from-header{position:fixed;top:56px;bottom:auto;inset-inline:10px auto;width:min(300px,calc(100vw - 20px));z-index:70}
+/* Projects sidebar */
+.side-kicker{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 0;font:600 10.5px var(--font-mono);letter-spacing:.16em;color:var(--text-3);direction:ltr}
+.side-kicker span{color:var(--primary)}
+.side-kicker b{font-weight:600;color:var(--text-2);padding:1px 7px;border:1px solid var(--border-2);border-radius:5px}
+#btnNew{background:transparent;color:var(--primary);border:1px dashed rgba(0,255,156,.45);box-shadow:none;border-radius:8px;height:38px}
+#btnNew svg{stroke:var(--primary)}
+#btnNew:hover{background:rgba(0,255,156,.07);border-style:solid;box-shadow:0 0 16px rgba(0,255,156,.15)}
+.hist-item{display:flex;align-items:center;gap:10px;border-radius:8px;padding:9px 10px;cursor:pointer}
+.hist-glyph{font:700 12px var(--font-mono);color:var(--text-4);width:10px;flex-shrink:0;direction:ltr}
+.hist-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.hist-item .hist-title{font-size:13px}
+.hist-meta{font:500 10px var(--font-mono);letter-spacing:.08em;color:var(--text-4);direction:ltr;text-align:start}
+.hist-item.active{background:rgba(0,255,156,.06);border-color:rgba(0,255,156,.28);color:var(--text)}
+.hist-item.active .hist-glyph{color:var(--primary)}
+.hist-item.active .hist-meta{color:var(--text-3)}
+
 @media (max-width:860px){
   #inputbar{inset-inline:10px;bottom:12px}
   .cmd-hint{display:none}
@@ -1079,7 +1101,7 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
       <label><span id="authPasswordLabelText" data-i18n="authPasswordLabel">كلمة المرور</span>
         <div style="position:relative">
           <input type="password" id="authPassword" autocomplete="current-password" style="height:42px;padding-inline-end:44px">
-          <button type="button" id="authTogglePassBtn" style="position:absolute;inset-inline-end:4px;top:4px;height:34px;width:34px;border:none;background:transparent;cursor:pointer;color:var(--text-3);display:flex;align-items:center;justify-content:center;border-radius:8px"></button>
+          <button type="button" id="authTogglePassBtn" style="position:absolute;inset-inline-end:4px;top:4px;height:34px;width:34px;border:none;background:transparent;cursor:pointer;color:var(--text-3);display:flex;align-items:center;justify-content:center;border-radius:8px" aria-label="إظهار كلمة المرور"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
         </div>
       </label>
       <label style="display:flex;align-items:center;gap:8px;margin:12px 0;font-size:12.5px;cursor:pointer">
@@ -1148,6 +1170,7 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
 
 <main>
   <div id="sidebar">
+    <div class="side-kicker"><span>// PROJECTS</span><b id="projCount">0</b></div>
     <div class="sidebar-head">
       <button class="btn primary" id="btnNew" style="flex:1;justify-content:center">
         <svg><use href="#i-plus"/></svg>
@@ -1218,10 +1241,14 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
         </div>
       </div>
     </div>
+    <div class="chat-hint" id="chatHint"><span>&gt;_</span><b data-i18n="chatHint">اكتب أمرك أو سؤالك الأمني بالأسفل، أو اختر أداة من مركز العمليات.</b></div>
     <div class="cmd-hint" aria-hidden="true"><span>Enter</span> <b data-i18n="hintSend">للإرسال</b> · <span>Shift+Enter</span> <b data-i18n="hintNewline">سطر جديد</b></div>
   </div>
 
+  <div class="resizer" id="resizer2"></div>
+
   <div id="workarea">
+    <section id="socPanel" class="soc-home" aria-labelledby="socPanelTitle"></section>
     <div id="tabs">
       <div class="tab active" data-tab="preview">
         <svg><use href="#i-preview"/></svg>
@@ -1448,8 +1475,8 @@ const PROVIDER_ORDER = ['deepseek','claude','openai','gemini','groq','openrouter
 
 /* ═══ i18n ═══ */
 const I18N = {
-  ar:{dir:'rtl',pageTitle:'TARYAM Cyber — أدوات الأمن السيبراني',appTitle:'تريم سايبر',offlineBanner:'أنت غير متصل بالإنترنت',backOnlineBanner:'عاد الاتصال',authTitle:'مرحبًا بك',authSubtitle:'سجّل الدخول أو أنشئ حسابًا جديدًا',authTabLogin:'دخول',authTabSignup:'حساب جديد',authUsernameLabel:'اسم المستخدم',authPasswordLabel:'كلمة المرور',authNewPasswordLabel:'كلمة مرور جديدة',authRecoveryLabel:'رمز الاسترجاع',authForgotLink:'نسيت كلمة المرور؟',authRememberMe:'تذكرني',authBackToLogin:'رجوع',authSubmitReset:'إعادة تعيين',authRecoveryModalTitle:'احتفظ برمز الاسترجاع',authRecoveryModalDesc:'هذا الرمز الوحيد لاستعادة حسابك إذا نسيت كلمة المرور.',authSubmitLogin:'دخول',authSubmitSignup:'إنشاء الحساب',guestMode:'الدخول كضيف (20 رسالة يوميًا)',guestLimitMsg:'استخدمت رسائلك المجانية! سجّل الدخول للمتابعة.',logout:'خروج',settings:'الإعدادات',download:'تنزيل',newProject:'مشروع جديد',send:'إرسال',preview:'المعاينة',code:'الكود',promptPlaceholder:'صف ما تريد... مثال: اشرح ثغرة XSS',emptyTitle:'مساحة العمل جاهزة',emptyDesc:'اكتب طلبك في المحادثة أو افتح أداة أمنية؛ الأكواد والتقارير تظهر هنا.',socTitle:'مركز العمليات الأمنية',socSub:'اختر أداة، أو اكتب طلبك تحت: فحص، تحليل، تشفير، تحقيق.',socLink:'اتصال مشفّر',socLinkPlain:'اتصال غير مشفّر',socTools:'أدوات جاهزة',socAll:'كل الأدوات',hintSend:'للإرسال',hintNewline:'سطر جديد',acctGuest:'ضيف',acctGuestPlan:'20 رسالة يوميًا',acctPlan:'حساب مسجّل',acctLogin:'تسجيل الدخول',acctLang:'اللغة',settingsTitle:'إعدادات الاتصال',langSectionTitle:'اللغة',apiKeysSectionTitle:'مفاتيح API',themeSectionLabel:'المظهر',voiceSectionLabel:'الصوت',aboutSectionTitle:'ℹ عن البرنامج',provider:'المزوّد الافتراضي',apiKeyLabel:'مفتاح API',modelLabel:'اسم النموذج',cancel:'إلغاء',save:'حفظ',close:'إغلاق',askAllLabel:'اسأل كل المزوّدين',mergeLabel:'دمج ذكي',building:'جارٍ العمل...',scoring:'تقييم جودة الإجابات...',synthesizing:'توليف الجواب الموحّد...',verifying:'التحقق النهائي...',merging:'دمج ذكي 3 مراحل...',mergedLabel:'الجواب الموحّد',mergeContributors:'دُمِجت إجابات: ',mergeFailedNote:'لم يستجب: ',mergeSourcesLabel:'عرض الإجابات الفردية',buildSuccess:'تم ',defaultProjectTitle:'مشروع جديد',confirmDeleteProject:'حذف "{name}"؟',install:'تثبيت التطبيق',speakBtn:'استماع',stopSpeakBtn:'إيقاف',providerError:'خطأ من المزوّد: ',quotaError:'الحصة المجانية انتهت مؤقتًا',authError:'مفتاح API غير صحيح',apiKeyMissing:'أدخل مفتاح API أولاً',acctSectionTitle:'حسابي',acctUsernameLabel:'اسم المستخدم',themeAccentLabel:'اللون الأساسي',themeTextLabel:'لون النص',themeBgLabel:'لون الخلفية',projectsListTitle:'المشاريع',secToolsTitle:'أدوات الأمن',rtpLabTitle:'مختبر RTP',casinoTitle:'كيف يكسب الكازينو',clockDialogTitle:'التقويم والوقت'},
-  en:{dir:'ltr',pageTitle:'TARYAM Cyber — Cybersecurity Tools',appTitle:'TARYAM Cyber',offlineBanner:"You're offline",backOnlineBanner:'Back online',authTitle:'Welcome',authSubtitle:'Log in or create an account',authTabLogin:'Log In',authTabSignup:'Sign Up',authUsernameLabel:'Username',authPasswordLabel:'Password',authNewPasswordLabel:'New password',authRecoveryLabel:'Recovery code',authForgotLink:'Forgot password?',authRememberMe:'Remember me',authBackToLogin:'Back',authSubmitReset:'Reset',authRecoveryModalTitle:'Save this recovery code',authRecoveryModalDesc:'The only code to recover your account if you forget your password.',authSubmitLogin:'Log In',authSubmitSignup:'Create Account',guestMode:'Continue as guest (20 messages/day)',guestLimitMsg:'Free messages used! Log in to continue.',logout:'Log out',settings:'Settings',download:'Download',newProject:'New Project',send:'Send',preview:'Preview',code:'Code',promptPlaceholder:'Describe what you want... e.g. explain XSS',emptyTitle:'Workspace ready',emptyDesc:'Ask in the chat or open a security tool; code and reports show up here.',socTitle:'Security Operations Center',socSub:'Pick a tool, or type your request below: scan, analyze, encrypt, investigate.',socLink:'Encrypted connection',socLinkPlain:'Unencrypted connection',socTools:'tools ready',socAll:'All tools',hintSend:'to send',hintNewline:'new line',acctGuest:'Guest',acctGuestPlan:'20 messages a day',acctPlan:'Signed-in account',acctLogin:'Log in',acctLang:'Language',settingsTitle:'Connection Settings',langSectionTitle:'Language',apiKeysSectionTitle:'API Keys',themeSectionLabel:'Appearance',voiceSectionLabel:'Voice',aboutSectionTitle:'ℹ About',provider:'Default provider',apiKeyLabel:'API Key',modelLabel:'Model name',cancel:'Cancel',save:'Save',close:'Close',askAllLabel:'Ask all providers',mergeLabel:'Smart merge',building:'Working...',scoring:'Scoring answer quality...',synthesizing:'Synthesizing unified answer...',verifying:'Final verification...',merging:'3-stage smart merge...',mergedLabel:'Unified Answer',mergeContributors:'Merged from: ',mergeFailedNote:'Did not respond: ',mergeSourcesLabel:'Show individual answers',buildSuccess:'Done ',defaultProjectTitle:'New Project',confirmDeleteProject:'Delete "{name}"?',install:'Install App',speakBtn:'Listen',stopSpeakBtn:'Stop',providerError:'Provider error: ',quotaError:'Free quota temporarily exhausted',authError:'Invalid API key',apiKeyMissing:'Enter your API key first',acctSectionTitle:'My account',acctUsernameLabel:'Username',themeAccentLabel:'Accent color',themeTextLabel:'Text color',themeBgLabel:'Background color',projectsListTitle:'Projects',secToolsTitle:'Security Tools',rtpLabTitle:'RTP Lab',casinoTitle:'How the casino wins',clockDialogTitle:'Calendar & Time'}
+  ar:{dir:'rtl',pageTitle:'TARYAM Cyber — أدوات الأمن السيبراني',appTitle:'تريم سايبر',offlineBanner:'أنت غير متصل بالإنترنت',backOnlineBanner:'عاد الاتصال',authTitle:'مرحبًا بك',authSubtitle:'سجّل الدخول أو أنشئ حسابًا جديدًا',authTabLogin:'دخول',authTabSignup:'حساب جديد',authUsernameLabel:'اسم المستخدم',authPasswordLabel:'كلمة المرور',authNewPasswordLabel:'كلمة مرور جديدة',authRecoveryLabel:'رمز الاسترجاع',authForgotLink:'نسيت كلمة المرور؟',authRememberMe:'تذكرني',authBackToLogin:'رجوع',authSubmitReset:'إعادة تعيين',authRecoveryModalTitle:'احتفظ برمز الاسترجاع',authRecoveryModalDesc:'هذا الرمز الوحيد لاستعادة حسابك إذا نسيت كلمة المرور.',authSubmitLogin:'دخول',authSubmitSignup:'إنشاء الحساب',guestMode:'الدخول كضيف (20 رسالة يوميًا)',guestLimitMsg:'استخدمت رسائلك المجانية! سجّل الدخول للمتابعة.',logout:'خروج',settings:'الإعدادات',download:'تنزيل',newProject:'مشروع جديد',send:'إرسال',preview:'المعاينة',code:'الكود',promptPlaceholder:'صف ما تريد... مثال: اشرح ثغرة XSS',emptyTitle:'مساحة العمل جاهزة',emptyDesc:'اكتب طلبك في المحادثة أو افتح أداة أمنية؛ الأكواد والتقارير تظهر هنا.',socTitle:'مركز العمليات الأمنية',socSub:'اختر أداة، أو اكتب طلبك تحت: فحص، تحليل، تشفير، تحقيق.',socLink:'اتصال مشفّر',socLinkPlain:'اتصال غير مشفّر',socTools:'أدوات جاهزة',socAll:'كل الأدوات',chatHint:'اكتب أمرك أو سؤالك الأمني بالأسفل، أو اختر أداة من مركز العمليات.',projKicker:'المشاريع',hintSend:'للإرسال',hintNewline:'سطر جديد',acctGuest:'ضيف',acctGuestPlan:'20 رسالة يوميًا',acctPlan:'حساب مسجّل',acctLogin:'تسجيل الدخول',acctLang:'اللغة',settingsTitle:'إعدادات الاتصال',langSectionTitle:'اللغة',apiKeysSectionTitle:'مفاتيح API',themeSectionLabel:'المظهر',voiceSectionLabel:'الصوت',aboutSectionTitle:'ℹ عن البرنامج',provider:'المزوّد الافتراضي',apiKeyLabel:'مفتاح API',modelLabel:'اسم النموذج',cancel:'إلغاء',save:'حفظ',close:'إغلاق',askAllLabel:'اسأل كل المزوّدين',mergeLabel:'دمج ذكي',building:'جارٍ العمل...',scoring:'تقييم جودة الإجابات...',synthesizing:'توليف الجواب الموحّد...',verifying:'التحقق النهائي...',merging:'دمج ذكي 3 مراحل...',mergedLabel:'الجواب الموحّد',mergeContributors:'دُمِجت إجابات: ',mergeFailedNote:'لم يستجب: ',mergeSourcesLabel:'عرض الإجابات الفردية',buildSuccess:'تم ',defaultProjectTitle:'مشروع جديد',confirmDeleteProject:'حذف "{name}"؟',install:'تثبيت التطبيق',speakBtn:'استماع',stopSpeakBtn:'إيقاف',providerError:'خطأ من المزوّد: ',quotaError:'الحصة المجانية انتهت مؤقتًا',authError:'مفتاح API غير صحيح',apiKeyMissing:'أدخل مفتاح API أولاً',acctSectionTitle:'حسابي',acctUsernameLabel:'اسم المستخدم',themeAccentLabel:'اللون الأساسي',themeTextLabel:'لون النص',themeBgLabel:'لون الخلفية',projectsListTitle:'المشاريع',secToolsTitle:'أدوات الأمن',rtpLabTitle:'مختبر RTP',casinoTitle:'كيف يكسب الكازينو',clockDialogTitle:'التقويم والوقت'},
+  en:{dir:'ltr',pageTitle:'TARYAM Cyber — Cybersecurity Tools',appTitle:'TARYAM Cyber',offlineBanner:"You're offline",backOnlineBanner:'Back online',authTitle:'Welcome',authSubtitle:'Log in or create an account',authTabLogin:'Log In',authTabSignup:'Sign Up',authUsernameLabel:'Username',authPasswordLabel:'Password',authNewPasswordLabel:'New password',authRecoveryLabel:'Recovery code',authForgotLink:'Forgot password?',authRememberMe:'Remember me',authBackToLogin:'Back',authSubmitReset:'Reset',authRecoveryModalTitle:'Save this recovery code',authRecoveryModalDesc:'The only code to recover your account if you forget your password.',authSubmitLogin:'Log In',authSubmitSignup:'Create Account',guestMode:'Continue as guest (20 messages/day)',guestLimitMsg:'Free messages used! Log in to continue.',logout:'Log out',settings:'Settings',download:'Download',newProject:'New Project',send:'Send',preview:'Preview',code:'Code',promptPlaceholder:'Describe what you want... e.g. explain XSS',emptyTitle:'Workspace ready',emptyDesc:'Ask in the chat or open a security tool; code and reports show up here.',socTitle:'Security Operations Center',socSub:'Pick a tool, or type your request below: scan, analyze, encrypt, investigate.',socLink:'Encrypted connection',socLinkPlain:'Unencrypted connection',socTools:'tools ready',socAll:'All tools',chatHint:'Type a command or a security question below, or pick a tool from the operations center.',projKicker:'Projects',hintSend:'to send',hintNewline:'new line',acctGuest:'Guest',acctGuestPlan:'20 messages a day',acctPlan:'Signed-in account',acctLogin:'Log in',acctLang:'Language',settingsTitle:'Connection Settings',langSectionTitle:'Language',apiKeysSectionTitle:'API Keys',themeSectionLabel:'Appearance',voiceSectionLabel:'Voice',aboutSectionTitle:'ℹ About',provider:'Default provider',apiKeyLabel:'API Key',modelLabel:'Model name',cancel:'Cancel',save:'Save',close:'Close',askAllLabel:'Ask all providers',mergeLabel:'Smart merge',building:'Working...',scoring:'Scoring answer quality...',synthesizing:'Synthesizing unified answer...',verifying:'Final verification...',merging:'3-stage smart merge...',mergedLabel:'Unified Answer',mergeContributors:'Merged from: ',mergeFailedNote:'Did not respond: ',mergeSourcesLabel:'Show individual answers',buildSuccess:'Done ',defaultProjectTitle:'New Project',confirmDeleteProject:'Delete "{name}"?',install:'Install App',speakBtn:'Listen',stopSpeakBtn:'Stop',providerError:'Provider error: ',quotaError:'Free quota temporarily exhausted',authError:'Invalid API key',apiKeyMissing:'Enter your API key first',acctSectionTitle:'My account',acctUsernameLabel:'Username',themeAccentLabel:'Accent color',themeTextLabel:'Text color',themeBgLabel:'Background color',projectsListTitle:'Projects',secToolsTitle:'Security Tools',rtpLabTitle:'RTP Lab',casinoTitle:'How the casino wins',clockDialogTitle:'Calendar & Time'}
 };
 let lang = localStorage.getItem('aiapp_lang') || 'ar';
 const t = k => I18N[lang][k] || k;
@@ -2034,12 +2061,17 @@ function renderMessages(keep){
 const historyEl = $('#history');
 function renderHistory(){
   historyEl.innerHTML = '';
+  $('#projCount').textContent = String(state.projects.length).padStart(2, '0');
   [...state.projects].reverse().forEach(p => {
     const div = document.createElement('div');
     div.className = 'hist-item' + (p.id === state.currentId ? ' active' : '');
+    const glyph = document.createElement('span'); glyph.className = 'hist-glyph'; glyph.textContent = '>';
+    const body = document.createElement('span'); body.className = 'hist-body';
     const ti = document.createElement('span'); ti.className = 'hist-title'; ti.textContent = p.title;
-    ti.onclick = () => { state.currentId = p.id; renderAll(); };
-    div.appendChild(ti);
+    const meta = document.createElement('span'); meta.className = 'hist-meta'; meta.textContent = `${(p.messages || []).length} MSG`;
+    body.append(ti, meta);
+    div.onclick = () => { state.currentId = p.id; renderAll(); };
+    div.append(glyph, body);
     const del = document.createElement('button'); del.className = 'hist-del';
     del.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
     del.onclick = e => { e.stopPropagation(); if(!confirm(t('confirmDeleteProject').replace('{name}', p.title))) return; state.projects = state.projects.filter(x => x.id !== p.id); if(state.currentId === p.id) state.currentId = state.projects.length ? state.projects[state.projects.length-1].id : null; if(!state.projects.length){ const id = 'p_'+Date.now(); state.projects.push({id,title:t('defaultProjectTitle'),messages:[],code:''}); state.currentId = id; } saveState(); renderAll(); };
@@ -2446,7 +2478,7 @@ $('#btnSaveSettings').onclick = () => {
     if(modelVal) localStorage.setItem(p.modelVar, modelVal); else localStorage.removeItem(p.modelVar);
     localStorage.setItem('aiapp_include_'+k, document.getElementById('inc_'+k)?.checked ? 'true' : 'false');
   });
-  const th = {accent:$('#themeAccent').value||'#00ff9c',text:$('#themeText').value||'#dcfff0',bg:$('#themeBg').value||'#030807'};
+  const th = {accent:$('#themeAccent').value||'#00ff9c',text:$('#themeText').value||'#ededed',bg:$('#themeBg').value||'#000000'};
   localStorage.setItem('aiapp_theme', JSON.stringify(th)); applyTheme();
   localStorage.setItem('aiapp_voice_gender', $('#voiceGenderPref').value);
   localStorage.setItem('aiapp_cloud_voice', $('#chkCloudVoice').checked?'true':'false');
@@ -2455,7 +2487,7 @@ $('#btnSaveSettings').onclick = () => {
   toast('تم الحفظ ✓', 'success');
 };
 $('#btnCancelSettings').onclick = () => closeDialogSafe($('#settingsDialog'));
-$('#btnResetColors').onclick = () => { localStorage.removeItem('aiapp_theme'); applyTheme(); ['themeAccent','themeText','themeBg'].forEach((id, i) => { document.getElementById(id).value = ['#00ff9c','#dcfff0','#030807'][i]; }); };
+$('#btnResetColors').onclick = () => { localStorage.removeItem('aiapp_theme'); applyTheme(); ['themeAccent','themeText','themeBg'].forEach((id, i) => { document.getElementById(id).value = ['#00ff9c','#ededed','#000000'][i]; }); };
 
 $('#acctUsernameSaveBtn').onclick = async () => {
   const newU = $('#acctUsername').value.trim(); const msg = $('#acctUsernameMsg');
@@ -2472,7 +2504,7 @@ function openDialogSafe(d){ if(d.hasAttribute('open')) return; if(typeof d.showM
 function closeDialogSafe(d){ if(typeof d.close === 'function'){ try { d.close(); } catch(e){} } d.removeAttribute('open'); }
 
 /* ═══ Theme ═══ */
-function getTheme(){ const def = {accent:'#00ff9c',text:'#dcfff0',bg:'#030807'}; try { const saved = JSON.parse(localStorage.getItem('aiapp_theme')||'{}'); if(saved.accent === '#8b5cf6' && saved.text === '#f4f4f5' && saved.bg === '#08090d') return def; return Object.assign(def, saved); } catch(e){ return def; } }
+function getTheme(){ const def = {accent:'#00ff9c',text:'#ededed',bg:'#000000'}; try { const saved = JSON.parse(localStorage.getItem('aiapp_theme')||'{}'); const oldDefault = (saved.accent === '#8b5cf6' && saved.text === '#f4f4f5' && saved.bg === '#08090d') || (saved.accent === '#00ff9c' && saved.text === '#dcfff0' && saved.bg === '#030807'); if(oldDefault) return def; return Object.assign(def, saved); } catch(e){ return def; } }
 function applyTheme(){ const th = getTheme(); const r = document.documentElement.style; r.setProperty('--primary', th.accent); r.setProperty('--text', th.text); r.setProperty('--bg', th.bg); }
 applyTheme();
 
@@ -2482,19 +2514,19 @@ applyTheme();
   function fade(ctx,w,h,c){ ctx.fillStyle = c; ctx.fillRect(0,0,w,h); }
   function fxAurora(ctx,w,h,t,S,c){
     if(!S.blobs) S.blobs = Array.from({length:5},()=>({x:rnd(0,w),y:rnd(0,h),r:rnd(180,320),vx:rnd(-.15,.15),vy:rnd(-.1,.1),hue:rnd(0,360)}));
-    fade(ctx,w,h,'rgba(3,8,7,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     S.blobs.forEach(b=>{ b.x+=b.vx; b.y+=b.vy; if(b.x<-b.r)b.x=w+b.r; if(b.x>w+b.r)b.x=-b.r; if(b.y<-b.r)b.y=h+b.r; if(b.y>h+b.r)b.y=-b.r;
       const g=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.r); g.addColorStop(0,`hsla(${(b.hue+t*10)%360},70%,60%,0.08)`); g.addColorStop(1,'transparent');
       ctx.fillStyle=g; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,7); ctx.fill(); });
   }
   function fxParticles(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     if(!S.pp) S.pp = Array.from({length:80},()=>({x:rnd(0,w),y:rnd(0,h),vx:rnd(-.3,.3),vy:rnd(-.3,.3),r:rnd(.5,2),hue:rnd(240,320)}));
     S.pp.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; if(p.x<0)p.x=w; if(p.x>w)p.x=0; if(p.y<0)p.y=h; if(p.y>h)p.y=0;
       ctx.fillStyle=`hsla(${p.hue},70%,70%,.5)`; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill(); });
   }
   function fxGrid(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.25)');
+    fade(ctx,w,h,'rgba(0,0,0,0.25)');
     ctx.strokeStyle='rgba(0,255,156,0.08)'; ctx.lineWidth=1;
     const gap=48;
     for(let x=0;x<w;x+=gap){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
@@ -2504,7 +2536,7 @@ applyTheme();
     ctx.fillStyle=cg; ctx.fillRect(0,0,w,h);
   }
   function fxWave(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     ctx.strokeStyle='rgba(34,211,238,0.15)'; ctx.lineWidth=1.5;
     for(let i=0;i<5;i++){
       ctx.beginPath();
@@ -2517,7 +2549,7 @@ applyTheme();
   }
   function fxNetwork(ctx,w,h,t,S,c){
     if(!S.pts) S.pts = Array.from({length:Math.max(20,Math.floor(w*h/28000))},()=>({x:rnd(0,w),y:rnd(0,h),vx:rnd(-.2,.2),vy:rnd(-.2,.2)}));
-    fade(ctx,w,h,'rgba(3,8,7,0.2)');
+    fade(ctx,w,h,'rgba(0,0,0,0.2)');
     S.pts.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; if(p.x<0||p.x>w)p.vx*=-1; if(p.y<0||p.y>h)p.vy*=-1; });
     for(let i=0;i<S.pts.length;i++) for(let j=i+1;j<S.pts.length;j++){
       const dx=S.pts[i].x-S.pts[j].x, dy=S.pts[i].y-S.pts[j].y, d=Math.sqrt(dx*dx+dy*dy);
@@ -2526,7 +2558,7 @@ applyTheme();
     S.pts.forEach(p=>{ ctx.fillStyle='rgba(167,139,250,0.8)'; ctx.beginPath(); ctx.arc(p.x,p.y,1.8,0,7); ctx.fill(); });
   }
   function fxOrb(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.25)');
+    fade(ctx,w,h,'rgba(0,0,0,0.25)');
     const cx=w/2, cy=h/2, R=Math.min(w,h)*0.35;
     ctx.strokeStyle='rgba(0,255,156,0.35)'; ctx.lineWidth=1.2;
     const rot=t*0.4;
@@ -2538,7 +2570,7 @@ applyTheme();
         la?ctx.lineTo(x,y):ctx.moveTo(x,y); } ctx.stroke(); }
   }
   function fxCubes(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.2)');
+    fade(ctx,w,h,'rgba(0,0,0,0.2)');
     if(!S.cb) S.cb = Array.from({length:8},()=>({x:rnd(0,w),y:rnd(0,h),s:rnd(18,34),ph:rnd(0,7)}));
     ctx.strokeStyle='rgba(34,211,238,0.5)'; ctx.lineWidth=1;
     S.cb.forEach(cu=>{ const rot=t*.5+cu.ph, s=cu.s;
@@ -2551,7 +2583,7 @@ applyTheme();
   function fxRain(ctx,w,h,t,S,c){
     const fs=16;
     if(!S.drops || S.w !== w){ S.w=w; S.cols=Math.floor(w/fs); S.drops=new Array(S.cols).fill(0).map(()=>Math.random()*h/fs); }
-    fade(ctx,w,h,'rgba(3,8,7,0.08)');
+    fade(ctx,w,h,'rgba(0,0,0,0.08)');
     if(!S.fs){ ctx.font=fs+'px JetBrains Mono, monospace'; S.fs=true; }
     ctx.fillStyle='rgba(0,255,156,0.4)';
     const chars='アイウエオカキクケコ01アイウエオ';
@@ -2559,7 +2591,7 @@ applyTheme();
       if(S.drops[i]*fs > h && Math.random() > 0.975) S.drops[i]=0; S.drops[i]++; }
   }
   function fxLissajous(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     const cx=w/2, cy=h/2, R=Math.min(w,h)*0.4;
     ctx.strokeStyle='rgba(236,72,153,0.25)'; ctx.lineWidth=1.2;
     for(let k=0;k<3;k++){
@@ -2573,14 +2605,14 @@ applyTheme();
   function fxRipples(ctx,w,h,t,S,c){
     if(!S.rips) S.rips=[];
     if(Math.random()<0.04 && S.rips.length<12) S.rips.push({x:rnd(0,w),y:rnd(0,h),r:0});
-    fade(ctx,w,h,'rgba(3,8,7,0.12)');
+    fade(ctx,w,h,'rgba(0,0,0,0.12)');
     S.rips.forEach(r=>{ r.r += 1.8; const op=Math.max(0,1-r.r/300);
       ctx.strokeStyle=`rgba(0,255,156,${op*0.5})`; ctx.lineWidth=1.5;
       ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,7); ctx.stroke(); });
     S.rips = S.rips.filter(r=>r.r<320);
   }
   function fxComet(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     if(!S.comets) S.comets = Array.from({length:6},()=>({x:rnd(0,w),y:rnd(0,h),vx:rnd(-1.2,1.2),vy:rnd(-.5,.5),len:rnd(40,100)}));
     S.comets.forEach(m=>{ m.x+=m.vx; m.y+=m.vy; if(m.x<-100||m.x>w+100||m.y<-100||m.y>h+100){ m.x=rnd(0,w); m.y=rnd(0,h); m.vx=rnd(-1.2,1.2); m.vy=rnd(-.5,.5); }
       const g=ctx.createLinearGradient(m.x-m.vx*m.len,m.y-m.vy*m.len,m.x,m.y);
@@ -2591,13 +2623,13 @@ applyTheme();
     });
   }
   function fxStars(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.1)');
+    fade(ctx,w,h,'rgba(0,0,0,0.1)');
     if(!S.stars) S.stars = Array.from({length:120},()=>({x:rnd(0,w),y:rnd(0,h),r:rnd(.3,1.2),ph:rnd(0,7)}));
     S.stars.forEach(s=>{ const op=0.3+0.7*Math.abs(Math.sin(t*0.8+s.ph));
       ctx.fillStyle=`rgba(167,139,250,${op*0.7})`; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,7); ctx.fill(); });
   }
   function fxScanline(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     const sp=6;
     ctx.strokeStyle='rgba(0,255,156,0.06)'; ctx.lineWidth=1;
     for(let y=0;y<h;y+=sp){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
@@ -2607,7 +2639,7 @@ applyTheme();
     ctx.fillStyle=g; ctx.fillRect(0,scanY-30,w,60);
   }
   function fxAurora2(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.12)');
+    fade(ctx,w,h,'rgba(0,0,0,0.12)');
     for(let i=0;i<3;i++){ ctx.beginPath();
       for(let x=0;x<=w;x+=8){ const y=h*(0.25+i*0.25)+Math.sin(x*0.005+t*(0.6+i*0.2))*80; x?ctx.lineTo(x,y):ctx.moveTo(x,y); }
       const g=ctx.createLinearGradient(0,0,w,0);
@@ -2617,7 +2649,7 @@ applyTheme();
     }
   }
   function fxMosaic(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.2)');
+    fade(ctx,w,h,'rgba(0,0,0,0.2)');
     const sz=40;
     for(let x=0;x<w;x+=sz) for(let y=0;y<h;y+=sz){
       const op = 0.02 + 0.08*Math.abs(Math.sin(t*0.5+(x+y)*0.001));
@@ -2626,7 +2658,7 @@ applyTheme();
     }
   }
   function fxGalaxy(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.1)');
+    fade(ctx,w,h,'rgba(0,0,0,0.1)');
     const cx=w/2, cy=h/2;
     if(!S.galPts) S.galPts = Array.from({length:220},(_,i)=>{ const ang=rnd(0,Math.PI*2), r=Math.pow(Math.random(),0.6)*Math.min(w,h)*0.45;
       return {x:cx+Math.cos(ang)*r, y:cy+Math.sin(ang)*r*0.6, r:rnd(.3,1.5), ang, orbit:r}; });
@@ -2636,7 +2668,7 @@ applyTheme();
       ctx.fillStyle=`hsla(${h_},70%,70%,0.5)`; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill(); });
   }
   function fxDNA(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     const cx=w/2;
     for(let y=0;y<h;y+=8){
       const off = Math.sin(y*0.02+t*1.5)*120;
@@ -2648,7 +2680,7 @@ applyTheme();
     }
   }
   function fxMatrixGrid(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.2)');
+    fade(ctx,w,h,'rgba(0,0,0,0.2)');
     const cs=24;
     for(let x=0;x<w;x+=cs) for(let y=0;y<h;y+=cs){
       const op = Math.abs(Math.sin(t*0.5+(x*y)*0.00005))*0.15;
@@ -2656,7 +2688,7 @@ applyTheme();
     }
   }
   function fxRings(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     const cx=w/2, cy=h/2;
     if(!S.rr) S.rr = Array.from({length:8},(_,i)=>({r:(i+1)*40, ph:i*0.8}));
     S.rr.forEach(o=>{ const rr=o.r + Math.sin(t*0.8+o.ph)*15;
@@ -2664,7 +2696,7 @@ applyTheme();
       ctx.beginPath(); ctx.arc(cx,cy,rr,0,7); ctx.stroke(); });
   }
   function fxHelix(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.15)');
+    fade(ctx,w,h,'rgba(0,0,0,0.15)');
     const cx=w/2;
     for(let i=0;i<8;i++){
       const ph = t*0.5 + i*0.9;
@@ -2675,7 +2707,7 @@ applyTheme();
     }
   }
   function fxAurora3(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.08)');
+    fade(ctx,w,h,'rgba(0,0,0,0.08)');
     ctx.globalCompositeOperation='lighter';
     for(let i=0;i<4;i++){
       const x = w/2 + Math.sin(t*0.3+i*1.7)*w*0.3;
@@ -2689,7 +2721,7 @@ applyTheme();
     ctx.globalCompositeOperation='source-over';
   }
   function fxWaves2(ctx,w,h,t,S,c){
-    fade(ctx,w,h,'rgba(3,8,7,0.1)');
+    fade(ctx,w,h,'rgba(0,0,0,0.1)');
     for(let i=0;i<6;i++){
       ctx.beginPath();
       const off = i*30;
@@ -2744,7 +2776,7 @@ applyTheme();
     host.classList.add('active');
     mainAnim = makeRunner(canvas, canvas.getContext('2d'), bg, false);
   }
-  function currentChoice(){ return localStorage.getItem('cyberBgChoice') || 'rain'; }
+  function currentChoice(){ return localStorage.getItem('cyberBgChoice') || 'none'; }
   window.selectCyberBg = id => { localStorage.setItem('cyberBgChoice', id); applyBg(id); if(window.renderBgPicker) window.renderBgPicker(); };
   let thumbRunners = [];
   function stopThumbs(){ thumbRunners.forEach(r => { try { r.stop(); } catch(e){} }); thumbRunners = []; }
@@ -2807,14 +2839,16 @@ const socEsc = v => String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;',
 const SOC_TILES = [['hashid','HASH'],['jwt','JWT'],['webscan','WEB'],['recon','RECON'],['vt','VT'],['phishing','PHISH'],['breach','LEAKS'],['iprep','IP']];
 function openSecTool(id){ $('#btnSecTools').click(); const b = document.querySelector(`.secToolNavBtn[data-tool="${id}"]`); if(b) b.click(); }
 function renderSocHome(){
-  const box = $('#socHome'); if(!box) return;
   const ready = SEC_TOOLS.filter(x => !x.desc.startsWith('(معطّلة')).length;
   const https = location.protocol === 'https:';
-  box.innerHTML = `<div class="soc-head"><div class="soc-kicker">// SOC · TARYAM</div><h2 id="socTitle">${socEsc(t('socTitle'))}</h2><p>${socEsc(t('socSub'))}</p></div>
-    <div class="soc-stats"><span class="soc-stat${https ? '' : ' warn'}"><i></i><b>${https ? 'TLS' : 'HTTP'}</b>${socEsc(t(https ? 'socLink' : 'socLinkPlain'))}</span><span class="soc-stat"><i></i><b>${ready}/${SEC_TOOLS.length}</b>${socEsc(t('socTools'))}</span><button type="button" class="btn soc-all" id="btnSocAll"><svg><use href="#i-tools"/></svg> <span>${socEsc(t('socAll'))}</span></button></div>
+  [['#socHome', 'socTitle'], ['#socPanel', 'socPanelTitle']].forEach(([sel, titleId]) => {
+    const box = $(sel); if(!box) return;
+    box.innerHTML = `<div class="soc-head"><div class="soc-kicker">// SOC · TARYAM</div><h2 id="${titleId}">${socEsc(t('socTitle'))}</h2><p>${socEsc(t('socSub'))}</p></div>
+    <div class="soc-stats"><span class="soc-stat${https ? '' : ' warn'}"><i></i><b>${https ? 'TLS' : 'HTTP'}</b>${socEsc(t(https ? 'socLink' : 'socLinkPlain'))}</span><span class="soc-stat"><i></i><b>${ready}/${SEC_TOOLS.length}</b>${socEsc(t('socTools'))}</span><button type="button" class="btn soc-all" data-soc-all><svg><use href="#i-tools"/></svg> <span>${socEsc(t('socAll'))}</span></button></div>
     <div class="soc-grid">${SOC_TILES.map(([id, code]) => { const tool = SEC_TOOLS.find(x => x.id === id); return tool ? `<button type="button" class="soc-tile hud" data-soc-tool="${id}"><code>${code}</code><strong>${socEsc(tool.name)}</strong><span>${socEsc(tool.desc)}</span></button>` : ''; }).join('')}</div>`;
-  box.querySelectorAll('[data-soc-tool]').forEach(b => { b.onclick = () => openSecTool(b.dataset.socTool); });
-  $('#btnSocAll').onclick = () => $('#btnSecTools').click();
+    box.querySelectorAll('[data-soc-tool]').forEach(b => { b.onclick = () => openSecTool(b.dataset.socTool); });
+    box.querySelector('[data-soc-all]').onclick = () => $('#btnSecTools').click();
+  });
 }
 window.renderSocHome = renderSocHome;
 
@@ -2991,7 +3025,7 @@ function wireSecTools(){
       loop(performance.now());
     } catch(e){ status.textContent = ''+e.message; }
   });
-  $('#btnMotionStop')?.addEventListener('click', () => { if(motionRAF) cancelAnimationFrame(motionRAF); if(motionStream) motionStream.getTracks().forEach(t => t.stop()); $('#motionVideo').style.display = 'none'; $('#motionStatus').textContent = ''; });
+  $('#btnMotionStop')?.addEventListener('click', () => { if(motionRAF) cancelAnimationFrame(motionRAF); if(motionStream) motionStream.getTracks().forEach(t => t.stop()); $('#motionVideo').style.display = 'none'; $('#motionStatus').textContent = isAr() ? 'متوقف' : 'Stopped'; });
   // Port scan
   $('#btnPortscanRun')?.addEventListener('click', async () => {
     const host = $('#portscanHost').value.trim(); const box = $('#portscanResult');
@@ -3022,20 +3056,20 @@ function wireSecTools(){
     if(!value) return; box.textContent = prefix + '...';
     try { const res = await fetch('/api/virustotal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode: mode === 'file' ? 'hash' : mode, value, guestId: window.getGuestId(), token: authGet('aiapp_auth_token')})}); const data = await res.json();
       if(data.notConfigured){ box.textContent = prefix+'قريبًا'; return; } if(data.error){ box.textContent = prefix+''+data.error; return; }
-      const icon = data.verdict === 'malicious' ? '' : data.verdict === 'clean' ? '' : ''; const s = data.stats || {};
+      const icon = data.verdict === 'malicious' ? '✕' : data.verdict === 'clean' ? '✓' : '!'; const s = data.stats || {};
       box.textContent = prefix+`${icon} ${data.verdict}\nخبيث: ${s.malicious||0} | نظيف: ${s.harmless||0}`;
     } catch(e){ box.textContent = ''+e.message; }
   });
   // Recon
   $('#btnReconRun')?.addEventListener('click', async () => { const domain = $('#reconDomain').value.trim(); if(!domain) return; const box = $('#reconResult'); box.textContent = '...'; try { const res = await fetch('/api/recon',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.error){ box.textContent = ''+data.error; return; } const lines = [`${data.domain}\nDNS:`]; Object.entries(data.dns||{}).forEach(([k,v]) => { if(v?.length) lines.push(`  ${k}: ${v.map(x => typeof x === 'object' ? x.exchange||JSON.stringify(x) : x).join(', ')}`); }); lines.push(`\nSubdomains (${data.subdomainCount}):`); (data.subdomains||[]).slice(0,100).forEach(s => lines.push('  • '+s)); box.textContent = lines.join('\n'); } catch(e){ box.textContent = ''+e.message; } });
   // WebScan
-  $('#btnWebscanRun')?.addEventListener('click', async () => { const mode = $('#webscanMode').value, value = $('#webscanValue').value.trim(); if(!value) return; const box = $('#webscanResult'); box.textContent = '...'; try { const res = await fetch('/api/webscan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode,value,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.error){ box.textContent = ''+data.error; return; } if(mode === 'headers'){ const lines = [`Grade: ${data.grade} (${data.score}/100)`, '']; (data.details||[]).forEach(d => lines.push((d.present ? '' : '')+' '+d.label)); box.textContent = lines.join('\n'); } else { box.textContent = `${data.host}\nIssuer: ${data.issuer||'—'}\nValid until: ${data.validTo||'—'}\nDays left: ${data.daysLeft}\nProtocol: ${data.protocol||'—'}`; } } catch(e){ box.textContent = ''+e.message; } });
+  $('#btnWebscanRun')?.addEventListener('click', async () => { const mode = $('#webscanMode').value, value = $('#webscanValue').value.trim(); if(!value) return; const box = $('#webscanResult'); box.textContent = '...'; try { const res = await fetch('/api/webscan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode,value,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.error){ box.textContent = ''+data.error; return; } if(mode === 'headers'){ const lines = [`Grade: ${data.grade} (${data.score}/100)`, '']; (data.details||[]).forEach(d => lines.push((d.present ? '✓' : '✕')+' '+d.label)); box.textContent = lines.join('\n'); } else { box.textContent = `${data.host}\nIssuer: ${data.issuer||'—'}\nValid until: ${data.validTo||'—'}\nDays left: ${data.daysLeft}\nProtocol: ${data.protocol||'—'}`; } } catch(e){ box.textContent = ''+e.message; } });
   // JWT
   $('#btnJwtRun')?.addEventListener('click', async () => { const token = $('#jwtInput').value.trim(); if(!token) return; const box = $('#jwtResult'); box.textContent = '...'; try { const parts = token.split('.'); if(parts.length !== 3){ box.textContent = 'JWT غير صالح'; return; } const header = JSON.parse(atob(parts[0].replace(/-/g,'+').replace(/_/g,'/'))); const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/'))); const lines = ['Header:', JSON.stringify(header, null, 2), '', 'Payload:', JSON.stringify(payload, null, 2)]; if(payload.exp) lines.push('', 'Expires: ' + new Date(payload.exp*1000).toISOString()); box.textContent = lines.join('\n'); } catch(e){ box.textContent = ''+e.message; } });
   // Hash ID
   $('#btnHashidRun')?.addEventListener('click', () => { const hash = $('#hashidInput').value.trim(); if(!hash) return; const box = $('#hashidResult'); const guesses = []; if(/^[a-f0-9]{32}$/i.test(hash)) guesses.push('MD5'); if(/^[a-f0-9]{40}$/i.test(hash)) guesses.push('SHA-1'); if(/^[a-f0-9]{64}$/i.test(hash)) guesses.push('SHA-256'); if(/^\$2[aby]\$/.test(hash)) guesses.push('bcrypt'); box.textContent = guesses.length ? `${guesses.join(', ')}` : 'نوع غير معروف'; });
   // IP Rep
-  $('#btnIprepCheck')?.addEventListener('click', async () => { const ip = $('#iprepIp').value.trim(); if(!ip) return; const box = $('#iprepResult'); box.textContent = '...'; try { const res = await fetch('/api/iprep',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.notConfigured){ box.textContent = 'قريبًا'; return; } if(data.error){ box.textContent = ''+data.error; return; } const score = data.abuseScore || 0; const icon = score >= 75 ? '' : score >= 25 ? '' : ''; box.textContent = `${icon} ${data.ip}\nAbuse Score: ${score}%\nReports: ${data.totalReports||0}\nISP: ${data.isp||'—'}\nCountry: ${data.countryName||'—'}`; } catch(e){ box.textContent = ''+e.message; } });
+  $('#btnIprepCheck')?.addEventListener('click', async () => { const ip = $('#iprepIp').value.trim(); if(!ip) return; const box = $('#iprepResult'); box.textContent = '...'; try { const res = await fetch('/api/iprep',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip,guestId:window.getGuestId(),token:authGet('aiapp_auth_token')})}); const data = await res.json(); if(data.notConfigured){ box.textContent = 'قريبًا'; return; } if(data.error){ box.textContent = ''+data.error; return; } const score = data.abuseScore || 0; const icon = score >= 75 ? '✕' : score >= 25 ? '!' : '✓'; box.textContent = `${icon} ${data.ip}\nAbuse Score: ${score}%\nReports: ${data.totalReports||0}\nISP: ${data.isp||'—'}\nCountry: ${data.countryName||'—'}`; } catch(e){ box.textContent = ''+e.message; } });
   // Probmath
   $('#btnPmHouseCalc')?.addEventListener('click', () => { const box = $('#pmHouseResult'); const bet = parseFloat($('#pmBet').value), wp = parseFloat($('#pmWinProb').value)/100, po = parseFloat($('#pmPayout').value); if(!(bet>0)||!(wp>=0&&wp<=1)||!(po>0)){ box.textContent = 'أرقام غير صحيحة'; return; } const winAmt = bet*(po-1), lp = 1-wp, ev = wp*winAmt - lp*bet, he = -ev/bet*100; box.textContent = `القيمة المتوقعة: ${ev.toFixed(4)}\nحافة البيت: ${he.toFixed(2)}%\n${ev < 0 ? 'لصالح البيت' : 'لصالحك'}`; });
   $('#btnPmKellyCalc')?.addEventListener('click', () => { const box = $('#pmKellyResult'); const bank = parseFloat($('#pmBankroll').value), p = parseFloat($('#pmKellyProb').value)/100, odds = parseFloat($('#pmKellyOdds').value); if(!(bank>0)||!(p>=0&&p<=1)||!(odds>0)){ box.textContent = 'أرقام غير صحيحة'; return; } const b = odds-1, q = 1-p, k = b > 0 ? ((b*p-q)/b) : -1; if(k <= 0) box.textContent = 'لا ميزة رياضية — 0%'; else box.textContent = `Kelly: ${(k*100).toFixed(2)}%\nالمقترح: ${(bank*k).toFixed(2)}`; });
@@ -3073,7 +3107,7 @@ function wireSecTools(){
     const pFilter = $('#rtpProviderFilter').value; const bFilter = $('#rtpBuyBonusFilter').value;
     const list = HKS_GAMES.filter(g => { if(f && !g.name.toLowerCase().includes(f)) return false; if(pFilter && g.provider !== pFilter) return false; if(bFilter === 'yes' && !g.buy) return false; if(bFilter === 'no' && g.buy) return false; return true; });
     if(!list.length){ box.innerHTML = '<div style="padding:12px;color:var(--text-3);font-size:12px">لا توجد نتائج</div>'; return; }
-    box.innerHTML = list.map(g => `<div class="hks-row" data-rtp="${g.rtp}"><div><div style="font-weight:600;font-size:13px">${g.name} ${g.buy ? '' : ''}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px">${g.provider} · ${volLabel(g.vol)} · ${g.maxWin}</div></div><div style="font-weight:700;color:var(--primary-2);font-family:var(--font-mono);font-size:12px">${g.rtp}%</div></div>`).join('');
+    box.innerHTML = list.map(g => `<div class="hks-row" data-rtp="${g.rtp}"><div><div style="font-weight:600;font-size:13px">${g.name} ${g.buy ? '· Bonus Buy' : ''}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px">${g.provider} · ${volLabel(g.vol)} · ${g.maxWin}</div></div><div style="font-weight:700;color:var(--primary-2);font-family:var(--font-mono);font-size:12px">${g.rtp}%</div></div>`).join('');
     box.querySelectorAll('.hks-row').forEach(row => { row.onclick = () => { $('#rtpSelectedRtp').value = row.getAttribute('data-rtp'); }; });
   }
   const pf = $('#rtpProviderFilter');
@@ -3092,7 +3126,7 @@ function wireSecTools(){
     const box = $('#ctfList'); if(!box) return;
     const solved = JSON.parse(localStorage.getItem('taryam_ctf_solved') || '[]');
     const items = await Promise.all([1,2,3,4].map(async id => ({id, title: CTF_TITLES[id], clue: CTF_CLUES[id], flagHash: await sha256(CTF_FLAGS[id])})));
-    box.innerHTML = items.map(ch => `<div class="ctf-item ${solved.includes(ch.id) ? 'solved' : ''}"><h4>${ch.title} ${solved.includes(ch.id) ? '' : ''}</h4><div style="font-family:var(--font-mono);font-size:12px;margin-bottom:10px;word-break:break-all;color:var(--text-2)">${ch.clue}</div><div style="display:flex;gap:6px"><input type="text" placeholder="TARYAM{...}" data-id="${ch.id}" style="flex:1;font-family:var(--font-mono)"><button class="btn ctf-btn" data-id="${ch.id}">تحقق</button></div></div>`).join('');
+    box.innerHTML = items.map(ch => `<div class="ctf-item ${solved.includes(ch.id) ? 'solved' : ''}"><h4>${ch.title} ${solved.includes(ch.id) ? '✓' : ''}</h4><div style="font-family:var(--font-mono);font-size:12px;margin-bottom:10px;word-break:break-all;color:var(--text-2)">${ch.clue}</div><div style="display:flex;gap:6px"><input type="text" placeholder="TARYAM{...}" data-id="${ch.id}" style="flex:1;font-family:var(--font-mono)"><button class="btn ctf-btn" data-id="${ch.id}">تحقق</button></div></div>`).join('');
     box.querySelectorAll('.ctf-btn').forEach(btn => { btn.onclick = async () => { const id = parseInt(btn.getAttribute('data-id'), 10); const input = box.querySelector(`input[data-id="${id}"]`); const h = await sha256(input.value.trim()); const item = items.find(x => x.id === id); if(h === item.flagHash){ const arr = JSON.parse(localStorage.getItem('taryam_ctf_solved') || '[]'); if(!arr.includes(id)) arr.push(id); localStorage.setItem('taryam_ctf_solved', JSON.stringify(arr)); window.renderCTF(); toast('تحدي مُنجز!', 'success'); } else toast('غير صحيح', 'error'); }; });
   };
   window.renderCTF();
@@ -3128,6 +3162,7 @@ function setupResizer(res, panel, {min, max, key}){
   function onM(e){ mm(e.clientX); }
   res.addEventListener('mousedown', e => { if(window.innerWidth <= 860) return; drag = true; sX = e.clientX; sW = panel.getBoundingClientRect().width; window.addEventListener('mousemove', onM); window.addEventListener('mouseup', up); });
 }
+setupResizer($('#resizer2'), $('#chatcol'), {min:320, max:640, key:'panelWidthChat'});
 setupResizer($('#resizer1'), $('#sidebar'), {min:200, max:420, key:'panelWidthSidebar'});
 
 /* ═══ Command Palette ═══ */
