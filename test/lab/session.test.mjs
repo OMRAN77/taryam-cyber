@@ -27,15 +27,25 @@ function withRound(raw) {
 const RED = withRound(sample('roulette-european.json'));
 const DG = withRound(sample('desert-gold.json'));
 
-// C(n, k) 18^k 19^(n-k) / 37^n exactly.
+// C(n, k) 18^k 19^(n-k) / 37^n exactly: numerators over the common denominator 37^n,
+// with the probability of each k, its cumulative sum and quantiles read off exactly.
 function binomialPmf(n) {
-  const out = [];
+  const den = 37n ** BigInt(n), nums = [];
   let c = 1n;
   for (let k = 0; k <= n; k++) {
-    out.push(new Fraction(c * 18n ** BigInt(k) * 19n ** BigInt(n - k), 37n ** BigInt(n)));
+    nums.push(c * 18n ** BigInt(k) * 19n ** BigInt(n - k));
     c = (c * BigInt(n - k)) / BigInt(k + 1);
   }
-  return out;
+  const p = (k) => new Fraction(nums[k], den).toNumber();
+  const tail = (from) => new Fraction(nums.slice(from).reduce((a, b) => a + b, 0n), den).toNumber();
+  // smallest net 2k - n with P(K <= k) >= q (q has at most 2 decimals)
+  const quantile = (q) => {
+    const need = (BigInt(Math.round(q * 100)) * den + 99n) / 100n;
+    let acc = 0n;
+    for (let k = 0; k <= n; k++) { acc += nums[k]; if (acc >= need) return 2 * k - n; }
+    return n;
+  };
+  return { p, tail, quantile };
 }
 
 test('two-outcome game: the n-round sum is the exact binomial distribution', () => {
@@ -47,7 +57,7 @@ test('two-outcome game: the n-round sum is the exact binomial distribution', () 
     const exact = binomialPmf(n);
     let worstAbs = 0, worstRel = 0;
     for (let k = 0; k < s.N; k++) {
-      const e = k <= n ? exact[k].toNumber() : 0;
+      const e = k <= n ? exact.p(k) : 0;
       worstAbs = Math.max(worstAbs, Math.abs(s.q[k] - e));
       if (e >= 1e-6) worstRel = Math.max(worstRel, Math.abs(s.q[k] - e) / e);
     }
@@ -56,13 +66,11 @@ test('two-outcome game: the n-round sum is the exact binomial distribution', () 
   // Funnel figures for 1000 rounds from the exact binomial: ahead when 2K > 1000.
   const f = sessionFunnel(RED.result.round.pmf, { rounds: 1000, rtp: RED.result.rtp.fraction, sd: RED.result.distribution.sd });
   const ex = binomialPmf(1000);
-  let ahead = new Fraction(0n);
-  for (let k = 501; k <= 1000; k++) ahead = ahead.add(ex[k]);
-  assert.ok(Math.abs(f.pAhead - ahead.toNumber()) < 1e-12, `P(ahead) ${f.pAhead} vs ${ahead.toNumber()}`);
-  assert.ok(Math.abs(f.pEven - ex[500].toNumber()) < 1e-14);
+  const ahead = ex.tail(501);
+  assert.ok(Math.abs(f.pAhead - ahead) < 1e-12, `P(ahead) ${f.pAhead} vs ${ahead}`);
+  assert.ok(Math.abs(f.pEven - ex.p(500)) < 1e-14);
   // Percentiles of net = 2K - 1000 from the exact CDF.
-  const quant = (q) => { let acc = new Fraction(0n); for (let k = 0; k <= 1000; k++) { acc = acc.add(ex[k]); if (acc.toNumber() >= q) return 2 * k - 1000; } return 1000; };
-  assert.deepStrictEqual(f.percentiles.map((p) => p.net), [0.05, 0.25, 0.5, 0.75, 0.95].map(quant));
+  assert.deepStrictEqual(f.percentiles.map((p) => p.net), [0.05, 0.25, 0.5, 0.75, 0.95].map(ex.quantile));
   // Hand arithmetic: expected loss 1000 * (1 - 36/37) = 1000/37 bets; sigma^2 =
   // 4 * 18/37 - (36/37)^2 = 1368/1369, so N* = (1.645 * sqrt(1368/1369) * 37)^2 = 3701.97...
   assert.strictEqual(f.expectedLoss.fraction, '1000/37');
@@ -71,6 +79,10 @@ test('two-outcome game: the n-round sum is the exact binomial distribution', () 
   // The published-in-research figures for this game (median -28, 5-95% band -80..+24,
   // P(ahead) 18.76%) follow from the same binomial.
   assert.deepStrictEqual([f.median, f.percentiles[0].net, f.percentiles[4].net, +(f.pAhead * 100).toFixed(2)], [-28, -80, 24, 18.76]);
+  // The funnel: 8 round counts up to n; at 500 rounds, the exact binomial percentiles.
+  assert.deepStrictEqual(f.funnel.map((p) => p.rounds), [125, 250, 375, 500, 625, 750, 875, 1000]);
+  assert.deepStrictEqual(f.funnel[3].percentiles.map((p) => p.net), [0.05, 0.25, 0.5, 0.75, 0.95].map(binomialPmf(500).quantile));
+  assert.strictEqual(f.funnel[3].mean, -500 / 37);
 });
 
 // Every sequence of reds (+1 bet) and others (-1 bet), 2^n of them, with ruin when

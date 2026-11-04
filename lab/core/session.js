@@ -116,18 +116,20 @@ function sumGrid(xs, ps, n, target = WRAP_TARGET) {
   return { L, bound };
 }
 
-// Distribution of the sum of n rounds (in steps) by FFT powering, or null when the
-// grid would pass `limit`.
-export function sumDistribution(xs, ps, n, { limit = SESSION_GRID_LIMIT } = {}) {
-  const g = sumGrid(xs, ps, n);
-  const N = nextPowerOfTwo(Math.max(2, g.L));
-  if (N > limit) return null;
+// The spectrum of one round on a grid of N points, for powering.
+function roundSpectrum(xs, ps, N) {
   const fft = new Fft(N);
   const re = new Float64Array(N), im = new Float64Array(N);
   for (let i = 0; i < xs.length; i++) re[xs[i] % N] += ps[i];
   fft.forward(re, im);
-  const H = N / 2;
-  for (let k = 0; k <= H; k++) { powC(re[k], im[k], n); re[k] = PR; im[k] = PI; }
+  return { fft, N, re: re.slice(0, N / 2 + 1), im: im.slice(0, N / 2 + 1) };
+}
+// The sum of m rounds from that spectrum: z^m by repeated squaring, inverse FFT,
+// negative rounding noise clipped and the result renormalized.
+function powerSum(spec, m) {
+  const { fft, N } = spec, H = N / 2;
+  const re = new Float64Array(N), im = new Float64Array(N);
+  for (let k = 0; k <= H; k++) { powC(spec.re[k], spec.im[k], m); re[k] = PR; im[k] = PI; }
   for (let k = H + 1; k < N; k++) { re[k] = re[N - k]; im[k] = -im[N - k]; }
   fft.inverse(re, im);
   let clipped = 0, total = 0;
@@ -136,7 +138,22 @@ export function sumDistribution(xs, ps, n, { limit = SESSION_GRID_LIMIT } = {}) 
     total += re[s];
   }
   for (let s = 0; s < N; s++) re[s] /= total;
-  return { q: re, N, wrapBound: g.bound, clipped, renormalizedFrom: total };
+  return { q: re, clipped, renormalizedFrom: total };
+}
+
+// Distribution of the sum of n rounds (in steps) by FFT powering, or null when the
+// grid would pass `limit`.
+export function sumDistribution(xs, ps, n, { limit = SESSION_GRID_LIMIT } = {}) {
+  const g = sumGrid(xs, ps, n);
+  const N = nextPowerOfTwo(Math.max(2, g.L));
+  if (N > limit) return null;
+  const spec = roundSpectrum(xs, ps, N);
+  return { ...powerSum(spec, n), N, wrapBound: g.bound, spec };
+}
+
+// Round counts at which the funnel is drawn: n/8, 2n/8, ..., n (distinct, >= 1).
+export function funnelPoints(n) {
+  return [...new Set(Array.from({ length: 8 }, (_, k) => Math.max(1, Math.round(((k + 1) * n) / 8))))];
 }
 
 // P(the bankroll falls below one bet within n rounds), by DP over the bankroll in
@@ -200,35 +217,40 @@ export function ruinProbability(xs, ps, a, b, n, start, { maxWork = RUIN_WORK_LI
   return { p: Math.min(1, Math.max(0, ruin)), method: 'dp', bigWinShare: big };
 }
 
-// Seeded Monte Carlo of `sessions` sessions of n rounds; S in bankroll steps.
-function monteCarlo(inp, n, start, rng, { sessions } = {}) {
+// Seeded Monte Carlo of `sessions` sessions of n rounds; S in bankroll steps, also
+// kept at the funnel's round counts.
+function monteCarlo(inp, n, start, rng, { sessions, points = [n], onProgress = () => {} } = {}) {
   const A = Number(inp.a), B = Number(inp.b);
   const m = sessions ?? Math.max(2000, Math.min(20000, Math.floor(MC_DRAWS / n)));
   const table = aliasTable(inp.ps);
-  const finals = new Float64Array(m);
+  const at = points.map(() => new Float64Array(m));
   let ruined = 0;
   for (let s = 0; s < m; s++) {
-    let S = 0, dead = false;
+    let S = 0, dead = false, pi = 0;
     for (let j = 1; j <= n; j++) {
       S += inp.xs[table.draw(rng)] * A;
       if (!dead && start !== null && start + S - j * B < B) dead = true;
+      if (j === points[pi]) at[pi++][s] = S;
     }
-    finals[s] = S;
     if (dead) ruined++;
+    if ((s & 255) === 0) onProgress(s / m);
   }
-  return { finals, ruined, sessions: m };
+  return { finals: at[at.length - 1], at, ruined, sessions: m };
 }
 
 const se = (p, m) => Math.sqrt(Math.max(p * (1 - p), 0) / m);
+const GENERATOR = 'xoshiro128** 1.1 (seed via SHA-256), Vose alias table over the whole-round pmf';
 
 // opts: { rounds, budget (bets, number or decimal string; null = no ruin figure),
 //         rtp (fraction string), sd (bets), rng (seeded; needed for Monte Carlo),
-//         seed (recorded), limit, forceMonteCarlo }
+//         seed (recorded), limit, forceMonteCarlo, onProgress }
+// Money is in bets: multiply by the bet to get currency.
 export function sessionFunnel(pmf, opts) {
   const n = Number(opts.rounds);
   if (!Number.isInteger(n) || n < 1 || n > MAX_SESSION_ROUNDS) {
     throw fail(`the number of rounds must be a whole number from 1 to ${MAX_SESSION_ROUNDS.toLocaleString('en-US')}`, `عدد الجولات يجب أن يكون عددًا صحيحًا من 1 إلى ${MAX_SESSION_ROUNDS.toLocaleString('en-US')}`);
   }
+  const onProgress = opts.onProgress || (() => {});
   const inp = sessionInputs(pmf);
   const rtp = Fraction.of(opts.rtp && String(opts.rtp).includes('/') ? new Fraction(...String(opts.rtp).split('/').map(BigInt)) : opts.rtp);
   const edge = new Fraction(1n).sub(rtp);
@@ -237,8 +259,9 @@ export function sessionFunnel(pmf, opts) {
   if (A > SAFE || B > SAFE) throw fail('the lattice is too fine for a session', 'الشبكة أدق من أن تُحسب بها جلسة');
   let start = null;
   if (opts.budget !== null && opts.budget !== undefined && String(opts.budget).trim() !== '') {
-    const bud = Fraction.of(String(opts.budget).trim());
-    if (!(bud.cmp(0) > 0)) throw fail('the budget must be a positive number', 'يجب أن تكون الميزانية عددًا موجبًا');
+    let bud;
+    try { bud = Fraction.of(String(opts.budget).trim()); } catch (e) { bud = null; }
+    if (!bud || !(bud.cmp(0) > 0)) throw fail('the budget must be a positive number', 'يجب أن تكون الميزانية عددًا موجبًا');
     const f = bud.mul(B); // budget in steps of 1/b bet, rounded down (exact for "runs out")
     const steps = f.num / f.den;
     start = steps > BigInt((n + 2) * Number(B)) ? (n + 2) * Number(B) : Number(steps);
@@ -254,37 +277,54 @@ export function sessionFunnel(pmf, opts) {
   out.nStar = e > 0 && sd > 0 ? { z: N_STAR_Z, rounds: Math.ceil((N_STAR_Z * sd / e) ** 2) } : null;
   out.normal = sd > 0 ? { pAhead: normalCdf(-Math.sqrt(n) * e / sd) } : null;
 
-  const toNet = (S) => S / Number(B) - n; // S in bankroll steps
+  const toNet = (S, m) => S / Number(B) - m; // S in bankroll steps after m rounds
+  const points = funnelPoints(n);
+  const meanAt = (m) => rtp.sub(1).mul(m).toNumber();
   const sums = opts.forceMonteCarlo ? null : sumDistribution(inp.xs, inp.ps, n, { limit: opts.limit ?? SESSION_GRID_LIMIT });
   let mc = null;
+  // Percentiles of a lattice pmf q (steps of the round lattice) after m rounds.
+  const quantilesOf = (q, m) => {
+    const pct = [];
+    let acc = 0, pi = 0;
+    for (let s = 0; s < q.length && pi < SESSION_PERCENTILES.length; s++) {
+      acc += q[s];
+      while (pi < SESSION_PERCENTILES.length && acc >= SESSION_PERCENTILES[pi] * (1 - 1e-12)) pct.push({ q: SESSION_PERCENTILES[pi++], net: toNet(s * Number(A), m) });
+    }
+    return pct;
+  };
   if (sums) {
     const q = sums.q;
-    let ahead = 0, even = 0, acc = 0, pi = 0;
-    const pct = [];
+    let ahead = 0, even = 0;
     const nb = BigInt(n) * B;
     for (let s = 0; s < sums.N; s++) {
       const v = BigInt(s) * A; // bankroll steps won
       if (v > nb) ahead += q[s]; else if (v === nb) even += q[s];
-      acc += q[s];
-      while (pi < SESSION_PERCENTILES.length && acc >= SESSION_PERCENTILES[pi] * (1 - 1e-12)) pct.push({ q: SESSION_PERCENTILES[pi++], net: toNet(s * Number(A)) });
     }
+    const pct = quantilesOf(q, n);
+    const funnel = points.map((m, i) => {
+      onProgress(0.6 * (i + 1) / points.length);
+      return { rounds: m, mean: meanAt(m), percentiles: m === n ? pct : quantilesOf(powerSum(sums.spec, m).q, m) };
+    });
     Object.assign(out, {
-      method: 'fft', pAhead: ahead, pEven: even, percentiles: pct, median: pct.find((x) => x.q === 0.5).net,
+      method: 'fft', pAhead: ahead, pEven: even, percentiles: pct, median: pct.find((x) => x.q === 0.5).net, funnel,
       grid: { size: sums.N, wrapBound: sums.wrapBound, clipped: sums.clipped, renormalizedFrom: sums.renormalizedFrom },
     });
   } else {
     if (!opts.rng) throw fail('a seeded generator is needed for Monte Carlo', 'يلزم مولّد ببذرة لمونت كارلو');
-    mc = monteCarlo(inp, n, start, opts.rng);
-    const f = mc.finals.slice().sort();
+    mc = monteCarlo(inp, n, start, opts.rng, { points, onProgress: (v) => onProgress(0.9 * v) });
+    const m = mc.sessions;
     const nb = n * Number(B);
     let ahead = 0, even = 0;
-    for (const S of f) { if (S > nb) ahead++; else if (S === nb) even++; }
-    const m = mc.sessions;
-    const at = (q) => f[Math.min(m - 1, Math.max(0, Math.ceil(q * m) - 1))];
-    const pct = SESSION_PERCENTILES.map((q) => ({ q, net: toNet(at(q)) }));
+    for (const S of mc.finals) { if (S > nb) ahead++; else if (S === nb) even++; }
+    const pctOf = (arr, rounds) => {
+      const f = arr.slice().sort();
+      return SESSION_PERCENTILES.map((q) => ({ q, net: toNet(f[Math.min(m - 1, Math.max(0, Math.ceil(q * m) - 1))], rounds) }));
+    };
+    const funnel = points.map((r, i) => ({ rounds: r, mean: meanAt(r), percentiles: pctOf(mc.at[i], r) }));
+    const pct = funnel[funnel.length - 1].percentiles;
     Object.assign(out, {
-      method: 'mc', sessions: m, generator: 'xoshiro128** (seeded), Vose alias table',
-      pAhead: ahead / m, pAheadSe: se(ahead / m, m), pEven: even / m, percentiles: pct, median: pct.find((x) => x.q === 0.5).net,
+      method: 'mc', sessions: m, generator: GENERATOR,
+      pAhead: ahead / m, pAheadSe: se(ahead / m, m), pEven: even / m, percentiles: pct, median: pct.find((x) => x.q === 0.5).net, funnel,
     });
   }
   // Ruin.
@@ -294,12 +334,13 @@ export function sessionFunnel(pmf, opts) {
     else {
       if (!mc) {
         if (!opts.rng) throw fail('a seeded generator is needed for Monte Carlo', 'يلزم مولّد ببذرة لمونت كارلو');
-        mc = monteCarlo(inp, n, start, opts.rng);
+        mc = monteCarlo(inp, n, start, opts.rng, { onProgress: (v) => onProgress(0.6 + 0.4 * v) });
         out.sessions = mc.sessions;
-        out.generator = 'xoshiro128** (seeded), Vose alias table';
+        out.generator = GENERATOR;
       }
       out.ruin = { p: mc.ruined / mc.sessions, se: se(mc.ruined / mc.sessions, mc.sessions), method: 'mc', startSteps: start, sessions: mc.sessions };
     }
   } else out.ruin = null;
+  onProgress(1);
   return out;
 }
