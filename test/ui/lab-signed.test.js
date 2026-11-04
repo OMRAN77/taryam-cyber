@@ -120,8 +120,17 @@ test('signed report: verifies in the Verify tab, a flipped byte does not, the ke
   const image = latin.indexOf('stream\n', latin.indexOf('/DCTDecode')) + 7;
   v = await verify(page, flip(pdf, image + 1000));
   assert.strictEqual(v.status, 'invalid', v.text);
-  // Back to the original: valid again.
-  assert.strictEqual((await verify(page, pdf)).status, 'valid');
+  // Back to the original, this time dropped on the panel's text: valid again.
+  await page.evaluate(() => { document.querySelector('#res-verify').replaceChildren(); });
+  const dropped = await page.evaluateHandle((b64) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], 'dropped.pdf', { type: 'application/pdf' }));
+    return dt;
+  }, pdf.toString('base64'));
+  await page.dispatchEvent('#panel-verify > p', 'drop', { dataTransfer: dropped });
+  v = await readVerdict(page);
+  assert.strictEqual(v.status, 'valid', v.text);
+  assert.match(await page.textContent('#name-verify'), /^dropped\.pdf/);
 
   // Not a PDF, and a PDF that is not a lab report: refused with a message.
   v = await verify(page, Buffer.from('bet,win\n1,0\n'), 'log.csv');

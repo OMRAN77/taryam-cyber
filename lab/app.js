@@ -645,10 +645,14 @@ function init() {
   $('#run-report').addEventListener('click', runReport);
 
   $('#verifyFile').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) await loadVerifyFile(f); });
-  const drop = $('#verify-drop');
-  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('drag'); });
-  drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
-  drop.addEventListener('drop', async (e) => {
+  // A PDF dropped anywhere on the Verify panel is checked (the browser would
+  // otherwise open it in place of the lab); the originals picker keeps its own drop.
+  const panel = $('#panel-verify'), drop = $('#verify-drop');
+  const ownDrop = (e) => e.target && e.target.id === 'verifyOriginals';
+  panel.addEventListener('dragover', (e) => { if (ownDrop(e)) return; e.preventDefault(); drop.classList.add('drag'); });
+  panel.addEventListener('dragleave', (e) => { if (!panel.contains(e.relatedTarget)) drop.classList.remove('drag'); });
+  panel.addEventListener('drop', async (e) => {
+    if (ownDrop(e)) return;
     e.preventDefault();
     drop.classList.remove('drag');
     const f = e.dataTransfer && e.dataTransfer.files[0];
