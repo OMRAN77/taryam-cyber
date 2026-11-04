@@ -15,13 +15,7 @@ const { resolvePublic, parseTarget, BlockedTargetError, TLS_PORTS } = require('.
 const MAX_REDIRECTS = 3;
 
 const DAILY_LIMIT = 40;
-const { quotaEnabled, isOwnerToken } = require('./_quota');
-const { clientIp } = require('./_client');
-const store = require('./_store');
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
+const scanQuota = require('./_scancounter');
 
 function normalizeUrl(input) {
   let u = String(input || '').trim();
@@ -161,41 +155,24 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // The counter is keyed on the caller address the platform sets, never on a body
-    // field: a client-chosen guestId is a free pass to an unlimited quota. The
-    // counter lives at an HMAC-derived, encrypted path (see _store.js) so it is not
-    // a public record that reveals who scanned what.
-    const today = todayStr();
-    // Daily per-tool limit; never for the owner's account or a QUOTA=off deployment (api/_quota.js).
-    const limited = quotaEnabled() && !isOwnerToken(body.token);
-    let usage = { date: today, count: 0 };
-    if (limited) {
-      const id = clientIp(req);
-      if (!id) { res.status(403).json({ error: 'Cannot determine caller address' }); return; }
-      let counterPath;
-      try {
-        counterPath = store.secretPath('webscan-usage', 'ip:' + id);
-        usage = await store.readSecret(counterPath);
-      } catch (e) {
-        res.status(503).json({ error: 'الخدمة غير مهيأة للمحاسبة (AUTH_SECRET)' });
-        return;
-      }
-      if (!usage || usage.date !== today) usage = { date: today, count: 0 };
-      if (usage.count >= DAILY_LIMIT) {
-        res.status(429).json({ error: 'limit', message: 'وصلت للحد اليومي المسموح لهذه الأداة (' + DAILY_LIMIT + ' فحوصات/يوم). حاول غدًا.' });
-        return;
-      }
-      usage.count += 1;
-      // Best-effort: one uncounted scan is cheaper than failing a working request.
-      try { await store.writeSecret(counterPath, usage); } catch (e) {}
+    // Daily per-tool limit keyed on the caller address; never for the owner's account
+    // or a QUOTA=off deployment (see _scancounter.js).
+    let quota;
+    try {
+      quota = await scanQuota.consume(req, { namespace: 'webscan', limit: DAILY_LIMIT, token: body.token });
+    } catch (e) {
+      res.status(503).json({ error: 'الخدمة غير مهيأة للمحاسبة (AUTH_SECRET)' });
+      return;
     }
+    if (quota.noAddress) { res.status(403).json({ error: 'Cannot determine caller address' }); return; }
+    if (!quota.allowed) { scanQuota.limitResponse(res, DAILY_LIMIT); return; }
 
     if (mode === 'headers') {
       const result = await scanHeaders(urlStr);
-      res.status(200).json({ mode, ...result, remaining: limited ? DAILY_LIMIT - usage.count : null });
+      res.status(200).json({ mode, ...result, remaining: quota.remaining });
     } else {
       const result = await scanSsl(urlStr);
-      res.status(200).json({ mode, ...result, remaining: limited ? DAILY_LIMIT - usage.count : null });
+      res.status(200).json({ mode, ...result, remaining: quota.remaining });
     }
   } catch (e) {
     // A refused target is the caller's problem, not a server fault.
