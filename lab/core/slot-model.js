@@ -502,7 +502,8 @@ export function canonicalJson(value) {
 //   for none); a key left out uses the base game's.
 const MAX_WAYS_ROWS = 10, MAX_CELL_MULTIPLIER = 1000, MAX_BET_COST = 1000000;
 // Every single-spin win (in model units) stays below this, so the engines' integer
-// sums and the distribution keys (win * 2 + trigger) stay exact as JS numbers.
+// sums and the pmf keys (win * 2 + trigger, slot-exact.js spinPmf) stay exact as JS
+// numbers; ways-exact.js keeps the win and the scatter count apart (no packed key).
 export const WAYS_MAX_UNITS = 2 ** 50;
 export const MULTIPLIER_STRATEGIES = ['symbol', 'board', 'global'];
 
@@ -579,6 +580,10 @@ function waysHeights(rowsRaw, heightsRaw, sets, [wa, we]) {
       return row.map((v) => { const w = jointWeight(v, `${ra}، الموقع ${p + 1}`, `${re}, stop ${p + 1}`); total += w; return w; });
     });
     if (total === 0n) throw err(`${ra}: كل أوزان الجدول أصفار`, `${re}: every weight in the table is 0`);
+    // A height listed with weight 0 at every stop never shows: it would count in the max
+    // ways and the scatter bounds, so it is removed instead (as for a weight of 0).
+    const dead = rows.find((h, j) => joint.every((row) => row[j] === 0n));
+    if (dead !== undefined) throw err(`${ra}: الارتفاع ${dead} وزنه 0 في كل المواقع فلا يظهر أبدًا؛ احذفه من rows ومن الجدول`, `${re}: height ${dead} has weight 0 at every stop, so it never shows; remove it from rows and from the table`);
     return { rows, weights: null, joint };
   });
 }

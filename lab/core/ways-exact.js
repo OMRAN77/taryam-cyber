@@ -176,7 +176,9 @@ function makeContext(model) {
 
 // What the engines use of one window: the scatter count and, per paying symbol j
 // that runs through it (shows j or a wild; on reel 1 per wildStartsWin), its count
-// element e, the element without wild cells (pure), the plain count and the board sum.
+// element e, e again if the window has no wild cell and 0 otherwise (pure: a win of j
+// "uses a wild", as a line win does, when any reel of its run shows a wild), the plain
+// count and the board sum.
 function windowInfo(ctx, cells, weight, first) {
   const { model, P, payIndex, alg } = ctx;
   const { cellBase, cellMult, strategy, wildStartsWin } = model.ways;
@@ -191,6 +193,7 @@ function windowInfo(ctx, cells, weight, first) {
     }
   }
   const alive = [], e = new Array(P).fill(null), pure = new Array(P).fill(null);
+  const noWild = wn === 0;
   const cnt = new Int32Array(P), mx = new Int32Array(P);
   let mask = 0;
   for (let j = 0; j < P; j++) {
@@ -202,13 +205,12 @@ function windowInfo(ctx, cells, weight, first) {
       const a = n[j] + wn, M = x[j] + wx;
       cnt[j] = a; mx[j] = M;
       e[j] = [BigInt(a), BigInt(a * M), M === 0 ? BigInt(a) : 0n];
-      pure[j] = [BigInt(n[j]), BigInt(n[j] * x[j]), x[j] === 0 ? BigInt(n[j]) : 0n];
     } else {
       const c = strategy === 'symbol' ? m[j] + wm : n[j] + wn;
       cnt[j] = c;
       e[j] = [BigInt(c)];
-      pure[j] = [BigInt(strategy === 'symbol' ? m[j] : n[j])];
     }
+    pure[j] = noWild ? e[j] : new Array(alg.d).fill(0n);
   }
   return { w: weight, sc, alive, mask, e, pure, cnt, mx, alg };
 }
@@ -447,14 +449,19 @@ export function waysSource(model, src, { triggerAt = null, hits = true, onProgre
     for (let k = 1; k <= N; k++) {
       if (!pays[j][k] || !hitsK[j][k]) continue;
       const sym = model.ways.paying[j], pay = model.waysPays[sym][k];
-      par.push({ sym, count: k, wildAssisted: false, pay, combos: pureC[j][k], hits: hitsK[j][k] });
-      par.push({ sym, count: k, wildAssisted: true, pay, combos: combos[j][k] - pureC[j][k], hits: 0n });
+      // payShown: the paytable's pay (units), before the global multiplier that pay holds.
+      const payShown = pay / model.ways.globalMultiplier;
+      par.push({ sym, count: k, wildAssisted: false, pay, payShown, combos: pureC[j][k], hits: hitsK[j][k] });
+      par.push({ sym, count: k, wildAssisted: true, pay, payShown, combos: combos[j][k] - pureC[j][k], hits: 0n });
     }
   }
   return {
     mix: prep.mix, total, par, sd: SD,
     moments: { s1, s2, sJ, sXJ, hits: hitsW },
     tuples: prep.tuples.length,
+    // Per reel set, each reel's total window weight (heights x stops, or the joint table),
+    // and the top reel's total weight: a set's cycle is their product.
+    reelTotals: prep.sets.map((st) => st.reelTotals), topTotal: src.top ? prep.U : null,
   };
 }
 
@@ -471,9 +478,13 @@ export function waysEntries(model, src, { cap, maxStates = 300000, maxWork = 600
   const prep = prepareSource(ctx, src);
   const can = new Array(N + 1).fill(false).map(() => new Uint8Array(P));
   for (let j = 0; j < P; j++) for (let i = N - 1; i >= 0; i--) can[i][j] = can[i + 1][j] || paysN[j][i + 1] > 0 ? 1 : 0;
-  const tooLarge = () => new ModelError(
+  // The closed form gives the hit frequency only through the bit-mask DP (P <= 16).
+  const tooLarge = () => (P <= MAX_HIT_SYMBOLS ? new ModelError(
     'التوزيع الكامل لهذه اللعبة كبير جدًا للحساب الدقيق (عدد الحالات تجاوز الحد). RTP والتباين ونسبة الفوز ما زالت دقيقة بالصيغة المغلقة؛ التوزيع متروك لمحاكاة مونت كارلو.',
-    'The full distribution of this game is too large to compute exactly (state limit exceeded). RTP, variance and hit frequency are still exact (closed form); the distribution is left to Monte Carlo.');
+    'The full distribution of this game is too large to compute exactly (state limit exceeded). RTP, variance and hit frequency are still exact (closed form); the distribution is left to Monte Carlo.')
+    : new ModelError(
+      'التوزيع الكامل لهذه اللعبة كبير جدًا للحساب الدقيق (عدد الحالات تجاوز الحد). RTP والتباين ما زالا دقيقين بالصيغة المغلقة؛ أما نسبة الفوز فغير متاحة هنا (أكثر من 16 رمزًا دافعًا)، فهي والتوزيع متروكان لمحاكاة مونت كارلو.',
+      'The full distribution of this game is too large to compute exactly (state limit exceeded). RTP and variance are still exact (closed form); the hit frequency is not available here (more than 16 paying symbols), so it and the distribution are left to Monte Carlo.'));
   // Windows of a reel variant grouped by what the pass reads from them.
   const groupsOf = (v) => {
     if (v.groups) return v.groups;
@@ -488,7 +499,9 @@ export function waysEntries(model, src, { cap, maxStates = 300000, maxWork = 600
     return (v.groups = [...map.values()]);
   };
   const paid = (j, k, prod, ms) => { const pay = paysN[j][k]; return pay ? pay * prod * (board ? Math.max(1, ms) : 1) : 0; };
-  const merged = new Map();
+  // Final (win, scatter count) pairs: one map of win -> weight per capped scatter count,
+  // so no key mixes the two (a win * 128 + count key passed 2^53 for wins near 2^50).
+  const merged = Array.from({ length: cap + 1 }, () => new Map());
   const steps = prep.sets.length * prep.tuples.length;
   // Each (set, tuple) gets its share of the work budget, so a game far too large stops
   // within its first pass instead of after all of them.
@@ -539,16 +552,17 @@ export function waysEntries(model, src, { cap, maxStates = 300000, maxWork = 600
       for (const st of states.values()) {
         let delta = 0;
         for (let q = 0; q < st.run.length; q += 3) delta += paid(st.run[q], N, st.run[q + 1], st.run[q + 2]);
+        const bySc = merged[st.sc];
         for (const [acc, w] of st.settled) {
-          const key = (acc + delta) * 128 + st.sc;
-          merged.set(key, (merged.get(key) || 0n) + w * F);
+          const win = acc + delta;
+          bySc.set(win, (bySc.get(win) || 0n) + w * F);
         }
       }
       onProgress(++step / steps);
     }
   });
   const out = [];
-  for (const [key, count] of merged) out.push({ lineWin: Math.floor(key / 128), scat: key % 128, count });
+  merged.forEach((bySc, scat) => { for (const [lineWin, count] of bySc) out.push({ lineWin, scat, count }); });
   return out;
 }
 

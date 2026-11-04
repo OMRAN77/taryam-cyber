@@ -85,7 +85,9 @@ function boards(raw, fsMode = false) {
   return { list: out, total: sumSets * allTot * topTot };
 }
 
-// The win of one board in total bets, from the rules (README / slot-model.js comments).
+// The win of one board in total bets, from the rules (README / slot-model.js comments),
+// and wildWin: the part of it from symbol wins that use a wild (a wild cell on a reel of
+// the run), as a line win "uses a wild".
 function payBoard(raw, cells) {
   const wild = raw.wild ? (typeof raw.wild === 'string' ? raw.wild : raw.wild.symbol) : null;
   const scatter = raw.scatter ? raw.scatter.symbol : null;
@@ -95,14 +97,15 @@ function payBoard(raw, cells) {
   const strategy = raw.multiplierStrategy || 'symbol';
   const betCost = raw.betCost || 1;
   const G = raw.globalMultiplier || 1;
-  let win = new Fraction(0n);
+  let win = new Fraction(0n), wildWin = new Fraction(0n);
   for (const [s, pays] of Object.entries(raw.paytable)) {
     if (s === wild || s === scatter) continue;
-    let ways = 1n, msum = 0, k = 0;
+    let ways = 1n, msum = 0, k = 0, usesWild = false;
     for (let i = 0; i < cells.length; i++) {
       const match = cells[i].filter((x) => baseOf(x) === s || baseOf(x) === wild);
       if (!match.length) break;
       if (i === 0 && raw.wildStartsWin === false && !cells[0].some((x) => baseOf(x) === s)) break;
+      if (match.some((x) => baseOf(x) === wild)) usesWild = true;
       if (strategy === 'symbol') ways *= big(match.reduce((a, x) => a + multOf(x), 0));
       else ways *= big(match.length);
       if (strategy === 'board') msum += match.reduce((a, x) => a + (multOf(x) > 1 ? multOf(x) : 0), 0);
@@ -112,14 +115,16 @@ function payBoard(raw, cells) {
     const pay = Fraction.of(pays[k - 1] || 0);
     const mult = strategy === 'board' ? Math.max(1, msum) : strategy === 'global' ? G : 1;
     win = win.add(pay.mul(ways).mul(mult));
+    if (usesWild) wildWin = wildWin.add(pay.mul(ways).mul(mult));
   }
   win = win.div(betCost); // coins -> total bets
+  wildWin = wildWin.div(betCost);
   const sc = cells.flat().filter((x) => x === scatter).length;
   if (scatter && sc > 0 && raw.scatter.pays) {
     const p = raw.scatter.pays;
     win = win.add(Fraction.of(p[Math.min(sc, p.length) - 1] || 0));
   }
-  return { win, sc };
+  return { win, sc, wildWin };
 }
 
 // Exact moments and distribution of one source by enumeration.
@@ -716,4 +721,122 @@ test('the ways sample: exact RTP equals the direct per-symbol computation; max w
   assert.ok(r.distribution.hitFrequency.value > 0.5);
   const json = JSON.parse(fs.readFileSync(new URL('../../lab/samples/oasis-caravan-ways.json', import.meta.url), 'utf8'));
   assert.deepStrictEqual(json, oasisCaravanWays, 'lab/samples.js matches the JSON (scripts/make-lab-samples.mjs)');
+});
+
+// ---------------- review fixes ----------------
+test('wins between 2^46 and 2^50 units: the full distribution keeps every scatter count (exact keys)', () => {
+  const X1000 = { X: { symbol: 'W', multiplier: 1000 } };
+  const models = [
+    // 3 reels x 3 rows, X a 1000x wild (symbol strategy), free spins on 5 scatters and no
+    // scatter pays. The board X S S | X S S | X X S has 5 scatters (a trigger) and A runs 3
+    // reels with 1000 x 1000 x 2000 ways x 40000 = 8 x 10^13 units, above 2^46
+    // (7.04 x 10^13) and below the 2^50 limit: its trigger flag must survive.
+    { evaluation: 'ways', rows: 3, reels: [['X', 'S', 'S', 'A'], ['X', 'S', 'S', 'A'], ['X', 'X', 'S', 'A']], paytable: { A: [0, 0, 40000] },
+      wild: { symbol: 'W' }, multiplierSymbols: X1000, scatter: { symbol: 'S', freeSpins: { trigger: 5, spins: 1, multiplier: 1 } } },
+    // 4 reels x 2 rows with scatter pays: windows X X count 2000 each for A and B.
+    { evaluation: 'ways', rows: 2, reels: Array.from({ length: 4 }, () => ['A', 'X', 'X', 'S', 'B']), paytable: { A: [0, 0, 0, 50], B: [0, 0, 1, 2] },
+      wild: { symbol: 'W' }, multiplierSymbols: X1000, scatter: { symbol: 'S', pays: [0, 1, 2] } },
+    // Six decimals (scale 10^6): A x2 pays 10^9 total bets = 10^15 units; scatter pays.
+    { evaluation: 'ways', rows: 1, reels: [['A', 'S', 'B'], ['A', 'S', 'B'], ['A', 'S', 'B']], paytable: { A: [0, 1000000000, 0], B: [0, 0, 0.000001] }, scatter: { symbol: 'S', pays: [1, 2, 3] } },
+  ];
+  for (const raw of models) {
+    const m = normalizeModel(raw);
+    const b = bruteRound(raw);
+    // The premise: the largest single-spin win (brute force) is above 2^46 units.
+    assert.ok(b.base.max.mul(BigInt(m.totalBetUnits)).cmp(2n ** 46n) > 0, 'max win above 2^46 units');
+    const r = analyzeExact(m);
+    assert.strictEqual(r.distribution.closedForm, undefined, 'the full distribution path');
+    assertMatches(r, b, 'large wins');
+    assert.deepStrictEqual(pmfList(enginePmf(r)), b.base.dist);
+    assert.strictEqual(r.distribution.maxWin.base, b.base.max.toNumber());
+  }
+});
+
+test('joint (stop, height) table: a height with weight 0 at every stop is rejected (it would count in max ways)', () => {
+  const raw = { evaluation: 'ways', rows: 1, reels: [['A', 'B', 'A'], ['A', 'B'], ['B', 'A']], heights: [{ rows: [1, 5], joint: [[1, 0], [1, 0], [1, 0]] }, null, null], paytable: { A: [0, 1, 2], B: [0, 1, 2] } };
+  assert.throws(() => normalizeModel(raw), (e) => e instanceof ModelError && /height 5/.test(e.en) && e.ar.includes('الارتفاع 5'));
+  // Without it every reel shows 1 row: max ways 1 x 1 x 1 = 1.
+  assert.strictEqual(analyzeExact(normalizeModel({ ...raw, heights: [{ rows: [1], joint: [[1], [1], [1]] }, null, null] })).model.ways.base.maxWays, '1');
+  // A 0 at some stops only stays allowed: height 2 shows at stop 2 alone, so max ways 2 x 1 x 1 = 2.
+  const some = { ...raw, heights: [{ rows: [1, 2], joint: [[1, 0], [1, 3], [1, 0]] }, null, null] };
+  const r = analyzeExact(normalizeModel(some));
+  assert.strictEqual(r.model.ways.base.maxWays, '2');
+  assertMatches(r, bruteRound(some), 'zeros at some stops');
+});
+
+test('too large: the message says the hit frequency is exact only when the closed form gives it (16 paying symbols or fewer)', () => {
+  const game = (n) => {
+    const s = Array.from({ length: n }, (_, i) => 'S' + i);
+    return { evaluation: 'ways', rows: 1, reels: [s, s.slice().reverse(), s.slice(3).concat(s.slice(0, 3))], paytable: Object.fromEntries(s.map((x, i) => [x, [0, 0, 1 + i]])) };
+  };
+  const r17 = analyzeExact(normalizeModel(game(17)), { maxStates: 1 });
+  assert.strictEqual(r17.distribution.hitFrequency, null);
+  assert.ok(!r17.distributionError.en.includes('hit frequency are still exact') && r17.distributionError.en.includes('hit frequency is not available'), r17.distributionError.en);
+  assert.ok(!r17.distributionError.ar.includes('ونسبة الفوز ما زالت دقيقة') && r17.distributionError.ar.includes('نسبة الفوز فغير متاحة'), r17.distributionError.ar);
+  const r16 = analyzeExact(normalizeModel(game(16)), { maxStates: 1 });
+  assert.strictEqual(r16.distribution.hitFrequency.fraction, bruteRound(game(16)).hit.toString());
+  assert.ok(r16.distributionError.en.includes('hit frequency are still exact'));
+});
+
+test('global strategy: the symbol table shows the paytable pay; the global multiplier counts once, in the RTP', () => {
+  // 2 reels ['A', 'B'] of 1 row: A A shows with probability 1/4 and pays 2 coins x 1 way
+  // x 3 = 6 coins, so RTP = 6 / 4 = 3/2, and the table lists the paytable's 2.
+  const r = analyzeExact(normalizeModel({ evaluation: 'ways', rows: 1, reels: [['A', 'B'], ['A', 'B']], paytable: { A: [0, 2] }, multiplierStrategy: 'global', globalMultiplier: 3 }));
+  assert.strictEqual(r.rtp.fraction, '3/2');
+  const a = r.symbols.find((s) => s.symbol === 'A').byCount[0];
+  assert.deepStrictEqual([a.pay, a.probabilityPerLine.fraction, a.averageWays.fraction, a.rtp.fraction], [2, '1/4', '1', '3/2']);
+  // Every row of a bigger game lists its paytable entry.
+  const g = { ...clone(MULT), multiplierStrategy: 'global', globalMultiplier: 3 };
+  for (const s of analyzeExact(normalizeModel(g)).symbols) for (const bc of s.byCount) assert.strictEqual(bc.pay, g.paytable[s.symbol][bc.count - 1], s.symbol + ' x' + bc.count);
+});
+
+test('"of which wild-assisted" for ways: the wins that use a wild, as for lines (brute force)', () => {
+  // Enumerating the 36 boards of this game: ways RTP 208/9, of which the symbol wins
+  // with a wild on a reel of their run total 45/2 (the ways through a wild cell alone
+  // would be 176/9, the figure before the fix).
+  const raw = { evaluation: 'ways', rows: 2, reels: [['A', 'W', 'B'], ['A', 'B', 'W', 'A'], ['B', 'A', 'W']], paytable: { A: [0, 0, 6], B: [0, 2, 4] }, wild: 'W' };
+  const r = analyzeExact(normalizeModel(raw));
+  assert.strictEqual(r.rtp.fraction, '208/9');
+  assert.strictEqual(r.contributions.wildAssistedLines.fraction, '45/2');
+  // Brute force (payBoard's wildWin) for each strategy, the reel-1 rule and a top reel.
+  const bruteWild = (g) => {
+    const { list, total } = boards(g);
+    return list.reduce((a, bd) => a.add(payBoard(g, bd.cells).wildWin.mul(bd.w)), new Fraction(0n)).div(total);
+  };
+  const cases = [raw, clone(BASE), { ...clone(BASE), wildStartsWin: false }];
+  for (const strategy of ['symbol', 'board', 'global']) {
+    cases.push({ ...clone(MULT), multiplierStrategy: strategy, ...(strategy === 'global' ? { globalMultiplier: 3 } : {}), topReel: { reel: ['W3', 'A', 'B', 'A5', 'C'], covers: [1, 2] } });
+  }
+  for (const g of cases) assert.strictEqual(analyzeExact(normalizeModel(g)).contributions.wildAssistedLines.fraction, bruteWild(g).toString(), g.multiplierStrategy || 'symbol');
+});
+
+test('weighted ways model: per-reel totals count the windows (heights x stops, joint table) and multiply to the cycle', () => {
+  // Reel 1: stop weights 1 + 2 + 3 = 6 times heights 1 and 2 weighing 1 + 3 = 4 -> 24; reel 2:
+  // the joint table's sum 1 + 5 + 2 + 0 + 7 + 1 = 16; reel 3: 3 stops of height 2 -> 3.
+  // 24 x 16 x 3 = 1152. A top reel weighing 1 + 2 + 4 = 7 makes it 1152 x 7 = 8064.
+  const raw = { evaluation: 'ways', reels: [['A', 'B', 'W'], ['A', 'B', 'C'], ['C', 'A', 'B']], weights: [[1, 2, 3], null, null],
+    heights: [[{ rows: 1, weight: 1 }, { rows: 2, weight: 3 }], { rows: [1, 2], joint: [[1, 5], [2, 0], [7, 1]] }, 2], paytable: { A: [0, 1, 3], B: [0, 2, 5], C: [0, 0, 4] }, wild: 'W' };
+  const r = analyzeExact(normalizeModel(raw));
+  assert.deepStrictEqual(r.model.reelSets[0].reelTotals, ['24', '16', '3']);
+  assert.strictEqual(r.model.totalWeight, '1152');
+  assert.strictEqual(r.model.reelSets[0].topReelTotal, undefined);
+  assert.strictEqual(r.rtp.fraction, bruteRound(raw).rtp.toString());
+  const top = { ...raw, topReel: { reel: ['A', 'W', 'C'], weights: [1, 2, 4], covers: [2, 3] } };
+  const r2 = analyzeExact(normalizeModel(top));
+  assert.deepStrictEqual([r2.model.reelSets[0].reelTotals, r2.model.reelSets[0].topReelTotal, r2.model.totalWeight], [['24', '16', '3'], '7', '8064']);
+  assert.strictEqual(r2.rtp.fraction, bruteRound(top).rtp.toString());
+});
+
+test('progress moves during the ways closed form, before the distribution', () => {
+  const g = clone(BASE);
+  g.topReel = { reel: ['A', 'W', 'C', 'S', 'B', 'Z', 'A'], covers: [2, 3] };
+  // A state limit of 1 stops the distribution at once: every call is the closed form's, in (0, 0.5].
+  const calls = [];
+  assert.strictEqual(analyzeExact(normalizeModel(g), { maxStates: 1, onProgress: (p) => calls.push(p) }).distribution.closedForm, true);
+  assert.ok(calls.length >= 2 && calls.every((p) => p > 0 && p <= 0.5) && calls.at(-1) === 0.5, calls.join(' '));
+  // The whole run (with free spins on their own heights) rises to 1.
+  g.scatter.freeSpins = { trigger: 2, spins: 3, multiplier: 2, heights: [1, 2, 1, 1] };
+  const all = [];
+  analyzeExact(normalizeModel(g), { onProgress: (p) => all.push(p) });
+  assert.ok(all.every((p, i) => i === 0 || p >= all[i - 1]) && all.at(-1) === 1 && all.some((p) => p > 0.25 && p <= 0.5), all.join(' '));
 });

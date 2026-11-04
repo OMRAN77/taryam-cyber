@@ -307,6 +307,12 @@ function setsInfo(sets) {
   }));
 }
 
+// Ways (P0-6): a reel's total weight is that of its windows (height x stop weights, or
+// the joint table), and the top reel's total (when there is one) multiplies the cycle.
+function waysSetsInfo(sets, src) {
+  return setsInfo(sets).map((s, r) => ({ ...s, reelTotals: src.reelTotals[r].map(String), ...(src.topTotal !== null ? { topReelTotal: src.topTotal.toString() } : {}) }));
+}
+
 const frac = (f) => ({ fraction: f.toString(), value: f.toNumber(), percent: f.toPercent(6) });
 
 function spinMoments(model, entries, triggerCounts) {
@@ -360,10 +366,15 @@ export function analyzeExact(model, opts = {}) {
   // Models built without reel sets (older callers) have one unweighted set.
   const baseSets = model.reelSets || [{ weight: 1n, reels: model.reels, weights: null }];
   const fsSets = fs ? fs.reelSets || (fs.sameReels ? baseSets : [{ weight: 1n, reels: fs.reels, weights: null }]) : null;
+  const progress = opts.onProgress || (() => {});
+  // Ways: the closed forms fill the first half of the progress bar and the distribution
+  // the second, each split between the base game and free spins on other reels.
+  const half = fs && !fs.sameReels ? 0.25 : 0.5;
+  const span = (from, width) => (p) => progress(from + p * width);
 
   // Exact RTP from the per-line tables and the scatter convolution. Counts are
   // weights over a cycle of `total` (the number of combinations when unweighted).
-  const base = ways ? waysSource(model, model.ways.base, { triggerAt: fs ? fs.trigger : null }) : sourcePar(model, baseSets);
+  const base = ways ? waysSource(model, model.ways.base, { triggerAt: fs ? fs.trigger : null, onProgress: span(0, half) }) : sourcePar(model, baseSets);
   const total = base.total;
   const par = base.par; // combos summed over every line
   const lineSum = par.reduce((a, o) => a + o.combos * BigInt(o.pay), 0n); // all lines, units
@@ -374,7 +385,7 @@ export function analyzeExact(model, opts = {}) {
   let fsInfo = null;
   let fsEV = new Fraction(0n); // expected free-spin win per trigger, units
   let fsSpinEV = null, pRetrig = new Fraction(0n);
-  const fsSrc = fs ? (fs.sameReels ? base : ways ? waysSource(model, model.ways.fs, { triggerAt: fs.retrigger ? fs.trigger : null, hits: false }) : sourcePar(model, fsSets)) : null;
+  const fsSrc = fs ? (fs.sameReels ? base : ways ? waysSource(model, model.ways.fs, { triggerAt: fs.retrigger ? fs.trigger : null, hits: false, onProgress: span(0.25, 0.25) }) : sourcePar(model, fsSets)) : null;
   const fsTotal = fs ? fsSrc.total : 1n;
   if (fs) {
     const fLine = fsSrc.par.reduce((a, o) => a + o.combos * BigInt(o.pay), 0n);
@@ -405,7 +416,9 @@ export function analyzeExact(model, opts = {}) {
     const s = symbols.get(name);
     const v = o.combos * BigInt(o.pay);
     s.sum += v;
-    const bc = s.byCount.get(o.count) || { count: o.count, combos: 0n, pay: o.pay / scale, sum: 0n, hits: 0n };
+    // Ways under the global strategy: the table shows the paytable's pay (payShown), the
+    // global multiplier being listed with the rules; the sums use the paid amount.
+    const bc = s.byCount.get(o.count) || { count: o.count, combos: 0n, pay: (o.payShown ?? o.pay) / scale, sum: 0n, hits: 0n };
     bc.combos += o.combos; bc.sum += v; bc.hits += o.hits || 0n;
     s.byCount.set(o.count, bc);
     if (o.wildAssisted) wildAssisted += v;
@@ -435,8 +448,8 @@ export function analyzeExact(model, opts = {}) {
       ...(ways ? { evaluation: 'ways', ways: waysInfo } : {}),
       weighted: Boolean(model.weighted),
       ...(model.weighted ? {
-        totalWeight: total.toString(), reelSets: setsInfo(baseSets),
-        freeSpinReelSets: fs && !fs.sameReels ? setsInfo(fsSets) : null,
+        totalWeight: total.toString(), reelSets: ways ? waysSetsInfo(baseSets, base) : setsInfo(baseSets),
+        freeSpinReelSets: fs && !fs.sameReels ? (ways ? waysSetsInfo(fsSets, fsSrc) : setsInfo(fsSets)) : null,
       } : {}),
     },
     rtp: frac(rtp),
@@ -455,8 +468,7 @@ export function analyzeExact(model, opts = {}) {
 
   // Exact distribution: hit frequency, variance, max win.
   try {
-    const progress = opts.onProgress || (() => {});
-    const baseEntries = ways ? waysEntries(model, model.ways.base, { ...opts, cap: scatterCap(model), onProgress: (p) => progress(fs && !fs.sameReels ? p / 2 : p) })
+    const baseEntries = ways ? waysEntries(model, model.ways.base, { ...opts, cap: scatterCap(model), onProgress: span(0.5, half) })
       : sourceDistribution(model, baseSets, base.mix, opts, (p) => progress(fs && !fs.sameReels ? p / 2 : p));
     const b = spinMoments(model, baseEntries, true);
     if (ways && !(b.s2 === base.moments.s2 && (base.moments.hits === null || b.hits === base.moments.hits))) throw new Error('internal check failed: ways closed form != distribution');
@@ -465,7 +477,7 @@ export function analyzeExact(model, opts = {}) {
     let ew2 = new Fraction(b.s2, total);
     let maxWin = { base: b.maxAll / totalBet, withFeature: b.maxAll / totalBet, unbounded: false };
     if (fs) {
-      const fsEntries = fs.sameReels ? baseEntries : ways ? waysEntries(model, model.ways.fs, { ...opts, cap: scatterCap(model), onProgress: (p) => progress(0.5 + p / 2) })
+      const fsEntries = fs.sameReels ? baseEntries : ways ? waysEntries(model, model.ways.fs, { ...opts, cap: scatterCap(model), onProgress: span(0.75, 0.25) })
         : sourceDistribution(model, fsSets, fsSrc.mix, opts, (p) => progress(0.5 + p / 2));
       const x = spinMoments(model, fsEntries, fs.retrigger);
       const m = fs.multiplier, F = BigInt(fs.spins);
