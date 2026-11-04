@@ -4,6 +4,10 @@
 // follow the publication; tests/lab/nist.test.js checks them against its worked
 // examples. runNist() applies NIST's recommended parameters and input-size limits.
 import { erfc, igamc, normalCdf, lgamma } from './specfun.js';
+import { dftMagnitudes } from './fft.js';
+
+// The FFT lives in fft.js (moved unchanged); re-exported for existing callers.
+export { dftMagnitudes };
 
 export const ALPHA = 0.01;
 
@@ -117,69 +121,6 @@ export function matrixRank(bits) {
 }
 
 // 2.6 Discrete Fourier transform (spectral), with the Rev. 1a threshold and variance.
-function fftInPlace(re, im, inverse) {
-  const n = re.length;
-  for (let i = 1, j = 0; i < n; i++) {
-    let bit = n >> 1;
-    for (; j & bit; bit >>= 1) j ^= bit;
-    j ^= bit;
-    if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
-  }
-  for (let len = 2; len <= n; len <<= 1) {
-    const ang = (inverse ? 2 : -2) * Math.PI / len;
-    const wr = Math.cos(ang), wi = Math.sin(ang);
-    for (let i = 0; i < n; i += len) {
-      let cr = 1, ci = 0;
-      for (let k = 0; k < len / 2; k++) {
-        const a = i + k, b = a + len / 2;
-        const xr = re[b] * cr - im[b] * ci, xi = re[b] * ci + im[b] * cr;
-        re[b] = re[a] - xr; im[b] = im[a] - xi;
-        re[a] += xr; im[a] += xi;
-        const ncr = cr * wr - ci * wi;
-        ci = cr * wi + ci * wr; cr = ncr;
-      }
-    }
-  }
-  if (inverse) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
-}
-
-// |X_j| for j < count of the DFT of a real sequence of any length (Bluestein's algorithm).
-export function dftMagnitudes(x, count) {
-  const n = x.length;
-  const out = new Float64Array(count);
-  if ((n & (n - 1)) === 0) {
-    const re = Float64Array.from(x), im = new Float64Array(n);
-    fftInPlace(re, im, false);
-    for (let j = 0; j < count; j++) out[j] = Math.hypot(re[j], im[j]);
-    return out;
-  }
-  let m = 1;
-  while (m < 2 * n - 1) m <<= 1;
-  const wr = new Float64Array(n), wi = new Float64Array(n);
-  for (let k = 0; k < n; k++) {
-    const ang = Math.PI * ((k * k) % (2 * n)) / n;
-    wr[k] = Math.cos(ang); wi[k] = -Math.sin(ang);
-  }
-  const ar = new Float64Array(m), ai = new Float64Array(m), br = new Float64Array(m), bi = new Float64Array(m);
-  for (let k = 0; k < n; k++) { ar[k] = x[k] * wr[k]; ai[k] = x[k] * wi[k]; }
-  br[0] = wr[0]; bi[0] = -wi[0];
-  for (let k = 1; k < n; k++) { br[k] = br[m - k] = wr[k]; bi[k] = bi[m - k] = -wi[k]; }
-  fftInPlace(ar, ai, false);
-  fftInPlace(br, bi, false);
-  for (let i = 0; i < m; i++) {
-    const r = ar[i] * br[i] - ai[i] * bi[i];
-    ai[i] = ar[i] * bi[i] + ai[i] * br[i];
-    ar[i] = r;
-  }
-  fftInPlace(ar, ai, true);
-  for (let j = 0; j < count; j++) {
-    const r = ar[j] * wr[j] - ai[j] * wi[j];
-    const i = ar[j] * wi[j] + ai[j] * wr[j];
-    out[j] = Math.hypot(r, i);
-  }
-  return out;
-}
-
 export function spectral(bits) {
   const n = bits.length;
   const x = new Float64Array(n);
@@ -253,6 +194,16 @@ export function nonOverlappingTemplate(bits, templates, N = 8) {
 }
 
 // 2.8 Overlapping template matching (template of m ones by default).
+//
+// The class probabilities pi_0..pi_K are the exact ones of the publication
+// (section 3.8: 0.364091, 0.185659, 0.139381, 0.100571, 0.070432, 0.139865 for
+// m = 9, M = 1032, K = 5, the values of Hamano & Kaneko). The reference code
+// (sts-2.1.2) and the publication's worked example in 2.8.8 replace them with an
+// older approximation; on long inputs that approximation alone makes random data
+// fail (chi-square bias grows with the number of blocks: about 35% false failures
+// at 10^8 bits). probabilities: 'reference' reproduces the reference code.
+
+// Approximation used by sts-2.1.2 (Poisson-compound with eta = lambda / 2).
 function overlapProbability(u, eta) {
   if (u === 0) return Math.exp(-eta);
   let sum = 0;
@@ -262,16 +213,64 @@ function overlapProbability(u, eta) {
   return sum;
 }
 
-export function overlappingTemplate(bits, m = 9, M = 1032, K = 5, template = null) {
+// Exact P(number of overlapping occurrences of template B in M random bits = u),
+// u = 0..K-1, and P(>= K): a dynamic program over the template's KMP automaton.
+const overlapCache = new Map();
+export function overlappingProbabilities(B, M, K) {
+  const key = B.join('') + ':' + M + ':' + K;
+  if (overlapCache.has(key)) return overlapCache.get(key).slice();
+  const m = B.length;
+  const fail = new Array(m + 1).fill(0);
+  for (let i = 1, k = 0; i < m; i++) {
+    while (k && B[i] !== B[k]) k = fail[k];
+    if (B[i] === B[k]) k++;
+    fail[i + 1] = k;
+  }
+  const next = [];
+  for (let st = 0; st <= m; st++) {
+    next.push([0, 1].map((b) => {
+      let x = st;
+      while (x && (x === m || B[x] !== b)) x = fail[x];
+      return x < m && B[x] === b ? x + 1 : x;
+    }));
+  }
+  let P = new Float64Array((m + 1) * (K + 1));
+  P[0] = 1;
+  for (let t = 0; t < M; t++) {
+    const Q = new Float64Array(P.length);
+    for (let st = 0; st <= m; st++) {
+      for (let c = 0; c <= K; c++) {
+        const v = P[st * (K + 1) + c];
+        if (v === 0) continue;
+        for (let b = 0; b < 2; b++) {
+          const s2 = next[st][b];
+          const c2 = s2 === m ? Math.min(K, c + 1) : c;
+          Q[s2 * (K + 1) + c2] += v / 2;
+        }
+      }
+    }
+    P = Q;
+  }
+  const out = new Array(K + 1).fill(0);
+  for (let st = 0; st <= m; st++) for (let c = 0; c <= K; c++) out[c] += P[st * (K + 1) + c];
+  overlapCache.set(key, out);
+  return out.slice();
+}
+
+export function overlappingTemplate(bits, m = 9, M = 1032, K = 5, template = null, { probabilities = 'exact' } = {}) {
   const B = template || new Array(m).fill(1);
   const target = B.reduce((v, b) => (v << 1) | b, 0);
   const N = Math.floor(bits.length / M);
-  const lambda = (M - m + 1) / 2 ** m;
-  const eta = lambda / 2;
-  const pi = [];
-  let acc = 0;
-  for (let u = 0; u < K; u++) { pi.push(overlapProbability(u, eta)); acc += pi[u]; }
-  pi.push(1 - acc);
+  let pi;
+  if (probabilities === 'reference') {
+    const eta = (M - m + 1) / 2 ** m / 2;
+    pi = [];
+    let acc = 0;
+    for (let u = 0; u < K; u++) { pi.push(overlapProbability(u, eta)); acc += pi[u]; }
+    pi.push(1 - acc);
+  } else {
+    pi = overlappingProbabilities(B, M, K);
+  }
   const nu = new Array(K + 1).fill(0);
   const win = windowValues(bits.subarray(0, N * M), m);
   for (let i = 0; i < N; i++) {
@@ -281,7 +280,7 @@ export function overlappingTemplate(bits, m = 9, M = 1032, K = 5, template = nul
   }
   let chi2 = 0;
   for (let i = 0; i <= K; i++) chi2 += (nu[i] - N * pi[i]) ** 2 / (N * pi[i]);
-  return { pValues: [igamc(K / 2, chi2 / 2)], stats: { N, nu, pi, chi2 } };
+  return { pValues: [igamc(K / 2, chi2 / 2)], stats: { N, nu, pi, chi2, probabilities } };
 }
 
 // 2.9 Maurer's universal statistical test
@@ -507,14 +506,68 @@ export function passesProportion(pValues, alpha = ALPHA) {
   return failures <= allowed;
 }
 
-// Runs every test with NIST's recommended parameters. Tests whose input-size
-// requirements are not met are reported as not applicable instead of run.
-export function runNist(bits, { alpha = ALPHA, onProgress = () => {} } = {}) {
+// P(X >= k) for X ~ Binomial(n, p).
+export function binomialUpperTail(k, n, p) {
+  if (k <= 0) return 1;
+  if (k > n) return 0;
+  let sum = 0;
+  for (let j = k; j <= n; j++) {
+    const t = Math.exp(lgamma(n + 1) - lgamma(j + 1) - lgamma(n - j + 1) + j * Math.log(p) + (n - j) * Math.log1p(-p));
+    sum += t;
+    if (t < sum * 1e-17) break;
+  }
+  return Math.min(1, sum);
+}
+
+// Holm's step-down procedure: which P-values are rejected while keeping the chance
+// of any false rejection at or below alpha, whatever the dependence between them.
+export function holm(pValues, alpha = ALPHA) {
+  const m = pValues.length;
+  const order = pValues.map((p, i) => [p, i]).sort((a, b) => a[0] - b[0]);
+  const rejected = new Array(m).fill(false);
+  for (let r = 0; r < m; r++) {
+    if (order[r][0] > alpha / (m - r)) break;
+    rejected[order[r][1]] = true;
+  }
+  return rejected;
+}
+
+// One verdict for all the P-values of a run. A single sequence gives ~150-190
+// P-values; at alpha = 0.01 some fall below alpha by chance in most runs of a
+// perfect generator (1 - 0.99^188 = 85% if they were independent). Per-test
+// results therefore get three states:
+//   fail - rejected by Holm at the family level: a real defect at level alpha;
+//   flag - fails NIST's per-test rule but not the family test: expected by chance
+//          this often, worth a second sample, not evidence on its own;
+//   pass.
+// tests: [{ id, applicable, pValues, pass }]
+export function assessFamily(tests, alpha = ALPHA) {
+  const all = [];
+  tests.forEach((t, ti) => { if (t.applicable) t.pValues.forEach((p) => all.push([p, ti])); });
+  const rejected = holm(all.map((x) => x[0]), alpha);
+  const rejectedTests = new Set();
+  rejected.forEach((r, i) => { if (r) rejectedTests.add(all[i][1]); });
+  const m = all.length;
+  const below = all.filter((x) => x[0] < alpha).length;
+  const statuses = tests.map((t, ti) => (!t.applicable ? 'na' : rejectedTests.has(ti) ? 'fail' : t.pass ? 'pass' : 'flag'));
+  return {
+    alpha, method: 'holm', pValueCount: m,
+    rejected: rejected.filter(Boolean).length,
+    pass: !rejected.some(Boolean),
+    minP: m ? Math.min(...all.map((x) => x[0])) : null,
+    belowAlpha: below, expectedBelowAlpha: m * alpha,
+    // Chance of this many or more P-values below alpha if they were independent.
+    belowAlphaTailP: binomialUpperTail(below, m, alpha),
+    statuses,
+  };
+}
+
+function testPlan(bits) {
   const n = bits.length;
   const log2n = Math.floor(Math.log2(n));
   const serialM = Math.min(16, log2n - 3);
   const apEnM = Math.min(10, log2n - 6);
-  const plan = [
+  return [
     ['frequency', n >= 100, () => frequency(bits), 'n ≥ 100'],
     ['blockFrequency', n >= 100 * 128, () => blockFrequency(bits, 128), 'n ≥ 12,800 (M = 128)'],
     ['runs', n >= 100, () => runs(bits), 'n ≥ 100'],
@@ -531,6 +584,11 @@ export function runNist(bits, { alpha = ALPHA, onProgress = () => {} } = {}) {
     ['randomExcursions', n >= 1000000, () => randomExcursions(bits), 'n ≥ 1,000,000 and J ≥ 500 cycles'],
     ['randomExcursionsVariant', n >= 1000000, () => randomExcursionsVariant(bits), 'n ≥ 1,000,000 and J ≥ 500 cycles'],
   ];
+}
+
+function runPlan(bits, alpha, onProgress) {
+  const n = bits.length;
+  const plan = testPlan(bits);
   const results = [];
   plan.forEach(([id, ok, run, requirement], i) => {
     onProgress(i / plan.length, id);
@@ -542,8 +600,92 @@ export function runNist(bits, { alpha = ALPHA, onProgress = () => {} } = {}) {
     const r = run();
     results.push({ id, applicable: true, pValues: r.pValues, stats: r.stats, pass: passesProportion(r.pValues, alpha) });
   });
+  return results;
+}
+
+// Runs every test with NIST's recommended parameters on one sequence. Tests whose
+// input-size requirements are not met are reported as not applicable instead of run.
+export function runNist(bits, { alpha = ALPHA, onProgress = () => {} } = {}) {
+  const results = runPlan(bits, alpha, onProgress);
+  const family = assessFamily(results, alpha);
+  results.forEach((r, i) => { r.status = family.statuses[i]; });
   onProgress(1, 'done');
-  return { n, alpha, results };
+  return { n: bits.length, alpha, results, family };
+}
+
+// Section 4.2: the input is cut into `count` sequences of `sequenceLength` bits,
+// every test runs on each, and each P-value position (a "sub-test": one template,
+// one excursion state...) is judged on two things across the sequences:
+//   proportion - the share with P >= alpha must lie within
+//                (1 - alpha) +- 3 sqrt(alpha (1 - alpha) / m)   (real bound: 97/100, not 96);
+//   uniformity - chi-square of the P-values over 10 equal bins, P_T >= 0.0001,
+//                assessed when m >= 55 (NIST's minimum).
+// Each sub-test also gets exact P-values for both checks (binomial tail for the
+// failures, P_T for uniformity) so the family verdict can use Holm like runNist.
+export const TWO_LEVEL_MIN_SEQUENCES = 10;
+export const UNIFORMITY_MIN_SEQUENCES = 55;
+
+// Second-level checks for one sub-test: its P-values across m sequences.
+export function secondLevel(ps, alpha = ALPHA) {
+  const m = ps.length;
+  const failures = ps.filter((p) => p < alpha).length;
+  const proportion = (m - failures) / m;
+  const lower = (1 - alpha) - 3 * Math.sqrt(alpha * (1 - alpha) / m);
+  let uniformityP = null;
+  if (m >= UNIFORMITY_MIN_SEQUENCES) {
+    const F = new Array(10).fill(0);
+    for (const p of ps) F[Math.min(9, Math.floor(p * 10))]++;
+    const e = m / 10;
+    uniformityP = igamc(4.5, F.reduce((a, f) => a + (f - e) ** 2 / e, 0) / 2);
+  }
+  return {
+    m, failures, proportion, lower,
+    proportionOk: proportion >= lower,
+    proportionP: binomialUpperTail(failures, m, alpha),
+    // Chance that a perfect generator fails the proportion rule for this m.
+    proportionChance: binomialUpperTail(Math.floor((1 - lower) * m + 1e-9) + 1, m, alpha),
+    uniformityP, uniformityOk: uniformityP === null ? null : uniformityP >= 0.0001,
+  };
+}
+
+export function runNistMulti(bits, { sequenceLength = 1000000, alpha = ALPHA, onProgress = () => {} } = {}) {
+  const count = Math.floor(bits.length / sequenceLength);
+  if (count < TWO_LEVEL_MIN_SEQUENCES) {
+    throw Object.assign(new Error(`two-level mode needs at least ${TWO_LEVEL_MIN_SEQUENCES} sequences of ${sequenceLength} bits`), {
+      ar: `التقييم من مستويين يحتاج ${TWO_LEVEL_MIN_SEQUENCES} تسلسلات على الأقل، كل منها ${sequenceLength.toLocaleString('en-US')} بت`,
+      en: `Two-level mode needs at least ${TWO_LEVEL_MIN_SEQUENCES} sequences of ${sequenceLength.toLocaleString('en-US')} bits`,
+    });
+  }
+  const collected = new Map(); // id -> { requirement, reason, pv: [[p of sub-test k per sequence]] }
+  for (let s = 0; s < count; s++) {
+    const seq = bits.subarray(s * sequenceLength, (s + 1) * sequenceLength);
+    const results = runPlan(seq, alpha, (f) => onProgress((s + f) / count));
+    for (const r of results) {
+      let c = collected.get(r.id);
+      if (!c) collected.set(r.id, c = { id: r.id, requirement: r.requirement, reason: null, sequences: 0, pv: [] });
+      if (!r.applicable) { c.reason = r.reason || c.reason; continue; }
+      c.sequences++;
+      r.pValues.forEach((p, k) => (c.pv[k] || (c.pv[k] = [])).push(p));
+    }
+  }
+  const tests = [...collected.values()].map((c) => {
+    if (!c.sequences) return { id: c.id, applicable: false, requirement: c.requirement, reason: c.reason };
+    const subtests = c.pv.map((ps) => secondLevel(ps, alpha));
+    const pValues = subtests.flatMap((t) => [t.proportionP, ...(t.uniformityP === null ? [] : [t.uniformityP])]);
+    const pass = subtests.every((t) => t.proportionOk && t.uniformityOk !== false);
+    return {
+      id: c.id, applicable: true, sequences: c.sequences, subtests, pValues, pass,
+      // Sub-tests that fail NIST's rule, and how many a perfect generator would fail.
+      subtestsFailing: subtests.filter((t) => !t.proportionOk || t.uniformityOk === false).length,
+      subtestsExpectedFailing: subtests.reduce((a, t) => a + t.proportionChance, 0),
+      minProportion: Math.min(...subtests.map((t) => t.proportion)),
+      minUniformityP: subtests.some((t) => t.uniformityP !== null) ? Math.min(...subtests.filter((t) => t.uniformityP !== null).map((t) => t.uniformityP)) : null,
+    };
+  });
+  const family = assessFamily(tests, alpha);
+  tests.forEach((t, i) => { t.status = family.statuses[i]; });
+  onProgress(1, 'done');
+  return { n: count * sequenceLength, alpha, sequenceLength, sequences: count, results: tests, family, twoLevel: true };
 }
 
 export function bitsFromString(s) {

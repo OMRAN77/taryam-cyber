@@ -1,11 +1,15 @@
 // Bilingual (Arabic / English) PDF report. Pages are laid out on canvases so the
 // browser shapes Arabic text, then embedded as JPEG pages; a final page carries the
 // identifiers and fingerprints as real, copyable text, and the input files plus a
-// machine-readable report.json are attached inside the PDF.
+// machine-readable report.json are attached inside the PDF. With a signing key,
+// report.sig (core/report-sign.js) signs report.json and every other byte of the PDF.
 import { PdfBuilder } from './core/pdf.js';
 import { canonicalJson } from './core/slot-model.js';
 import { sha256Hex } from './core/fair.js';
 import { pair, NIST_NAMES, VOLATILITY, VERDICT } from './i18n.js';
+import { planAttachments, buildManifest, reportIdFor, ATTACH_LIMIT_BYTES, REPORT_FILE, SIGNATURE_FILE } from './core/manifest.js';
+import { signaturePlaceholder, sealReportPdf } from './core/report-sign.js';
+import { formatFingerprint, ALGORITHM_INFO } from './core/sign.js';
 
 const W = 1488, H = 2105; // A4 at about 180 dpi
 const M = 92;
@@ -108,7 +112,10 @@ class Layout {
     const family = mono ? MONO : FONT;
     const size = mono ? 22 : 25;
     const midWidth = W - 2 * M - 2 * 420;
-    const long = this.measure(v, size, '600', family) > midWidth;
+    // The value goes on its own line when it is wider than the middle column, or when a
+    // long label would run into it (labels are drawn from the page edges inwards).
+    const vw = this.measure(v, size, '600', family);
+    const long = vw > midWidth || M + this.measure(en, 21) + 16 > (W - vw) / 2 || W - M - this.measure(ar, 23) - 16 < (W + vw) / 2;
     const lines = long ? this.wrap(v, W - 2 * M - 40, size, '600', family) : [v];
     const h = 46 + (long ? lines.length * 34 : 0);
     this.ensure(h);
@@ -223,7 +230,9 @@ async function canvasToJpeg(canvas, quality = 0.9) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-// Machine-readable summary that the report fingerprint covers.
+// Machine-readable summary that the report fingerprint (and signature) covers.
+// session.signer: the signing key or null; session.inputs may carry `attachment`
+// (planAttachments: the name inside the PDF, null for hash only).
 export function reportPayload(session, createdAt) {
   const r = session.results;
   const out = {
@@ -232,90 +241,322 @@ export function reportPayload(session, createdAt) {
     meta: { title: session.meta.title || '', auditor: session.meta.auditor || '', notes: session.meta.notes || '' },
     inputs: session.inputs.map((i) => ({ id: i.id, name: i.name, kind: i.kind, size: i.size, sha256: i.sha256 })),
     results: {},
+    signer: session.signer ? { alg: session.signer.alg, keyFingerprint: session.signer.fingerprint, keyStorage: session.signer.storage, file: SIGNATURE_FILE } : null,
+    manifest: buildManifest(session),
   };
   if (r.theoretical) {
     const x = r.theoretical.result;
     out.results.theoretical = {
       input: r.theoretical.inputId, model: x.model, rtp: x.rtp, contributions: x.contributions, freeSpins: x.freeSpins,
-      distribution: x.distribution && { hitFrequency: x.distribution.hitFrequency, variance: x.distribution.variance, sd: x.distribution.sd, maxWin: x.distribution.maxWin },
+      distribution: x.distribution && { hitFrequency: x.distribution.hitFrequency, variance: x.distribution.variance, sd: x.distribution.sd, maxWin: x.distribution.maxWin, ...(x.distribution.closedForm ? { closedForm: true } : {}) },
       symbols: x.symbols.map((s) => ({ symbol: s.symbol, rtp: s.rtp.fraction })),
+      // Ways and cascading games (P0-6): "firstDrop" = the first drop only, not the game's RTP.
+      ...(x.model.ways || x.scope ? { scope: x.scope || 'round' } : {}),
+      ...(x.controlVariate ? { controlVariate: x.controlVariate } : {}),
+    };
+    // Whole-round distribution and max-win cap (P0-8): the summary, not the pmf itself.
+    if (x.round || x.roundError) Object.assign(out.results.theoretical, roundPayload(r.theoretical));
+  }
+  if (r.session) {
+    const ss = r.session, x = ss.result;
+    out.results.session = {
+      input: ss.inputId, modelSha256: ss.modelSha256, options: ss.options, method: x.method, rounds: x.rounds,
+      expectedLossBets: x.expectedLoss, meanBets: x.mean, medianBets: x.median, percentilesBets: x.percentiles, pAhead: x.pAhead, pAheadSe: x.pAheadSe ?? null,
+      // pAhead is null under the precision floor; then pAheadBelow bounds it. A Monte
+      // Carlo count of 0 (or all) gives a 95% bound instead of a standard error.
+      pAheadBelow: x.pAheadBelow ?? null, pAheadUpper95: x.pAheadUpper95 ?? null, pAheadLower95: x.pAheadLower95 ?? null, precision: x.precision ?? null,
+      pEven: x.pEven, normalApproximation: x.normal, nStar: x.nStar, ruin: x.ruin, sessions: x.sessions ?? null, generator: x.generator ?? null,
+      grid: x.grid ?? null, funnelBets: x.funnel, droppedMassPerRound: x.droppedMass,
+      // A cascading game's funnel covers first drops only (P0-6).
+      ...(ss.scope ? { scope: ss.scope } : {}),
     };
   }
   if (r.actual) {
     const a = r.actual.result;
     out.results.actual = { input: r.actual.inputId, options: r.actual.options, rounds: a.rounds, totalBet: a.totalBet, totalWin: a.totalWin, rtp: a.rtp, ci: a.ci, confidence: a.confidence, standardError: a.standardError, declared: a.declared || null, roundsNeeded: a.roundsNeeded, skipped: r.actual.skipped };
   }
+  if (r.distTests) {
+    const d = r.distTests, x = d.result;
+    out.results.distTests = {
+      input: d.inputId, inputs: d.inputIds, candidates: d.candidates.map((c) => ({ label: c.label, kind: c.kind, input: c.inputId })),
+      options: d.options, seed: x.seed, generator: x.generator, rounds: x.rounds, mode: x.mode, scope: x.scope, refIndex: x.refIndex, alpha: x.alpha,
+      distributions: x.candidates, fit: x.fit, versions: x.versions || null, betting: x.betting, planner: x.planner,
+    };
+  }
   if (r.rng) {
     out.results.rng = {
       input: r.rng.inputId, kind: r.rng.parsed.kind, bits: r.rng.parsed.nBits, values: r.rng.parsed.nValues,
-      nist: r.rng.nist.results.map((t) => ({ id: t.id, applicable: t.applicable, pass: t.pass ?? null, pValues: t.pValues || null })),
+      nist: r.rng.nist.results.map((t) => ({ id: t.id, applicable: t.applicable, pass: t.pass ?? null, status: t.status ?? null, pValues: t.pValues || null })),
+      twoLevel: r.rng.nist.twoLevel ? { sequences: r.rng.nist.sequences, sequenceLength: r.rng.nist.sequenceLength } : null,
+      family: r.rng.family || null,
       chiSquare: r.rng.chi, serialCorrelation: r.rng.serial,
     };
   }
-  if (r.fair) {
+  if (r.fair && r.fair.mode === 'adapter') out.results.fair = pfPayload(r.fair);
+  else if (r.fair) {
     const f = r.fair.result;
     out.results.fair = { input: r.fair.inputId, scheme: r.fair.scheme, options: r.fair.options, ok: f.ok, summary: { ...f, mismatches: (f.mismatches || []).slice(0, 100), commitmentFailures: (f.commitmentFailures || []).slice(0, 100), breaks: (f.breaks || []).slice(0, 100) } };
   }
   if (r.montecarlo) {
     const m = r.montecarlo;
-    out.results.montecarlo = { modelSha256: m.modelSha256, seed: m.seed, spins: m.spins, generator: m.generator, result: m.result, resultSha256: m.resultSha256, exactRtp: m.exactRtp ?? null };
+    out.results.montecarlo = { modelSha256: m.modelSha256, seed: m.seed, spins: m.spins, generator: m.generator, result: m.result, resultSha256: m.resultSha256, exactRtp: m.exactRtp ?? null, ...(m.controlVariate ? { controlVariate: m.controlVariate } : {}) };
+  }
+  if (r.lut) {
+    const x = r.lut.result;
+    out.results.lut = { inputs: r.lut.inputIds, format: x.format, indexFile: x.indexFile, ignored: x.ignored, provablyFair: false, modes: x.modes, profile: x.profile };
   }
   return out;
 }
 
+// ---- Whole-round distribution, max-win cap and session funnel (P0-8) ----
+function roundPayload(th) {
+  const x = th.result;
+  if (!x.round) return { roundDistribution: null, roundError: x.roundError };
+  const { pmf, mgf, tailSums, ...rest } = x.round;
+  return {
+    roundDistribution: { ...rest, pmf: { scope: pmf.scope, cells: pmf.entries.length, droppedMass: pmf.droppedMass, noiseFloor: pmf.noiseFloor, unitBets: pmf.unitBets } },
+    roundError: null,
+    maxWinCap: th.cap ? { M: th.cap.M, oddsChecks: th.cap.odds, ...th.cap.result } : null,
+  };
+}
+// Ceiled to two significant digits, so "< x" stays an upper bound.
+function upper2(v) {
+  if (!(v > 0)) return '0';
+  let e = Math.floor(Math.log10(v));
+  let m = Math.ceil(v / 10 ** (e - 1) - 1e-9);
+  if (m >= 100) { m = 10; e += 1; }
+  return (m / 10).toFixed(1) + 'e' + e;
+}
+// An exact probability under 1e-300 is written from its fraction (sci / oneInSci), never as 0.
+const roundProb = (p) => (!p ? '—' : p.method === 'bound' ? '< ' + upper2(p.below) : p.sci ? p.sci : p.value === 0 ? '0' : p.value >= 1e-3 ? pct(p.value, 3) : p.value.toExponential(3));
+const roundCount = (n) => (n >= 1e9 ? n.toExponential(2) : num(n, n < 100 ? 2 : 0));
+const roundOneIn = (p) => (!p ? '—' : p.method === 'bound' ? '> ' + roundCount(1 / p.below) : p.oneInSci ? p.oneInSci : p.value > 0 ? roundCount(1 / p.value) : '—');
+const roundSrc = (m) => pair('roundSrc_' + m)[1];
+const smallPct = (v, d = 2) => (v === 0 ? '0%' : v < 1e-4 ? (v * 100).toExponential(2) + '%' : pct(v, d));
+function capsLine(c) {
+  return [c.maxSpins !== null ? `maxSpins ${c.maxSpins}` : null, c.maxRetriggers !== null ? `maxRetriggers ${c.maxRetriggers}` : null].filter(Boolean).join(', ');
+}
+function roundSection(L, th) {
+  const x = th.result;
+  L.section('roundTitle');
+  if (x.roundError) {
+    L.badge('roundUnavailable', x.roundError.internal ? C.fail : C.warn);
+    L.note(null, [x.roundError.ar, x.roundError.en]);
+    if (x.roundError.tooLarge) L.note(x.distribution && x.distribution.closedForm ? 'roundUseMcClosed' : 'roundUseMc');
+    return;
+  }
+  const r = x.round;
+  // A cascading game: first drops only, as its RTP says (P0-6).
+  if (r.scope === 'firstDrop') { L.badge('firstDropBadge', C.warn); L.note('roundFirstDropNote'); }
+  L.kv('roundMethod', pair('roundMethod_' + r.method)[1]);
+  if (r.caps) L.kv('roundCapsCard', capsLine(r.caps), { mono: true });
+  if (!r.exact) {
+    // Short labels: a kv label has about 420 points on each side of the value.
+    L.kv('roundGrid', r.grid.size.toLocaleString('en-US'));
+    L.kv(null, r.aliasBound ? '< ' + upper2(r.aliasBound) : '0', { mono: true, labels: pair('roundAliasShort') });
+    L.kv('roundFloor', upper2(r.floor), { mono: true });
+    L.kv(null, Math.max(...Object.values(r.checks).map((c) => c.relativeError)).toExponential(1), { mono: true, labels: pair('roundChecksShort') });
+    L.note('roundChecksNote');
+  }
+  L.kv('roundTop', r.maxWin.bounded ? `${num(r.maxWin.x, 2)}×   P = ${roundProb(r.maxWin)}` : `${pair('roundUnboundedTop')[1]} (${num(r.maxWin.largestAboveFloor, 2)}×)`);
+  const rows = r.thresholds.map((t) => [`≥ ${num(t.x, 0)}×`, roundProb(t), roundOneIn(t), roundSrc(t.method)]);
+  if (r.maxWin.bounded) rows.push([`${num(r.maxWin.x, 2)}×`, roundProb(r.maxWin), roundOneIn(r.maxWin), roundSrc(r.maxWin.method)]);
+  L.table([{ key: 'roundWinCol', w: 0.25 }, { key: 'probability', w: 0.25, mono: true }, { key: 'roundOneInCol', w: 0.25, mono: true }, { key: 'roundSource', w: 0.25 }], rows);
+  L.table([{ key: 'roundQuantile', w: 0.5 }, { key: 'roundWinCol', w: 0.5, mono: true }], r.quantiles.map((q) => [(q.q * 100).toFixed(q.q >= 0.9999 ? 2 : q.q >= 0.999 ? 1 : 0) + '%', num(q.x, 2) + '×']));
+  L.note('roundNote');
+  const c = th.cap;
+  if (!c) return;
+  const k = c.result.cap;
+  if (k) {
+    L.kv('roundCapTitle', num(k.M, 4) + '×');
+    L.kv('roundCapped', k.rtpCapped.fraction && k.rtpCapped.fraction.length <= 40 ? `${pct(k.rtpCapped.value, 4)}  (${k.rtpCapped.fraction})` : pct(k.rtpCapped.value, 4), { color: C.accent });
+    L.kv('roundLost', smallPct(k.lost.value, 4) + (k.lost.upper > k.lost.value && smallPct(k.lost.upper, 4) !== smallPct(k.lost.value, 4) ? ` – ${smallPct(k.lost.upper, 4)}` : ''));
+    L.kv('roundReach', `${roundProb(k.reach)}   (${pair('roundOneInCol')[1]}: ${roundOneIn(k.reach)})`);
+    if (k.aboveMax) L.note('roundCapAboveMax');
+    L.note('roundCapNote');
+  }
+  if (!c.odds) return;
+  if (!c.result.top) { L.note('roundNeedCap'); return; }
+  const top = c.result.top, ch = top.checks;
+  // A cascading game: the top award and its odds are those of the first drop too.
+  if (r.scope === 'firstDrop') L.note('roundOddsFirstDrop');
+  L.kv('roundTopAward', `${num(top.x, 2)}×   P = ${roundProb(top.prob)}`);
+  const verdict = (pass) => (pass === true ? { text: pair('roundPass').join(' / '), color: C.pass } : pass === false ? { text: pair('roundFail').join(' / '), color: C.fail } : { text: pair('roundUndecided').join(' / '), color: C.warn });
+  L.table([{ key: 'roundRule', w: 0.7 }, { key: 'result', w: 0.3 }], [[pair('roundRuleGli')[1], verdict(ch.gli19.pass)], [pair('roundRulePa')[1], verdict(ch.pa.pass)]]);
+  L.note('roundOddsNote');
+}
+
+// A bet stored with a decimal comma by an older version reads the same.
+const betOf = (options) => Number(String(options.bet).replace(',', '.'));
+// A session probability as text: the value (± its standard error), "< bound" under the
+// precision floor, or a 95% bound when Monte Carlo saw it in no session (or in all).
+// Bounds are rounded outwards. tag: the English words that say which.
+const pctUp = (v) => (v * 100 >= 0.01 ? (Math.ceil(v * 1e4 - 1e-9) / 100).toFixed(2) + '%' : upper2(v * 100) + '%');
+const pctDown = (v) => (Math.floor(v * 1e4 + 1e-9) / 100).toFixed(2) + '%';
+function sessText(p, { below = null, se = null, upper95, lower95 } = {}, sep = ' ± ') {
+  if (p === null || p === undefined) return { text: '< ' + pctUp(below), key: 'sessBelowFloor' };
+  if (typeof upper95 === 'number') return { text: '< ' + pctUp(upper95), key: 'sessNone95' };
+  if (typeof lower95 === 'number') return { text: '> ' + pctDown(lower95), key: 'sessAll95' };
+  return { text: smallPct(p) + (se !== undefined && se !== null ? sep + smallPct(se) : ''), key: null };
+}
+const aheadOf = (x, sep) => sessText(x.pAhead, { below: x.pAheadBelow, se: x.pAheadSe, upper95: x.pAheadUpper95, lower95: x.pAheadLower95 }, sep);
+
+function sessionSection(L, ss) {
+  const r = ss.result, bet = betOf(ss.options);
+  const money = (v) => (v > 0 ? '+' : '') + num(v * bet, 2);
+  L.section('sessTitle');
+  if (ss.scope === 'firstDrop') { L.badge('firstDropBadge', C.warn); L.note('sessFirstDropNote'); }
+  L.kv('modelHash', ss.modelSha256, { mono: true });
+  L.kv('sessRounds', r.rounds.toLocaleString('en-US'));
+  L.kv('sessBet', ss.options.bet);
+  if (ss.options.budget) L.kv('sessBudgetShort', ss.options.budget);
+  L.kv(null, pair('sessMethod_' + r.method)[1], { labels: pair('sessMethodRange') });
+  if (r.ruin) L.kv(null, pair('sessRuinMethod_' + r.ruin.method)[1], { labels: pair('sessMethodRuin') });
+  if (r.sessions) {
+    L.kv('seed', ss.options.seed, { mono: true });
+    L.kv('sessSessions', r.sessions.toLocaleString('en-US'));
+  }
+  L.kv('sessExpectedLoss', `${num(r.expectedLoss.value * bet, 2)}   (${r.rounds.toLocaleString('en-US')} × ${ss.options.bet} × (1 − RTP))`, { color: C.fail });
+  L.kv('sessMedian', money(r.median));
+  const ahead = aheadOf(r);
+  L.kv('sessAhead', ahead.text + (r.normal ? `   (${pair('sessNormal')[1]}: ${smallPct(r.normal.pAhead)})` : ''));
+  if (ahead.key) L.note(ahead.key);
+  if (r.ruin) {
+    const ruin = sessText(r.ruin.p, r.ruin);
+    L.kv(null, ruin.text, { labels: pair('sessRuinShort') });
+    if (ruin.key) L.note(ruin.key);
+  }
+  if (r.nStar) L.kv('sessNStar', r.nStar.rounds.toLocaleString('en-US'));
+  if (r.nStar) L.note('sessNStarNote');
+  L.table([{ key: 'sessPct', w: 0.5 }, { key: 'sessNet', w: 0.5, mono: true }], r.percentiles.map((p) => [pct(p.q, 0), money(p.net)]));
+  L.note('sessNote');
+}
+
 function theorySection(L, th) {
   const x = th.result;
+  const ways = x.model.ways, firstDrop = x.scope === 'firstDrop';
   L.section('tabTheory');
   L.kv('game', x.model.name || '—');
-  L.kv('layout', `${x.model.reels} × ${x.model.rows}, ${x.model.lines}`);
+  if (ways) L.kv('waysEval', pair('waysWord').join(' / '));
+  else L.kv('layout', `${x.model.reels} × ${x.model.rows}, ${x.model.lines}`);
   L.kv('stops', x.model.stops.join(' / '));
-  L.kv('combinations', Number(x.model.combinations).toLocaleString('en-US'));
+  L.kv(ways ? 'waysCombinations' : 'combinations', BigInt(x.model.combinations).toLocaleString('en-US'));
   L.kv('modelHash', th.modelSha256, { mono: true });
-  L.kv('rtp', x.rtp.percent + '%', { color: C.accent });
+  L.kv(firstDrop ? 'rtpFirstDrop' : 'rtp', x.rtp.percent + '%', { color: C.accent });
   L.kv('exactFraction', x.rtp.fraction, { mono: true });
+  if (firstDrop) { L.badge('firstDropBadge', C.warn); L.note('firstDropNote'); }
   const d = x.distribution;
   if (d) {
-    L.kv('hitFrequency', pct(d.hitFrequency.value, 4));
+    L.kv('hitFrequency', d.hitFrequency ? pct(d.hitFrequency.value, 4) : '—');
+    if (!d.hitFrequency) L.note('hitUnavailable');
     L.kv('sd', num(d.sd, 4));
     L.kv('vi90', num(d.volatilityIndex90, 4));
     const v = VOLATILITY[d.volatilityClass];
     L.kv('volatility', v[0] + ' / ' + v[1]);
-    L.kv('maxWinBase', num(d.maxWin.base, 2) + '×');
-    if (d.maxWin.perFreeSpin !== undefined) {
+    if (d.maxWin) L.kv('maxWinBase', num(d.maxWin.base, 2) + '×');
+    if (d.maxWin && d.maxWin.perFreeSpin !== undefined) {
       L.kv('maxWinFs', num(d.maxWin.perFreeSpin, 2) + '×');
       L.kv('maxWinTotal', d.maxWin.unbounded ? pair('unbounded').join(' / ') : num(d.maxWin.withFeature, 2) + '×');
     }
-  } else if (x.distributionError) {
-    L.badge('distributionError', C.warn, [x.distributionError.ar, x.distributionError.en]);
   }
+  if (x.distributionError && !d) L.badge('distributionError', C.warn, [x.distributionError.ar, x.distributionError.en]);
+  // A ways game whose full distribution is too large: the message says what stays exact.
+  else if (x.distributionError) L.note(null, [x.distributionError.ar, x.distributionError.en]);
   L.section('contributions');
   const c = x.contributions;
   L.table([{ key: 'contributions', w: 0.5 }, { key: 'contribution', w: 0.5, mono: true }], [
-    [pair('contribLines').join(' / '), c.lines.percent + '%'],
+    [pair(ways ? 'contribWays' : 'contribLines').join(' / '), c.lines.percent + '%'],
     [pair('contribWild').join(' / '), c.wildAssistedLines.percent + '%'],
     [pair('contribScatter').join(' / '), c.scatter.percent + '%'],
     [pair('contribFs').join(' / '), c.freeSpins.percent + '%'],
     [{ text: 'RTP', bold: true }, { text: x.rtp.percent + '%', bold: true }],
   ]);
+  if (ways) L.note('waysWildNote');
   if (x.freeSpins) {
     const f = x.freeSpins;
     L.kv('triggerProb', `${pct(f.triggerProbability.value, 4)}  (1 / ${num(1 / f.triggerProbability.value, 1)})`);
     L.kv('expectedSpins', num(f.expectedSpinsPerTrigger.value, 4));
     L.kv('evPerTrigger', num(f.evPerTrigger.value, 4) + '×');
   }
-  L.section('symbolTable');
+  if (x.model.weighted) weightsSection(L, x.model);
+  if (ways) waysSection(L, x);
+  L.section(ways ? 'symbolTableWays' : 'symbolTable');
   const rows = [];
   for (const s of x.symbols) for (const b of s.byCount) rows.push([s.symbol + (s.isWild ? ' (wild)' : ''), b.count, num(b.pay, 4), b.probabilityPerLine.value.toExponential(4), b.rtp.percent + '%']);
-  L.table([{ key: 'symbol', w: 0.22 }, { key: 'count', w: 0.12 }, { key: 'pay', w: 0.16 }, { key: 'probability', w: 0.24, mono: true }, { key: 'contribution', w: 0.26, mono: true }], rows);
+  L.table([{ key: 'symbol', w: 0.22 }, { key: 'count', w: 0.12 }, { key: ways ? 'payPerWay' : 'pay', w: 0.16 }, { key: ways ? 'probabilityRun' : 'probability', w: 0.24, mono: true }, { key: 'contribution', w: 0.26, mono: true }], rows);
   if (x.scatter && x.scatter.length) {
     L.table([{ labels: ['عدد الـScatter', 'Scatters'], w: 0.25 }, { key: 'probability', w: 0.35, mono: true }, { labels: ['الدفع × الرهان', 'Pay × bet'], w: 0.2 }, { labels: ['تفعيل', 'Trigger'], w: 0.2 }],
       x.scatter.map((s) => [s.count, s.probability.value.toExponential(4), num(s.pay, 4), s.triggers ? '✓' : '']));
   }
-  if (d) {
+  if (d && d.buckets) {
     L.section('distribution');
     L.table([{ key: 'range', w: 0.5 }, { key: 'probability', w: 0.5, mono: true }],
       d.buckets.map((b) => [b.to === 0 ? '0' : b.to === null ? `≥ ${b.from}` : `${b.from} – ${b.to}`, pct(b.probability.value, 4)]));
   }
+  if (x.round || x.roundError) roundSection(L, th);
+}
+
+// ---- Ways / Megaways (P0-6) ----
+// Heights one row per (reel, height), so no cell holds a list that L.table would cut.
+function waysHeightsRows(src) {
+  const rows = [];
+  src.heights.forEach((h, i) => h.rows.forEach((r, j) => rows.push([j === 0 ? i + 1 : '', r, h.probabilities[j] + '%', j === 0 && h.topCell ? '✓' : '', j === 0 && h.joint ? '✓' : ''])));
+  return rows;
+}
+const WAYS_HEIGHT_COLUMNS = [{ key: 'reelNo', w: 0.14 }, { key: 'waysHeight', w: 0.18 }, { key: 'probability', w: 0.28, mono: true }, { key: 'waysTopCell', w: 0.22 }, { key: 'waysJoint', w: 0.18 }];
+function waysSourceKv(L, src) {
+  L.kv('maxWays', BigInt(src.maxWays).toLocaleString('en-US'));
+  L.kv('waysRange', `${BigInt(src.minWays).toLocaleString('en-US')} – ${BigInt(src.maxWays).toLocaleString('en-US')}`);
+  L.kv('topReelKv', src.topReel ? `${src.topReel.covers.join(', ')} · ${src.topReel.stops}` : '—');
+  L.table(WAYS_HEIGHT_COLUMNS, waysHeightsRows(src));
+}
+function waysSection(L, x) {
+  const w = x.model.ways;
+  L.section('waysTitle');
+  L.kv('betCostLabel', String(w.betCost));
+  waysSourceKv(L, w.base);
+  if (w.freeSpins) { L.section('fsWindows'); waysSourceKv(L, w.freeSpins); }
+  L.kv('multStrategy', w.multiplierStrategy + (w.multiplierStrategy === 'global' ? ` × ${w.globalMultiplier}` : ''));
+  L.note('multStrategy_' + w.multiplierStrategy);
+  if (w.multiplierStrategy === 'global') L.note('globalPayNote');
+  L.kv('wildReel1', 'wildStartsWin: ' + w.wildStartsWin);
+  L.note(w.hasWild === false ? 'wildReel1_none' : 'wildReel1_' + w.wildStartsWin);
+  if (w.multiplierSymbols.length) L.kv('multiplierSymbolsLabel', w.multiplierSymbols.map((m) => `${m.symbol} = ${m.countsAs} × ${m.multiplier}`).join(', '));
+  if (x.controlVariate) L.kv('controlVariateLabel', x.controlVariate.mean.percent + '%');
+  L.note('waysPayUnit');
+  L.note('waysSource');
+  if (w.multiplierStrategy === 'board') L.note('waysBoardNote');
+  L.note('waysNotCert');
+}
+
+// ---- Weighted stops and reel sets (P0-5) ----
+const bigNum = (s) => BigInt(s).toLocaleString('en-US');
+// One row per reel of each set, so no cell holds more than one number: L.table cuts a
+// cell that does not fit with '…'. The widest values still fit their columns at 19px
+// mono: a set weight up to 2^64 - 1 (26 characters with commas) and a reel total up to
+// 10,000 stops x (2^64 - 1) (31 characters).
+function reelSetsTable(L, sets) {
+  const rows = [];
+  sets.forEach((st, i) => st.reelTotals.forEach((total, k) => rows.push(k === 0
+    ? [i + 1, bigNum(st.weight), st.probability.percent + '%', k + 1, st.stops[k], bigNum(total)]
+    : ['', '', '', k + 1, st.stops[k], bigNum(total)])));
+  L.table([{ key: 'reelSet', w: 0.1 }, { key: 'setWeight', w: 0.25, mono: true }, { key: 'probability', w: 0.15, mono: true },
+    { key: 'reelNo', w: 0.08 }, { key: 'reelStops', w: 0.12, mono: true }, { key: 'reelTotal', w: 0.3, mono: true }], rows);
+}
+function weightsSection(L, m) {
+  L.section('weightedModel');
+  L.kv('totalWeight', bigNum(m.totalWeight), { mono: true });
+  L.kv('reelSetsCount', m.reelSets.length);
+  reelSetsTable(L, m.reelSets);
+  // Ways (P0-6): the top reel's total weight multiplies a set's cycle.
+  if (m.reelSets[0].topReelTotal) L.kv('topReelTotal', bigNum(m.reelSets[0].topReelTotal), { mono: true });
+  if (m.freeSpinReelSets) {
+    L.kv('fsReelSetsCount', m.freeSpinReelSets.length);
+    reelSetsTable(L, m.freeSpinReelSets);
+    if (m.freeSpinReelSets[0].topReelTotal) L.kv('topReelTotal', bigNum(m.freeSpinReelSets[0].topReelTotal), { mono: true });
+  }
+  L.note('weightsNote');
+  if (m.ways) L.note('waysWeightsNote');
 }
 
 function actualSection(L, ac) {
@@ -332,37 +573,210 @@ function actualSection(L, ac) {
     L.kv('declaredRtp', pct(dd.rtp, 4));
     L.kv('difference', (dd.difference >= 0 ? '+' : '') + pct(dd.difference, 4));
     L.kv('zScore', num(dd.z, 3));
-    L.kv('pValue', fmtP(dd.pValue));
-    const color = dd.verdict === 'normal' ? C.pass : dd.verdict === 'review' ? C.warn : C.fail;
+    L.kv('pBelow', fmtP(dd.pBelow ?? dd.pValue));
+    const color = dd.verdict === 'normal' ? C.pass : dd.verdict === 'suspicious' ? C.fail : C.warn;
     L.badge(null, color, VERDICT[dd.verdict]);
+    if (dd.verdict === 'insufficient') L.note('insufficientNote');
+    if (dd.aboveDeclared) L.note('aboveDeclared');
     if (dd.roundsToDetect) L.kv('roundsToDetect', dd.roundsToDetect.toLocaleString('en-US'));
   }
-  L.badge(null, a.reliable ? C.pass : C.warn, pair(a.reliable ? 'reliableYes' : 'reliableNo'));
+  if (a.reliable === null) { L.badge('reliableUnknownShort', C.warn); L.note('reliableUnknown'); }
+  else L.badge(null, a.reliable ? C.pass : C.warn, pair(a.reliable ? 'reliableYes' : 'reliableNo'));
   L.table([{ key: 'margin', w: 0.5 }, { key: 'roundsChecked', w: 0.5, mono: true }], a.roundsNeeded.map((r) => ['± ' + pct(r.margin, 1), r.rounds.toLocaleString('en-US')]));
+  if (a.modes) {
+    L.section('byMode');
+    L.table([{ key: 'modeName', w: 0.4 }, { key: 'roundsChecked', w: 0.3, mono: true }, { key: 'observedRtp', w: 0.3, mono: true }],
+      a.modes.map((m) => [m.mode, m.rounds.toLocaleString('en-US'), pct(m.rtp, 3)]));
+    L.note('modesNote');
+  }
+  const mg = a.merged;
+  if (mg && (mg.freeRows || mg.sameRoundRows)) L.kv('mergedRows', (mg.freeRows + mg.sameRoundRows).toLocaleString('en-US'));
   if (ac.skipped) L.kv('skippedRows', ac.skipped.toLocaleString('en-US'));
+  if (a.sigmaSource !== 'declared') L.note('ciObservedNote');
   L.note('confidenceNote');
 }
+
+// Distribution tests of the play log (core/audit-stats.js).
+function distSection(L, dt) {
+  const r = dt.result, f = r.fit;
+  const ref = r.candidates[r.refIndex];
+  const both = (key) => pair(key).join(' / ');
+  const x = (v) => num(v, 4) + '×';
+  const rounds = (v) => (v === null || v === undefined ? '—' : !Number.isFinite(v) ? '∞' : Math.ceil(v).toLocaleString('en-US'));
+  L.section('distTitle');
+  L.kv('roundsChecked', r.rounds.toLocaleString('en-US') + (r.mode ? `  (${r.mode})` : ''));
+  const [la, le] = pair('distLoaded');
+  r.candidates.forEach((c, i) => L.kv(null, `${i === r.refIndex ? '★ ' : ''}${c.label}` + (c.scope === 'round' ? `  (RTP ${pct(c.mean, 3)})` : ''), { labels: [`${la}: ${i + 1}`, `${le}: ${i + 1}`] }));
+  // Probabilities or weights that were divided by their total.
+  const normalized = r.candidates.filter((c) => c.normalizedFrom !== null && c.normalizedFrom !== undefined);
+  if (normalized.length) {
+    const list = normalized.map((c) => `${c.label} (${num(c.normalizedFrom, 8)})`).join(', ');
+    L.note(null, pair('distNormalized').map((s) => `${s}: ${list}`));
+  }
+  L.kv('distScope', both(ref.scope === 'round' ? 'distScopeRound' : 'distScopeBase'));
+  L.kv('seed', `"${r.seed}"`, { mono: true });
+  const color = { consistent: C.pass, mismatch: C.fail, impossible: C.fail, insufficient: C.warn }[f.verdict];
+  L.badge('distB_' + f.verdict, color);
+  L.note('distV_' + f.verdict);
+  L.note({ consistent: 'distPassNote', mismatch: 'distMismatchNote', impossible: 'distImpossibleNote', insufficient: 'distNeedTrigger' }[f.verdict]);
+  if (f.unavailable && f.verdict !== 'insufficient') L.note('distNeedTrigger');
+  if (r.mixedModes) L.note('distMixedModes');
+  if (f.offSupport && f.offSupport.count) L.kv('distOff', `${f.offSupport.count.toLocaleString('en-US')}: ` + f.offSupport.examples.map((e) => `#${e.round} ${x(e.x)}`).join(', '));
+  const inFamily = (id, index) => f.tests.find((t) => t.id === id && (index === undefined || t.index === index));
+  const status = (t, out = 'distTooRareShort') => (!t ? { text: both(out), color: C.muted } : t.rejected ? { text: both('distReject'), color: C.fail, bold: true } : { text: both('distKeep'), color: C.pass, bold: true });
+  const rows = [];
+  const g = f.gof;
+  if (g && g.applicable) rows.push([both('distGof'), `G ${num(g.G, 2)}, df ${g.df}, P ${fmtP(g.pValue)}`, status(inFamily('gof'), 'distGofOut')]);
+  if (f.hit) rows.push([both('distHit'), `${pct(f.hit.rate, 3)} / ${pct(f.hit.expected, 3)}, P ${fmtP(f.hit.pValue)}`, status(inFamily('hit'))]);
+  if (f.trigger) rows.push([both('distTrigger'), `${pct(f.trigger.rate, 4)} / ${pct(f.trigger.expected, 4)}, P ${fmtP(f.trigger.pValue)}`, status(inFamily('trigger'))]);
+  (f.tails || []).forEach((t, i) => rows.push([`P(X ≥ ${x(t.threshold)})`, `${t.observed} / ${num(t.expected, 2)}, P ${fmtP(t.pValue)}`, status(inFamily('tail', i))]));
+  if (rows.length) {
+    L.table([{ key: 'test', w: 0.36 }, { labels: ['المرصود / المتوقع، قيمة P', 'Observed / expected, P'], w: 0.4, mono: true }, { key: 'result', w: 0.24 }], rows);
+    if (f.tails && f.tails.length) L.note('distTailNote');
+  }
+  if (g && g.applicable) {
+    L.kv('distMcP', `G ${fmtP(g.pValue)}  ·  χ² ${fmtP(g.pValueX2)}  (${g.replicates.toLocaleString('en-US')} MC)`);
+    L.kv('distBinsDf', `${g.bins.length} / ${g.df}`);
+    if (!g.inFamily) L.note('distGofFloorNote');
+    // Every minimum detectable effect is at Holm's strictest level, alpha / m.
+    const [lva, lve] = pair('distMdeLevel');
+    const m = g.mde;
+    if (m) {
+      const b = g.bins[m.bin];
+      const zero = b && b.lo === 0 && b.hi === 0 && !b.triggered;
+      const share = m.relativeChange === null ? '' : `±${pct(m.relativeChange, 2)}`;
+      L.kv('distMde', `w = ${num(m.w, 4)}` + (share ? `  (${share})` : '') + `   α/m = ${fmtP(m.alpha)}`);
+      const [sa, se] = share ? pair(zero ? 'distNoWinShare' : 'distLargestBin') : ['', ''];
+      L.note(null, [
+        `${pair('distMde')[0]}` + (share ? `: ${share} ${pair('distMdeBin')[0]} ${sa}` : '') + `، ${lva}.`,
+        `${pair('distMde')[1]}` + (share ? `: ${share} ${pair('distMdeBin')[1]} ${se}` : '') + `, ${lve}.`,
+      ]);
+    }
+  }
+  if (f.hit) L.kv('distHit', `${pct(f.hit.rate, 3)}  [${pct(f.hit.ci[0], 3)} – ${pct(f.hit.ci[1], 3)}]  ${(f.hit.confidence * 100).toFixed(1)}%`);
+  if (f.trigger) L.kv('distTrigger', `${pct(f.trigger.rate, 4)}  [${pct(f.trigger.ci[0], 4)} – ${pct(f.trigger.ci[1], 4)}]`);
+  if (f.hit) {
+    const [ra, re] = pair('distMdeRate'), [ha, he] = pair('distHit'), [ta, te] = pair('distTrigger'), [va, ve] = pair('distMdeLevel');
+    const hit = pct(f.hit.mde.absolute, 3), trig = f.trigger ? pct(f.trigger.mde.absolute, 4) : null, level = fmtP(f.hit.mde.alpha);
+    L.note(null, [
+      `${ra}: ${ha} ${hit}` + (trig ? `، ${ta} ${trig}` : '') + ` (${va}: ${level}).`,
+      `${re}: ${he.toLowerCase()} ${hit}` + (trig ? `, ${te.toLowerCase()} ${trig}` : '') + ` (${ve}: ${level}).`,
+    ]);
+  }
+  if (f.topPrize) {
+    const tp = f.topPrize;
+    L.kv('distTop', `${x(tp.x)}  (1 / ${num(tp.oneIn, 0)})`);
+    if (tp.paidSpinOnly) L.note('distTopBase');
+    L.kv('distTopExpected', num(tp.expected, 3));
+    L.kv('distTopSeen', tp.observed.toLocaleString('en-US'));
+    L.kv('distTopNever', pct(tp.pNeverSeen, 2));
+    if (tp.ruleOfThree !== null) L.kv('distRuleOfThree', tp.ruleOfThree.toExponential(3));
+    if (tp.rtpShare !== null) L.kv('distTopShare', pct(tp.rtpShare, 2));
+    L.kv('distTopFor95', rounds(tp.roundsFor95));
+  }
+  if (f.total) {
+    const tt = f.total;
+    const est = tt.count === 0 ? `< ${fmtP(1 / tt.replicates)}` : tt.count === tt.replicates ? `> ${fmtP(1 - 1 / tt.replicates)}` : `≈ ${fmtP(tt.estimate)} ± ${fmtP(tt.se)}`;
+    L.kv('distTotalShort', `${est}   (${num(tt.sum, 2)} / ${num(tt.expected, 2)})`);
+    const draws = pair('distDraws');
+    L.note(null, pair('distTotalNote').map((s, i) => `${s} (${draws[i]}: ${tt.replicates.toLocaleString('en-US')}).`));
+  }
+  if (f.unseen) L.kv('distUnseenShort', `${pct(f.unseen.rtpAbove, 3)}  (max ${x(f.unseen.maxObserved)})`);
+
+  const v = r.versions;
+  if (v) {
+    L.section('distVersions');
+    if (v.error) L.note(null, [v.error.ar, v.error.en]);
+    else {
+      L.table([{ key: 'distVersion', w: 0.26 }, { key: 'distPmfRtp', w: 0.16, mono: true }, { key: 'distLogLik', w: 0.2, mono: true }, { key: 'distPosterior', w: 0.16, mono: true }, { key: 'distAsn', w: 0.22, mono: true }],
+        v.models.map((m, i) => [(i === v.refIndex ? '★ ' : '') + m.label, r.candidates[i].scope === 'round' ? pct(r.candidates[i].mean, 3) : '—', Number.isFinite(m.logLik) ? num(m.logLik, 2) : '−∞', pct(m.posterior, 2), rounds(m.asn)]));
+      const s = v.sequential;
+      if (s.decision === null) L.badge('distSprtPending', C.warn);
+      else {
+        L.kv('distSprtDecided', v.models[s.decision].label, { color: s.decision === v.refIndex ? C.pass : C.fail });
+        L.kv('distAtRound', s.at.toLocaleString('en-US'));
+      }
+      L.table([{ key: 'distVersion', w: 0.22 }, { labels: ['تباعد KL', 'KL divergence'], w: 0.4, mono: true }, { labels: ['جولات SPRT المتوقعة', 'Expected SPRT rounds'], w: 0.38, mono: true }],
+        v.pairs.map((p) => [p.label, `${p.klRefAlt.toExponential(3)} / ${p.klAltRef.toExponential(3)}`, `${rounds(p.asnRef)} / ${rounds(p.asnAlt)}`]));
+      L.note('distKl');
+      L.note('distPairAsn');
+      const wald = v.pairs.length === 1 && v.pairs[0].sprt;
+      if (wald) L.kv('distWald', wald.decision === 'continue' ? '—' : `${both(wald.decision === 'reference' ? 'distWaldRef' : 'distWaldAlt')} (${wald.at.toLocaleString('en-US')})`);
+      if (v.unmatched) L.kv('distUnmatched', v.unmatched.toLocaleString('en-US'));
+      L.note('distSprtNote');
+    }
+  }
+
+  const b = r.betting;
+  L.section('distSecBetting');
+  if (b.needs) L.note(b.needs === 'maxWin' ? 'distNeedsMax' : 'distNeedsDeclared');
+  else if (b.error) L.note(null, [b.error.ar, b.error.en]);
+  else {
+    L.kv(b.mu0Source === 'reference' ? 'distRefRtp' : 'declaredRtp', pct(b.mu0, 3));
+    L.kv(null, `${x(b.M)}   (${both('distSrc_' + b.maxWinSource)})`, { labels: ['M', 'M'] });
+    L.kv('distEValue', num(b.eValue, 4));
+    L.kv('distMaxE', `${num(b.maxEValue, 4)}   (1/α = ${num(1 / b.alpha, 0)})`);
+    L.kv('distAnytimeP', fmtP(b.pValue));
+    L.kv('distUpper', (b.upperBound === null ? `> ${pct(b.gridTop, 0)}` : (b.belowGrid ? '≤ ' : '') + pct(b.upperBound, 1)) + `   (${((1 - b.alpha) * 100).toFixed(1)}%)`);
+    if (b.crossedAt) L.kv('distCrossed', b.crossedAt.toLocaleString('en-US'));
+    L.badge(b.rejected ? 'distBetBadgeReject' : 'distBetBadgeKeep', b.rejected ? C.fail : C.pass);
+    L.note(b.rejected ? 'distBetReject' : 'distBetKeep');
+  }
+  if (b.declaredDiffers) L.note(null, pair('distDeclaredDiffers').map((s) => `${s}: ${pct(b.declaredDiffers, 3)} ≠ ${pct(b.mu0, 3)}`));
+  L.note('distBetNote');
+
+  const pl = r.planner;
+  L.section('distPlanner');
+  L.kv('distGap', num(pl.gap * 100, 2));
+  if (pl.sigma) L.kv(null, `${num(pl.sigma, 3)}   (${both('distSrc_' + pl.sigmaSource)})`, { labels: ['σ', 'σ'] });
+  const short = (id) => { const [a, e] = pair('planShort_' + id); return a === e ? a : `${a} / ${e}`; };
+  L.table([{ key: 'distPlanMethod', w: 0.5 }, { key: 'distVersion', w: 0.2 }, { key: 'distPlanRounds', w: 0.3, mono: true }],
+    pl.rows.map((p) => [short(p.id), p.version || '—', (p.approx && p.rounds !== null ? '≈ ' : '') + rounds(p.rounds)]));
+  const w = 1 / (2 + pl.maxWins.length);
+  L.table([{ labels: ['σ', 'σ'], w }, { key: 'distPlanMean', w, mono: true }, ...pl.maxWins.map((m) => ({ labels: [`M = ${m}×\u200e`, `M = ${m}×`], w, mono: true }))],
+    pl.grid.map((gr) => [num(gr.sigma, 3), rounds(gr.meanTest), ...gr.eProcess.map((e) => rounds(e.rounds))]));
+  L.note('distPlanNote');
+}
+
+const STATUS_COLOR = { pass: C.pass, flag: C.warn, fail: C.fail };
+const statusOf = (r) => r.status || (r.pass ? 'pass' : 'fail');
+const statusCell = (status) => ({ text: pair(status).join(' / '), color: STATUS_COLOR[status] || C.fail, bold: true });
 
 function rngSection(L, rg) {
   L.section('tabRng');
   L.kv('rngMode', rg.parsed.kind);
   L.kv('bitsCount', rg.parsed.nBits.toLocaleString('en-US'));
   L.kv('valuesCount', rg.parsed.nValues.toLocaleString('en-US'));
+  if (rg.nist.twoLevel) L.kv('twoLevel', `${rg.nist.sequences} × ${rg.nist.sequenceLength.toLocaleString('en-US')}`);
   for (const n of rg.parsed.notes || []) L.note(null, [n, n]);
+  const fam = rg.family;
+  if (fam) {
+    L.kv('familyDetail', `${fam.belowAlpha} / ${fam.pValueCount}  (${pair('familyExpected').join(' / ')} ≈ ${num(fam.expectedBelowAlpha, 1)})`);
+    L.badge(fam.pass ? 'familyPassShort' : 'familyFailShort', fam.pass ? C.pass : C.fail);
+    L.note(fam.pass ? 'familyPass' : 'familyFail');
+  }
   const rows = rg.nist.results.map((r) => {
     const [ar, en] = NIST_NAMES[r.id];
     if (!r.applicable) return [`${ar} / ${en}`, r.reason || r.requirement, { text: pair('na').join(' / '), color: C.muted }];
-    const ps = r.pValues;
-    const shown = ps.length === 1 ? fmtP(ps[0]) : `min ${fmtP(Math.min(...ps))} (${ps.filter((p) => p < 0.01).length}/${ps.length} < 0.01)`;
-    return [`${ar} / ${en}`, shown, { text: pair(r.pass ? 'pass' : 'fail').join(' / '), color: r.pass ? C.pass : C.fail, bold: true }];
+    let shown;
+    if (rg.nist.twoLevel) {
+      shown = `${r.sequences} seq, min ${(r.minProportion * 100).toFixed(1)}%` + (r.minUniformityP === null ? '' : `, P_T ${fmtP(r.minUniformityP)}`)
+        + (r.subtestCount > 1 ? `, ${r.subtestsFailing}/${r.subtestCount} out (~${num(r.subtestsExpectedFailing, 1)})` : '');
+    } else {
+      const ps = r.pValues;
+      shown = ps.length === 1 ? fmtP(ps[0]) : `min ${fmtP(Math.min(...ps))} (${ps.filter((p) => p < 0.01).length}/${ps.length} < 0.01)`;
+    }
+    return [`${ar} / ${en}`, shown, statusCell(statusOf(r))];
   });
-  rows.push([pair('chiSquare').join(' / '), `χ² = ${num(rg.chi.chi2, 2)}, df ${rg.chi.df}, P ${fmtP(rg.chi.pValue)}`, { text: pair(rg.chi.pass ? 'pass' : 'fail').join(' / '), color: rg.chi.pass ? C.pass : C.fail, bold: true }]);
-  rows.push([pair('serialCorr').join(' / '), rg.serial.r === null ? '—' : `r = ${num(rg.serial.r, 6)}, P ${fmtP(rg.serial.pValue)}`, { text: pair(rg.serial.pass ? 'pass' : 'fail').join(' / '), color: rg.serial.pass ? C.pass : C.fail, bold: true }]);
+  rows.push([pair('chiSquare').join(' / '), `χ² = ${num(rg.chi.chi2, 2)}, df ${rg.chi.df}, P ${fmtP(rg.chi.pValue)}`, statusCell(rg.chi.status || (rg.chi.pass ? 'pass' : 'fail'))]);
+  rows.push([pair('serialCorr').join(' / '), rg.serial.r === null ? '—' : `r = ${num(rg.serial.r, 6)}, P ${fmtP(rg.serial.pValue)}`, statusCell(rg.serial.status || (rg.serial.pass ? 'pass' : 'fail'))]);
   L.table([{ key: 'test', w: 0.46 }, { key: 'pValue', w: 0.34, mono: true }, { key: 'result', w: 0.2 }], rows);
   L.note('nistPassRule');
+  if (rg.nist.twoLevel) L.note('twoLevelRule');
 }
 
 function fairSection(L, fr) {
+  if (fr.mode === 'adapter') { pfSection(L, fr); return; }
   const f = fr.result;
   L.section('tabFair');
   L.kv('fairScheme', fr.scheme === 'chain' ? pair('schemeChain').join(' / ') : pair('schemeHmac').join(' / '));
@@ -386,6 +800,124 @@ function fairSection(L, fr) {
   if (bad.length) L.table([{ key: 'line', w: 0.15 }, { key: 'expected', w: 0.45, mono: true }, { key: 'claimed', w: 0.4, mono: true }], bad);
 }
 
+// ---- Provably fair v2 (adapter audit) ----
+function pfPayload(fr) {
+  const r = fr.result, a = fr.adapter;
+  return {
+    input: fr.inputId, mode: 'adapter',
+    adapter: { key: a.key, id: a.id, version: a.version, evidence: a.evidence, sourceUrl: a.sourceUrl, captureDate: a.captureDate, selfTest: a.selfTest ? { ok: a.selfTest.ok, passed: a.selfTest.passed, total: a.selfTest.total } : null },
+    options: { ...fr.options, paytable: fr.options.paytable || null },
+    verdict: r.verdict, rows: r.rows, counts: r.counts, payout: r.payout,
+    epochs: r.epochs.slice(0, 100), listed: r.listed || null, chain: r.chain, uniformity: r.uniformity, games: r.games || {},
+    issueCounts: r.issueCounts, issues: r.issues.slice(0, 100),
+    // per-row verdicts: mismatches first, then rounds not checked (with the reason)
+    problemRows: (r.problemRows || []).slice(0, 200),
+  };
+}
+
+// Short text for an issue's detail (nonce range, P-value, link count...) in `lang`.
+export function pfIssueDetail(i, lang = 'en') {
+  const d = i.detail || {};
+  const tx = (k, v) => pair(k)[lang === 'en' ? 1 : 0].replace('{0}', v);
+  if (d.from !== undefined) return tx('pfD_nonce', `${d.from}${d.to !== d.from ? '–' + d.to : ''}`);
+  if (d.nonce !== undefined) return tx('pfD_nonce', d.nonce);
+  if (d.pValue !== undefined) return 'P = ' + fmtP(d.pValue);
+  if (d.links !== undefined && d.links !== null) return tx('pfD_links', num(d.links, 0));
+  if (d.missing !== undefined) return tx('pfD_missing', d.missing);
+  if (d.rows !== undefined) return tx('pfD_rows', d.rows);
+  if (d.first !== undefined) return tx('pfD_first', d.first);
+  if (d.edge) return tx('pfEdge_' + d.edge);
+  if (d.era) return tx('pfEra_' + d.era);
+  if (d.formula) return tx('pfLimboShort_' + d.formula);
+  if (d.message) return typeof d.message === 'object' ? d.message[lang === 'en' ? 'en' : 'ar'] : String(d.message);
+  if (d.gap !== undefined) return tx('pfD_gap', d.gap);
+  if (d.clients !== undefined) return tx('pfD_clients', d.clients);
+  if (d.length !== undefined) return tx('pfD_length', d.length);
+  if (d.fromGame !== undefined) return tx('pfD_game', `${d.fromGame} → ${d.toGame}`);
+  if (d.gameId !== undefined) return tx('pfD_game', d.gameId);
+  if (d.hash) return d.hash.slice(0, 12) + '…';
+  return i.epoch ? i.epoch.slice(0, 12) + '…' : '';
+}
+
+const PF_COLOR = { PASS: C.pass, CONDITIONAL: C.warn, FAIL: C.fail, INCONCLUSIVE: C.warn, NOTHING_CHECKED: C.warn };
+const SEV_COLOR = { fail: C.fail, warn: C.warn, info: C.muted };
+function pfSection(L, fr) {
+  const r = fr.result, a = fr.adapter, v = r.verdict;
+  const both = (k) => pair(k).join(' / ');
+  const n = (x) => x.toLocaleString('en-US');
+  L.section('tabFair');
+  L.kv('pfAdapter', `${a.name[1]} · ${a.id}@${a.version}`);
+  L.kv('pfEvidence', both('pfEv_' + a.evidence), { color: a.evidence === 'verified' ? C.pass : a.evidence === 'unconfirmed' ? C.warn : C.accent });
+  L.kv('pfSource', a.sourceUrl, { mono: true });
+  L.kv('pfCaptureDate', a.captureDate);
+  if (a.selfTest) L.kv('pfSelfTest', `${a.selfTest.passed} / ${a.selfTest.total}`, { color: a.selfTest.ok ? C.pass : C.fail });
+  // the games the audit actually covered (rows per game), not only the default one
+  const played = Object.entries(r.games || {});
+  const formulaOf = (g) => (a.games && a.games[g] && a.games[g].formula ? a.games[g].formula : null);
+  if (played.length > 1) {
+    L.kv('pfGame', played.map(([g, c]) => `${g}: ${n(c)}`).join(' · '));
+    const lines = played.filter(([g]) => formulaOf(g)).map(([g]) => `${g} — ${formulaOf(g)}`);
+    if (lines.length) L.note(null, [lines.join(' ؛ '), lines.join('; ')]);
+  } else {
+    const g = played.length ? played[0][0] : r.options.game;
+    if (g) L.kv('pfGame', g + (formulaOf(g) ? ' — ' + formulaOf(g) : ''));
+  }
+  if (a.games && a.games.limbo && (!played.length || r.games.limbo)) L.kv('pfLimbo', r.options.limboFormula === 'docs' ? 'docs: 1e8 / (f × 1e8) × 0.99' : 'calculator: 2^24 / (floor(f × 2^24) + 1) × 0.99');
+  L.note('pfEvNote_' + a.evidence);
+  L.note(null, a.notes);
+  L.kv('roundsChecked', n(r.rows));
+  L.kv('pfMatched', `${n(r.counts.ok)} / ${n(r.counts.ok + r.counts.mismatch)}`, { color: r.counts.mismatch ? C.fail : C.pass });
+  if (r.counts.notChecked) L.kv('pfNotChecked', n(r.counts.notChecked));
+  if (r.counts.computed) L.kv('pfComputedOnly', n(r.counts.computed));
+  if (r.epochs.length) L.kv('pfEpochs', `${r.epochs.filter((e) => e.commitment === 'ok').length} / ${r.epochs.length}`);
+  if (r.payout.checked) L.kv('pfPayouts', `${n(r.payout.ok)} / ${n(r.payout.checked)}`, { color: r.payout.mismatch ? C.fail : C.pass });
+  if (r.chain) {
+    L.kv('pfChainLinks', n(r.chain.linksChecked));
+    L.kv('pfChainBreaks', String(r.chain.breaks), { color: r.chain.breaks ? C.fail : C.pass });
+    L.kv('pfLinksWalked', n(r.chain.linksWalked));
+    const term = r.chain.terminating;
+    if (term) {
+      L.kv('pfTerminatingRes', (term.status === 'ok' ? '✓' : '✗') + (term.links !== null && term.links !== undefined ? ` · ${n(term.links)}` : ''), { color: term.status === 'ok' ? C.pass : C.fail });
+      L.note(term.status === 'ok' ? 'pfTerm_ok' : term.status === 'mismatch' ? 'pfTerm_mismatch' : term.status === 'no-target' ? 'pfTerm_noTarget' : 'pfTerm_notReached');
+    }
+  }
+  L.kv('pfVerdictCode', String(v.exit));
+  L.badge('pfVS_' + v.code, PF_COLOR[v.code]);
+  L.note('pfV_' + v.code);
+  L.note('pfVerdictNote');
+  const issues = r.issues.slice().sort((x, y) => ({ fail: 0, warn: 1, info: 2 }[x.severity] - { fail: 0, warn: 1, info: 2 }[y.severity])).slice(0, 25);
+  if (issues.length) {
+    L.section('pfIssuesTable');
+    L.table([{ key: 'pfSeverity', w: 0.15 }, { key: 'pfDescription', w: 0.3, mono: true }, { key: 'line', w: 0.12, mono: true }, { key: 'expected', w: 0.13, mono: true }, { key: 'claimed', w: 0.13, mono: true }, { labels: ['التفاصيل', 'Detail'], w: 0.17, mono: true }],
+      issues.map((i) => [{ text: both('pfSev_' + i.severity), color: SEV_COLOR[i.severity], bold: i.severity === 'fail' }, i.code, i.line ?? (i.lines ? i.lines.slice(0, 3).join(' · ') : ''), i.expected ?? '', i.claimed ?? '', pfIssueDetail(i)]));
+    for (const code of [...new Set(issues.map((i) => i.code))]) {
+      const [ar, en] = pair('pfI_' + code);
+      L.note(null, [`${ar} (${code})`, `${code}: ${en}`]);
+    }
+  }
+  const rows = r.problemRows || [];
+  if (rows.length) {
+    L.section('pfRowsTable');
+    L.table([{ key: 'line', w: 0.1, mono: true }, { key: 'pfGame', w: 0.14, mono: true }, { key: 'pfRowStatus', w: 0.36 }, { key: 'expected', w: 0.2, mono: true }, { key: 'claimed', w: 0.2, mono: true }],
+      rows.slice(0, 25).map((p) => [p.line, p.game || '—', p.status === 'mismatch' ? { text: both('pfRow_mismatch'), color: C.fail, bold: true } : { text: both('pfR_' + p.reason), color: C.muted }, p.computed ?? '—', p.claimed ?? '']));
+    if (rows.length > 25) L.note(null, [`${pair('pfRowsShown')[0]}: 25 / ${n(r.counts.mismatch + r.counts.notChecked)}`, `${pair('pfRowsShown')[1]}: 25 / ${n(r.counts.mismatch + r.counts.notChecked)}`]);
+  }
+  if (r.epochs.length) {
+    L.section('pfEpochTable');
+    L.table([{ key: 'pfCommitment', w: 0.22 }, { labels: ['SHA-256', 'SHA-256'], w: 0.24, mono: true }, { key: 'roundsChecked', w: 0.1, mono: true }, { key: 'pfNonces', w: 0.16, mono: true }, { key: 'pfForward', w: 0.28 }],
+      r.epochs.slice(0, 20).map((e) => [both('pfCm_' + e.commitment), e.hash.slice(0, 20) + '…', e.rows, e.nonceMin === null ? '—' : `${e.nonceMin}–${e.nonceMax}`, e.forward ? both('pfFw_' + e.forward) : '—']));
+    L.note('pfCommitmentNote');
+    if (r.listed === 'newest-first') L.note('pfListedNewest');
+  }
+  if (r.uniformity.length) {
+    L.section('pfUniformity');
+    L.table([{ key: 'pfGame', w: 0.25 }, { key: 'roundsChecked', w: 0.2, mono: true }, { labels: ['χ² / df', 'χ² / df'], w: 0.2, mono: true }, { key: 'pValue', w: 0.15, mono: true }, { key: 'result', w: 0.2 }],
+      r.uniformity.map((u) => [u.game + (u.group.rows ? ` (${u.group.rows})` : ''), n(u.n), u.chi2 === null ? '—' : `${num(u.chi2, 2)} / ${u.df}`, fmtP(u.pValue),
+        u.status === 'na' ? { text: both('pfInsufficient'), color: C.muted } : u.status === 'pass' ? { text: both('pfNotRejected'), color: C.pass } : statusCell(u.status)]));
+    L.note('pfUniformityNote');
+  }
+}
+
 function mcSection(L, mc) {
   const s = mc.result;
   L.section('tabMc');
@@ -393,7 +925,12 @@ function mcSection(L, mc) {
   L.kv('seed', mc.seed, { mono: true });
   L.kv('prng', mc.generator, { mono: true });
   L.kv('spins', mc.spins.toLocaleString('en-US'));
-  L.kv('simRtp', pct(s.rtp, 4), { color: C.accent });
+  L.kv(s.scope === 'firstDrop' ? 'simRtpFirstDrop' : 'simRtp', pct(s.rtp, 4), { color: C.accent });
+  if (mc.controlVariate) {
+    const cv = mc.controlVariate;
+    L.kv(s.scope === 'firstDrop' ? 'cvRtpFirstDrop' : 'cvRtp', `${pct(cv.rtp, 4)}  (95%: ${pct(cv.ci95[0], 3)} – ${pct(cv.ci95[1], 3)})`);
+    L.note('cvNote');
+  }
   L.kv('ci', `95%:  ${pct(s.ci95[0], 3)} – ${pct(s.ci95[1], 3)}`);
   L.kv('hitFrequency', pct(s.hitFrequency, 4));
   L.kv('sd', num(s.sd, 4));
@@ -407,8 +944,189 @@ function mcSection(L, mc) {
   L.note('reproduce');
 }
 
+// ---- Outcome tables (LUT, P0-7) ----
+const lutPct = (v) => (v === 0 ? '0%' : v < 1e-5 ? (v * 100).toExponential(2) + '%' : pct(v, 4));
+const lutOneIn = (n) => (n === null || n === undefined ? '—' : '1 / ' + num(n, n < 100 ? 2 : 0));
+const lutBig = (s) => (/^\d+$/.test(String(s)) ? BigInt(s).toLocaleString('en-US') : String(s));
+function lutValue(unit, v) {
+  if (typeof v === 'string') return lutBig(v);
+  if (unit === 'rtp') return pct(v, 4);
+  if (unit === 'p') return lutPct(v);
+  if (unit === 'x' || unit === 'xc') return num(v, 4) + '×';
+  return num(v, 4);
+}
+
+// A small heading above a table (Arabic right, English left), kept with the table.
+function lutSub(L, key) {
+  const [ar, en] = pair(key);
+  L.ensure(160);
+  L.y += 10;
+  L.draw(ar, W - M, L.y, { size: 24, weight: '700', align: 'right', dir: 'rtl' });
+  L.draw(en, M, L.y, { size: 21, weight: '600', color: C.muted });
+  L.y += 46;
+}
+
+function lutSection(L, lu) {
+  const x = lu.result;
+  L.section('tabLut');
+  L.badge('lutNotPfShort', C.warn);
+  L.note('lutNotPf');
+  L.table([{ key: 'lutMode', w: 0.16 }, { key: 'lutCostShort', w: 0.12 }, { key: 'rtp', w: 0.18, mono: true }, { key: 'lutHitShort', w: 0.16, mono: true }, { key: 'lutSdShort', w: 0.14, mono: true }, { key: 'lutMaxShort', w: 0.24, mono: true }],
+    x.modes.map((m) => [m.name, m.cost.text + '×', m.rtp.percent + '%', pct(m.hitRate.value, 4), num(m.sd, 4), `${num(m.maxWin.multiplier.value, 2)}× (${lutOneIn(m.maxWin.oneIn)})`]));
+  L.note('lutCostNote');
+  for (const m of x.modes) {
+    L.y += 16;
+    L.kv('lutMode', `${m.name}  ·  ${m.cost.text}×  ·  ${m.weightsFile}`, { color: C.accent });
+    L.kv('rtp', m.rtp.percent + '%', { color: C.accent });
+    L.kv('exactFraction', m.rtp.fraction, { mono: true });
+    L.kv('lutTotalWeight', lutBig(m.totalWeight), { mono: true });
+    L.kv('lutHit', `${pct(m.hitRate.value, 4)}  (${lutOneIn(m.hitRate.oneIn)})`);
+    L.kv('lutLdw', pct(m.ldw.value, 4) + (m.ldwShareOfWins ? `  (${pair('lutLdwShare')[1]}: ${pct(m.ldwShareOfWins.value, 2)})` : ''));
+    L.kv('lutBelowCost', pct(m.belowCost.value, 4));
+    L.kv('lutSd', num(m.sd, 4));
+    L.kv('lutMaxWin', `${num(m.maxWin.multiplier.value, 2)}×  (${lutOneIn(m.maxWin.oneIn)})`);
+    L.kv('lutCvar', `${num(m.cvar999.absolute.value, 2)}×  (÷ cost: ${num(m.cvar999.relative.value, 2)})`);
+    L.kv('lutMea_rtp40', pct(m.tail.rtpFrom40xCost.value, 4) + (m.tail.shareFrom40xCost ? `  (${pair('lutShare')[1]}: ${pct(m.tail.shareFrom40xCost.value, 2)})` : ''));
+    L.kv('lutMea_rtp10k', pct(m.tail.rtpFrom10kx.value, 4) + (m.tail.shareFrom10kx ? `  (${pair('lutShare')[1]}: ${pct(m.tail.shareFrom10kx.value, 2)})` : ''));
+    lutSub(L, 'lutBigWins');
+    L.table([{ key: 'lutWinAtLeast', w: 0.34 }, { key: 'probability', w: 0.33, mono: true }, { labels: ['1 من N', '1 in N'], w: 0.33, mono: true }],
+      m.bigWins.map((b) => [b.threshold.toLocaleString('en-US') + '×', lutPct(b.probability.value), lutOneIn(b.oneIn)]));
+    // Buckets are in multiples of the mode's cost, unlike the base-bet tables above.
+    lutSub(L, 'lutBuckets');
+    L.table([{ key: 'lutRangeCost', w: 0.34 }, { key: 'probability', w: 0.33, mono: true }, { key: 'lutContribution', w: 0.33, mono: true }],
+      m.buckets.map((b) => [b.to === 0 ? '0' : b.to === null ? `≥ ${b.from}` : `${b.from} – ${b.to}`, lutPct(b.probability.value), pct(b.rtp.value, 4)]));
+  }
+  L.note('lutCvarNote');
+  L.section('lutTransparency');
+  L.table([{ key: 'lutMode', w: 0.16 }, { key: 'lutRows', w: 0.14, mono: true }, { key: 'lutZeroRows', w: 0.18, mono: true }, { key: 'lutEssShort', w: 0.18, mono: true }, { key: 'lutMaxRowShort', w: 0.18, mono: true }, { key: 'lutKlShort', w: 0.16, mono: true }],
+    x.modes.map((m) => {
+      const tp = m.transparency;
+      return [m.name, tp.rows.toLocaleString('en-US'), tp.zeroWeightRows.toLocaleString('en-US'), num(tp.effectiveSize.value, 1), lutPct(tp.maxRowProbability.value), num(tp.klBits, 4)];
+    }));
+  L.note('lutTransparencyNote');
+  if (x.ignored.length) L.kv('lutIgnored', x.ignored.join(', '));
+  L.note('lutBooksNote'); // books are never read, whether or not any were selected
+
+  const pr = x.profile;
+  L.section('lutStake');
+  L.note('lutStakeSource');
+  if (pr.submissionIssues) L.badge('lutSubmissionBadShort', C.fail);
+  else if (pr.inferredIssues) L.badge('lutInferredBadShort', C.warn);
+  else L.badge('lutSubmissionOk', C.pass);
+  L.kv('lutRiskPassing', `${pr.riskPassing} / ${pr.riskCategories}`, { color: pr.riskPassing === pr.riskCategories ? C.pass : C.warn });
+  L.kv('lutMaxBet', `$${num(pr.maxBaseBet.value, 2)}  (${pair('lutTemplate')[1]} ${pr.maxBaseBet.template})`);
+  L.note('lutStakeRiskNote');
+  const mode = (m) => (m === null ? pair('lutAllShort').join(' / ') : m);
+  const cell = (ok) => statusCell(ok ? 'pass' : 'fail');
+  // Arabic and English labels in their own columns: a mixed cell with numbers reorders badly.
+  // Submission labels state their own limit ("Cost ≤ 50,000×").
+  lutSub(L, 'lutSubmission');
+  L.table([{ key: 'lutCheckAr', w: 0.28 }, { key: 'lutCheckEn', w: 0.24 }, { key: 'lutMode', w: 0.1 }, { key: 'lutValue', w: 0.26, mono: true }, { key: 'result', w: 0.12 }],
+    pr.submission.map((c) => [pair('lutChk_' + c.id)[0], pair('lutChk_' + c.id)[1], mode(c.mode), c.id === 'rtp' ? `${pct(c.value, 4)} → ${pct(c.rounded, 2)}` : lutValue(c.unit, c.value), cell(c.ok)]));
+  lutSub(L, 'lutInferred');
+  L.table([{ key: 'lutCheckAr', w: 0.28 }, { key: 'lutCheckEn', w: 0.24 }, { key: 'lutMode', w: 0.1 }, { key: 'lutValue', w: 0.26, mono: true }, { key: 'result', w: 0.12 }],
+    pr.inferred.map((c) => [pair('lutChk_' + c.id)[0], pair('lutChk_' + c.id)[1], c.mode, lutValue(c.unit, c.value), statusCell(c.ok ? 'pass' : 'flag')]));
+  L.note('lutInferredNote');
+  // Risk measures grouped under their category (a category fails if any measure in any mode does).
+  const riskRows = [];
+  for (const cat of [...new Set(pr.risk.map((c) => c.category))]) {
+    const [ar, en] = pair('lutCat_' + cat);
+    riskRows.push([{ text: ar, bold: true }, { text: en, bold: true }, '', '', '', pr.failedCategories.includes(cat) ? cell(false) : cell(true)]);
+    for (const c of pr.risk.filter((r) => r.category === cat)) {
+      riskRows.push([pair('lutMea_' + c.measure)[0], pair('lutMea_' + c.measure)[1], c.mode, lutValue(c.unit, c.value), lutValue(c.unit, c.limit), cell(c.ok)]);
+    }
+  }
+  lutSub(L, 'lutRisk');
+  L.table([{ key: 'lutCheckAr', w: 0.26 }, { key: 'lutCheckEn', w: 0.22 }, { key: 'lutMode', w: 0.1 }, { key: 'lutValue', w: 0.16, mono: true }, { key: 'lutLimit', w: 0.14, mono: true }, { key: 'result', w: 0.12 }], riskRows);
+  L.note('lutStakeNotCert');
+  L.note('lutStakeExactNote');
+}
+
+function lutAscii(lines, x) {
+  lines.push(`  Outcome tables (Stake Engine LUT format), modes: ${x.modes.length}. A LUT drawn on the server is not provably fair without commit-reveal.`);
+  for (const m of x.modes) {
+    const f = m.rtp.fraction.length > 60 ? m.rtp.fraction.slice(0, 57) + '...' : m.rtp.fraction;
+    lines.push(`    ${m.name} (cost ${m.cost.text}x): RTP ${m.rtp.percent}% = ${f}, hit ${(m.hitRate.value * 100).toFixed(4)}%, SD ${m.sd.toFixed(4)} x cost, top win ${m.maxWin.multiplier.value}x (1 in ${Math.round(m.maxWin.oneIn).toLocaleString('en-US')}), effective size ${m.transparency.effectiveSize.value.toFixed(1)} of ${m.transparency.rows} rows`);
+  }
+  const pr = x.profile;
+  lines.push(`  Stake Engine RGS limits (${pr.profile.source} @${pr.profile.commit.slice(0, 7)}, ${pr.profile.commitDate}): submission issues ${pr.submissionIssues}`
+    + (pr.inferredIssues ? ` (plus format notes ${pr.inferredIssues}: the lab's inference, not published checks)` : '')
+    + `; risk categories passing ${pr.riskPassing} of ${pr.riskCategories}`
+    + (pr.failedCategories.length ? ` (failing: ${pr.failedCategories.join(', ')}; this lowers bet limits, it does not reject the game)` : '')
+    + `; max base bet $${pr.maxBaseBet.value}. A recomputation, not a certification. Book files are not read, so their match with the tables is not checked.`);
+}
+
+function roundAscii(lines, r) {
+  const t = r.theoretical;
+  const rd = t && t.roundDistribution;
+  if (t && t.roundError) lines.push(`  Whole-round distribution: not available (${t.roundError.en})`);
+  if (rd) {
+    const worst = Math.max(...Object.values(rd.checks).map((c) => c.relativeError));
+    const head = rd.exact ? 'exact fractions' : `${rd.method === 'capsDp' ? 'FFT, cap-state sweep' : 'FFT, free-spin fixed point'}, grid ${rd.grid.size}, wrapped mass ${rd.aliasBound ? '< ' + upper2(rd.aliasBound) : '0'}, noise floor ${upper2(rd.floor)}; mass/mean/variance match the closed forms to ${worst.toExponential(1)}`;
+    const big = rd.thresholds.map((x) => `>= ${x.x}x ${roundProb(x)}${x.method === 'bound' ? ' (bound)' : x.value > 0 || x.oneInSci ? ` (1 in ${roundOneIn(x)})` : ''}`).join('; ');
+    const top = rd.maxWin.bounded ? `top win ${rd.maxWin.x}x, P ${roundProb(rd.maxWin)}` : `no top win (uncapped retriggers; largest above the floor ${rd.maxWin.largestAboveFloor}x)`;
+    lines.push(`  Whole-round distribution${rd.scope === 'firstDrop' ? ' (FIRST DROP ONLY: each spin\'s first drop, not the game\'s rounds)' : ''} (${head}${rd.caps ? '; caps ' + capsLine(rd.caps) : ''}): ${big}; ${top}`);
+  }
+  const c = t && t.maxWinCap;
+  if (c && c.cap) {
+    // What the cap removes, with the upper bound the cells under the noise floor allow.
+    const k = c.cap;
+    const up = typeof k.lost.upper === 'number' && smallPct(k.lost.upper, 4) !== smallPct(k.lost.value, 4) ? ` to ${smallPct(k.lost.upper, 4)}` : '';
+    lines.push(`  Max-win cap ${k.M}x per round: RTP ${pct(k.rtpCapped.value, 4)}${rd && rd.scope === 'firstDrop' ? ' (first drop only)' : ''} (the cap removes ${smallPct(k.lost.value, 4)}${up}${k.aboveMax ? '; the cap is above the top possible win' : ''}); P(a round reaches the cap) ${roundProb(k.reach)}`);
+  }
+  if (c && c.oddsChecks && c.top) {
+    const w = (p) => (p === true ? 'meets' : p === false ? 'does not meet' : 'undecided');
+    lines.push(`  Top award ${c.top.x}x${rd && rd.scope === 'firstDrop' ? ' (FIRST DROP ONLY: from the first-drop distribution, so the verdicts do not hold for the game)' : ''}, P ${roundProb(c.top.prob)}: GLI-19 4.7.3 (1 in 100,000,000) ${w(c.top.checks.gli19.pass)}; Pennsylvania 461a.7 (50,000,000 to 1) ${w(c.top.checks.pa.pass)}. Rules unverified; not a regulatory finding.`);
+  }
+  const s = r.session;
+  if (s) {
+    const bet = betOf(s.options);
+    const tag = { sessBelowFloor: ' (below the precision floor)', sessNone95: ' (no simulated session; 95% bound)', sessAll95: ' (every simulated session; 95% bound)' };
+    const say = (v) => v.text + (v.key ? tag[v.key] : '');
+    const mc = `seeded Monte Carlo, seed "${s.options.seed}"`;
+    const ruin = s.ruin && sessText(s.ruin.p, s.ruin, ' +/- ');
+    lines.push(`  Session funnel${s.scope === 'firstDrop' ? ' (FIRST DROP ONLY)' : ''}: ${s.rounds} rounds at ${s.options.bet}${s.options.budget ? `, budget ${s.options.budget}` : ''} (${s.method === 'fft' ? 'FFT, no simulation' : mc}): expected loss ${num(s.expectedLossBets.value * bet, 2)}, median ${num(s.medianBets * bet, 2)}, P(finish ahead) ${say(aheadOf(s, ' +/- '))} (normal approximation ${s.normalApproximation ? smallPct(s.normalApproximation.pAhead) : '-'})`
+      + (ruin ? `, P(budget runs out) ${say(ruin)} (${s.ruin.method === 'dp' ? 'DP over the bankroll, no simulation' : mc})` : '')
+      + (s.nStar ? `, N* = ${s.nStar.rounds} (normal approximation, z = 1.645)` : '') + '. Range and P(finish ahead) assume every round is played. Describes cost, not advice.');
+  }
+}
+
+// ---- signed reports: reproducibility manifest page ----
+const REFERENCE_USE = {
+  'FIPS 180-4': 'refUseHash', 'PDF 1.4': 'refUsePdf', 'RFC 8032': 'refUseSignature', 'FIPS 186-5': 'refUseSignature',
+  'RFC 5280': 'refUseSpki', 'NIST SP 800-22 Rev. 1a': 'refUseNist', 'NIST STS 2.1.2': 'refUseSts', 'RFC 2104': 'refUseHmac', 'xoshiro128** 1.1': 'refUseMc',
+  'Stake Engine math-sdk': 'refUseLut', 'Stake Engine math-sdk (ways)': 'refUseWays',
+  'GLI-19 v3.0': 'refUseRules', '58 Pa. Code 461a.7': 'refUseRules', 'Vose 1991': 'refUseAlias',
+};
+const DEVIATION_TEXT = {
+  'nist-overlapping-exact': 'devOverlapping', 'nist-linear-pi0': 'devLinearPi0', 'nist-cusum-bounds': 'devCusum',
+  'nist-family-holm': 'devFamily', 'nist-proportion-bound': 'devProportion',
+  'ways-board-sum': 'devWaysBoard', 'ways-wild-reel1': 'devWaysWild',
+};
+
+// "25 MiB (26,214,400 bytes)", in Arabic (lang 0) or English (lang 1).
+function limitText(bytes, lang) {
+  const mib = (bytes / 1048576).toLocaleString('en-US', { maximumFractionDigits: 3 });
+  return `${mib} ${pair('mib')[lang]} (${bytes.toLocaleString('en-US')} ${pair('bytes')[lang]})`;
+}
+
+function manifestSection(L, m) {
+  L.section('manifestTitle');
+  L.kv('labVersion', m.lab.version, { mono: true });
+  L.kv('attachLimit', limitText(m.attachmentLimitBytes, 1));
+  if (m.model) L.kv('modelHash', m.model.sha256, { mono: true });
+  if (m.montecarlo) L.kv('seed', m.montecarlo.seed, { mono: true });
+  L.section('referencesTitle');
+  for (const ref of m.references) L.kv(null, ref.id, { labels: pair(REFERENCE_USE[ref.id] || 'refUseHash') });
+  if (m.deviations.length) {
+    L.section('deviationsTitle');
+    for (const d of m.deviations) L.note(null, DEVIATION_TEXT[d.id] ? pair(DEVIATION_TEXT[d.id]) : [d.text, d.text]);
+  }
+  L.note('manifestNote');
+}
+
 // Pretty JSON, but arrays of plain values stay on one line (reel strips, pay rows).
-function compactJson(v, indent = '') {
+export function compactJson(v, indent = '') {
   if (Array.isArray(v)) {
     if (v.every((x) => x === null || typeof x !== 'object')) return JSON.stringify(v);
     return '[\n' + v.map((x) => indent + '  ' + compactJson(x, indent + '  ')).join(',\n') + '\n' + indent + ']';
@@ -434,32 +1152,94 @@ function previewLines(input) {
 }
 
 function asciiSummary(payload, reportId, digest) {
+  const sg = payload.signer;
   const lines = [
     'TARYAM RTP Lab - verification page',
     '',
     'Report ID:      ' + reportId,
-    'Created (UTC):  ' + payload.createdAt,
+    'Created (UTC):  ' + payload.createdAt + (sg ? "  (the signer's own device clock)" : ''),
     'Report SHA-256: ' + digest,
     '                (SHA-256 of the attached file report.json)',
-    '',
-    'Inputs (attached inside this PDF):',
+    'Lab version:    ' + payload.manifest.lab.version,
   ];
+  if (sg) {
+    lines.push(
+      'Signature:      ' + ALGORITHM_INFO[sg.alg].label + ' (' + ALGORITHM_INFO[sg.alg].reference + '), attached file report.sig',
+      '                (signs report.json, and every other byte of this PDF)',
+      'Signer key:     SHA-256 of the public key (SPKI):',
+      '                ' + formatFingerprint(sg.keyFingerprint),
+      'Key storage:    ' + (sg.keyStorage === 'persistent' ? "kept in the signer's browser (private key not extractable)" : 'this session only (browser storage was unavailable); later reports use another key'),
+    );
+  }
+  lines.push('', 'Inputs:');
+  const attachedAs = new Map(payload.manifest.inputs.map((i) => [i.id, i.attachment]));
   payload.inputs.forEach((i, n) => {
-    lines.push(`  ${n + 1}. ${i.name} (${i.kind}, ${i.size} bytes)`);
+    const hashOnly = attachedAs.get(i.id) === null;
+    lines.push(`  ${n + 1}. ${i.name} (${i.kind}, ${i.size} bytes)` + (hashOnly ? ` - HASH ONLY: over ${payload.manifest.attachmentLimitBytes} bytes, not attached` : ', attached'));
     lines.push(`     SHA-256 ${i.sha256}`);
   });
   lines.push('', 'Results:');
   const r = payload.results;
   if (r.theoretical) lines.push(`  Theoretical RTP: ${r.theoretical.rtp.percent}% = ${r.theoretical.rtp.fraction.length > 80 ? r.theoretical.rtp.fraction.slice(0, 77) + '...' : r.theoretical.rtp.fraction}`);
-  if (r.theoretical && r.theoretical.distribution) lines.push(`  Hit frequency ${(r.theoretical.distribution.hitFrequency.value * 100).toFixed(4)}%, SD ${r.theoretical.distribution.sd.toFixed(4)} x bet`);
+  if (r.theoretical && r.theoretical.model.weighted) {
+    const m = r.theoretical.model;
+    lines.push(`  Weighted reels: base reel sets ${m.reelSets.length}` + (m.freeSpinReelSets ? `, free-spin reel sets ${m.freeSpinReelSets.length}` : '') + `; exact for the weights as entered, not a certification`);
+  }
+  if (r.theoretical && r.theoretical.model.ways) {
+    const w = r.theoretical.model.ways, top = w.base.topReel;
+    lines.push(`  Ways evaluation: ${w.base.minWays}-${w.base.maxWays} ways, bet ${w.betCost} coins, top reel ${top ? `over reels ${top.covers.join(', ')} (${top.stops} stops)` : 'none'};`
+      + ` multiplier strategy "${w.multiplierStrategy}", ${w.hasWild === false ? 'no wild in the model (wildStartsWin changes nothing)' : `wild on reel 1 ${w.wildStartsWin ? 'starts every symbol' : 'starts only symbols shown on reel 1'}`}`
+      + ' (conventions named after StakeEngine/math-sdk ways.py, commit 141b4e8, 2 Nov 2026); exact for the model as entered, not a certification');
+  }
+  if (r.theoretical && r.theoretical.scope === 'firstDrop') {
+    lines.push('  FIRST DROP ONLY: the game cascades and the lab does not compute the drops that follow; this is not the game\'s RTP'
+      + (r.theoretical.controlVariate ? `. Exact paid-spin first-drop mean (a control variate): ${r.theoretical.controlVariate.mean.fraction}` : ''));
+  }
+  if (r.theoretical && r.theoretical.distribution) {
+    const d = r.theoretical.distribution;
+    lines.push(`  Hit frequency ${d.hitFrequency ? (d.hitFrequency.value * 100).toFixed(4) + '%' : 'not available'}, SD ${d.sd.toFixed(4)} x bet` + (d.closedForm ? ' (closed form; the full distribution and max win were too large to compute)' : ''));
+  }
   if (r.actual) lines.push(`  Observed RTP: ${(r.actual.rtp * 100).toFixed(4)}% over ${r.actual.rounds} rounds, ${(r.actual.confidence * 100).toFixed(1)}% CI ${(r.actual.ci[0] * 100).toFixed(3)}% - ${(r.actual.ci[1] * 100).toFixed(3)}%` + (r.actual.declared ? `, declared ${(r.actual.declared.rtp * 100).toFixed(2)}%, p = ${r.actual.declared.pValue.toPrecision(4)} (${r.actual.declared.verdict})` : ''));
+  if (r.distTests) {
+    const d = r.distTests, f = d.fit, g = f.gof;
+    lines.push(`  Distribution tests (reference "${d.distributions[d.refIndex].label}", ${d.rounds} rounds, alpha ${d.alpha}, seed "${d.seed}"): ${f.verdict}`
+      + (g && g.applicable ? `; G-test P = ${g.pValue.toPrecision(4)} (Monte Carlo, ${g.replicates} replicates`
+        + (g.inFamily ? `), minimum detectable w = ${g.mde.w.toPrecision(3)} at alpha/m = ${g.mde.alpha.toPrecision(3)}` : '; cannot reach alpha/m, kept out of the verdict)') : '')
+      + (f.hit ? `; hit ${(f.hit.rate * 100).toFixed(3)}% vs ${(f.hit.expected * 100).toFixed(3)}%` : '')
+      + (f.trigger ? `; trigger ${(f.trigger.rate * 100).toFixed(4)}% vs ${(f.trigger.expected * 100).toFixed(4)}%` : '')
+      + (f.total ? `; P(total <= observed) ~ ${f.total.estimate.toPrecision(3)} +/- ${f.total.se.toPrecision(2)} (Monte Carlo, ${f.total.replicates} draws)` : ''));
+    const v = d.versions;
+    if (v && v.models) lines.push(`  Versions: posterior ${v.models.map((m) => `${m.label} ${(m.posterior * 100).toFixed(1)}%`).join(', ')}; SPRT ${v.sequential.decision === null ? 'undecided' : `chose ${v.models[v.sequential.decision].label} at round ${v.sequential.at}`}`);
+    const b = d.betting;
+    if (b && b.eValue !== undefined) lines.push(`  RTP below ${(b.mu0 * 100).toFixed(2)}% (${b.mu0Source === 'reference' ? 'the reference version' : 'the declared field'})? Betting e-process (M = ${b.M}x, from ${b.maxWinSource}): ${b.rejected ? 'REJECTED' : 'not rejected'}, max e-value ${b.maxEValue.toPrecision(4)}, anytime P = ${b.pValue.toPrecision(4)}`);
+    if (b && b.declaredDiffers) lines.push(`  Note: the declared RTP field (${(b.declaredDiffers * 100).toFixed(3)}%) differs from the reference version's RTP (${(b.mu0 * 100).toFixed(3)}%); the e-process tests the latter`);
+  }
   if (r.rng) {
     const app = r.rng.nist.filter((t) => t.applicable);
-    lines.push(`  RNG: NIST SP 800-22 passed ${app.filter((t) => t.pass).length} of ${app.length} applicable tests; chi-square ${r.rng.chiSquare.pass ? 'pass' : 'fail'}; serial correlation ${r.rng.serialCorrelation.pass ? 'pass' : 'fail'}`);
+    const fam = r.rng.family;
+    lines.push(`  RNG: NIST SP 800-22 passed ${app.filter((t) => (t.status || (t.pass ? 'pass' : 'fail')) === 'pass').length} of ${app.length} applicable tests` + (r.rng.twoLevel ? ` (two-level, ${r.rng.twoLevel.sequences} sequences)` : '') + `; chi-square ${r.rng.chiSquare.status || (r.rng.chiSquare.pass ? 'pass' : 'fail')}; serial correlation ${r.rng.serialCorrelation.status || (r.rng.serialCorrelation.pass ? 'pass' : 'fail')}`);
+    if (fam) lines.push(`  Family verdict (Holm over ${fam.pValueCount} P-values, alpha ${fam.alpha}): ${fam.pass ? 'no gross statistical defect detected' : 'statistical defect detected'}; ${fam.belowAlpha} below alpha, ~${fam.expectedBelowAlpha.toFixed(1)} expected by chance`);
   }
-  if (r.fair) lines.push(`  Provably fair (${r.fair.scheme}): ${r.fair.ok ? 'all rounds verified' : 'FAILURES FOUND'}`);
-  if (r.montecarlo) lines.push(`  Monte Carlo: ${r.montecarlo.spins} rounds, seed "${r.montecarlo.seed}", RTP ${(r.montecarlo.result.rtp * 100).toFixed(4)}%, result SHA-256 ${r.montecarlo.resultSha256}`);
-  lines.push('', 'How to verify: extract the attached files, compute their SHA-256 and compare with the', 'values above. Any change to an input or to report.json changes its fingerprint.', 'The fingerprint detects changes; it is not a digital signature of the issuer.');
+  if (r.fair && r.fair.mode === 'adapter') {
+    const f = r.fair;
+    lines.push(`  Provably fair: adapter ${f.adapter.key} (evidence: ${f.adapter.evidence}; self-test ${f.adapter.selfTest ? f.adapter.selfTest.passed + '/' + f.adapter.selfTest.total : 'n/a'}), verdict ${f.verdict.code} (code ${f.verdict.exit}); ${f.counts.ok} of ${f.counts.ok + f.counts.mismatch} recomputed results match, ${f.counts.notChecked} not checked` + (f.payout.checked ? `; payouts ${f.payout.ok}/${f.payout.checked}` : '') + (f.chain && f.chain.terminating ? `; terminating hash ${f.chain.terminating.status}` : ''));
+    const issues = Object.entries(f.issueCounts).filter(([c]) => f.verdict.fails.includes(c) || f.verdict.warns.includes(c));
+    if (issues.length) lines.push('  Issues: ' + issues.map(([c, n]) => `${c} x${n}`).join(', '));
+    lines.push('  Not a certification: provably fair covers outcome derivation only, not RTP, settlement or paytables.');
+  } else if (r.fair) lines.push(`  Provably fair (${r.fair.scheme}): ${r.fair.ok ? 'all rounds verified' : 'FAILURES FOUND'}`);
+  if (r.montecarlo) lines.push(`  Monte Carlo: ${r.montecarlo.spins} rounds, seed "${r.montecarlo.seed}", RTP ${(r.montecarlo.result.rtp * 100).toFixed(4)}%` + (r.montecarlo.result.scope === 'firstDrop' ? ' (first drop only)' : '') + `, result SHA-256 ${r.montecarlo.resultSha256}`
+    + (r.montecarlo.controlVariate ? `; with the paid spin as a control variate ${(r.montecarlo.controlVariate.rtp * 100).toFixed(4)}% +/- ${(1.959964 * r.montecarlo.controlVariate.standardError * 100).toFixed(4)}%` + (r.montecarlo.result.scope === 'firstDrop' ? ' (first drop only)' : '') : ''));
+  if (r.lut) lutAscii(lines, r.lut);
+  roundAscii(lines, r);
+  if (sg) {
+    lines.push('', 'How to verify: open the RTP Lab\'s "Verify a report" tab and drop this PDF. It checks report.sig',
+      'and recomputes the SHA-256 of every attached file against the list in report.json. Compare the',
+      'signer key fingerprint with one the auditor publishes somewhere independent of this file.',
+      'A valid signature shows who holds the key, not that the content is correct, and the date is the',
+      "signer's own clock. This report is supporting evidence, not a certification.");
+  } else {
+    lines.push('', 'How to verify: extract the attached files, compute their SHA-256 and compare with the', 'values above. Any change to an input or to report.json changes its fingerprint.', 'The fingerprint detects changes; it is not a digital signature of the issuer.');
+  }
   const out = [];
   for (const l of lines) {
     let rest = l;
@@ -475,17 +1255,21 @@ function asciiSummary(payload, reportId, digest) {
   return out;
 }
 
-const SECTION_ORDER = ['theoretical', 'actual', 'rng', 'fair', 'montecarlo'];
-const RENDER = { theoretical: theorySection, actual: actualSection, rng: rngSection, fair: fairSection, montecarlo: mcSection };
+const SECTION_ORDER = ['theoretical', 'actual', 'distTests', 'rng', 'fair', 'montecarlo', 'lut', 'session'];
+const RENDER = { theoretical: theorySection, actual: actualSection, distTests: distSection, rng: rngSection, fair: fairSection, montecarlo: mcSection, lut: lutSection, session: sessionSection };
 
 // session: { meta, inputs: [{ id, name, kind, size, sha256, bytes, mime }], results: {...} }
-export async function buildReport(session, { createCanvas, now = new Date(), onProgress = () => {} } = {}) {
+// signer: a key from core/sign.js (loadSigningKey), or null for an unsigned report.
+// Inputs larger than attachLimit are listed by SHA-256 only, not attached.
+export async function buildReport(session, { createCanvas, now = new Date(), onProgress = () => {}, signer = null, attachLimit = ATTACH_LIMIT_BYTES } = {}) {
   const createdAt = now.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  session = { ...session, inputs: planAttachments(session.inputs, { limit: attachLimit }), signer, attachLimit };
   const payload = reportPayload(session, createdAt);
   const json = canonicalJson(payload);
   const jsonBytes = new TextEncoder().encode(json);
   const digest = await sha256Hex(jsonBytes);
-  const reportId = 'TRL-' + createdAt.slice(0, 10).replace(/-/g, '') + '-' + digest.slice(0, 8).toUpperCase();
+  const reportId = reportIdFor(createdAt, digest);
+  const hashOnly = session.inputs.some((i) => i.attachment === null);
 
   const draw = (L) => {
     L.y += 10;
@@ -495,14 +1279,26 @@ export async function buildReport(session, { createCanvas, now = new Date(), onP
     if (session.meta.auditor) L.kv('auditor', session.meta.auditor);
     if (session.meta.notes) L.note(null, [session.meta.notes, session.meta.notes]);
     L.kv('digest', digest, { mono: true });
+    if (signer) {
+      L.kv('sigAlg', `${ALGORITHM_INFO[signer.alg].label}  (${ALGORITHM_INFO[signer.alg].reference})`);
+      L.kv('keyFingerprint', formatFingerprint(signer.fingerprint), { mono: true });
+      L.kv('keyStorage', pair(signer.storage === 'persistent' ? 'signerKeyPersistent' : 'signerKeySession').join(' / '), { color: signer.storage === 'persistent' ? C.text : C.warn });
+      if (signer.storage !== 'persistent') L.note('sessionKeyNote');
+      L.note('signedReportNote');
+      L.note('signatureMeaning');
+    }
     L.section('inputsTitle');
     for (const i of session.inputs) {
       L.kv('file', `${i.name}  (${i.size.toLocaleString('en-US')} ${pair('bytes')[1]})`);
       L.kv('modelHash', i.sha256, { mono: true, labels: ['SHA-256', 'SHA-256'] });
+      if (i.attachment === null) L.kv('attachedState', pair('hashOnlyShort').join(' / '), { color: C.warn });
     }
-    L.note('verifyHow');
-    L.note('signatureNote');
+    if (hashOnly) L.note(null, pair('hashOnlyNote').map((t, k) => t.replace('{limit}', limitText(attachLimit, k))));
+    L.note(hashOnly ? 'verifyHowHashOnly' : 'verifyHow');
+    if (!signer) L.note('signatureNote');
     for (const key of SECTION_ORDER) if (session.results[key]) { L.newPage(); RENDER[key](L, session.results[key]); }
+    L.newPage();
+    manifestSection(L, payload.manifest);
     if (session.inputs.length) {
       L.newPage();
       L.section('appendix');
@@ -511,7 +1307,7 @@ export async function buildReport(session, { createCanvas, now = new Date(), onP
         L.kv('modelHash', i.sha256, { mono: true, labels: ['SHA-256', 'SHA-256'] });
         const p = previewLines(i);
         L.mono(p.lines);
-        if (p.truncated) L.note('truncated');
+        if (p.truncated) L.note(i.attachment === null ? 'truncatedHashOnly' : 'truncated');
       }
     }
     L.end();
@@ -551,8 +1347,14 @@ export async function buildReport(session, { createCanvas, now = new Date(), onP
     y -= l.startsWith('TARYAM') ? 22 : 12.5;
   }
   pdf.addPage({ lines: textPage });
-  pdf.attach('report.json', jsonBytes, { mime: 'application/json', description: 'Report data covered by the report SHA-256' });
-  for (const i of session.inputs) pdf.attach(i.name, i.bytes, { mime: i.mime || 'application/octet-stream', description: 'SHA-256 ' + i.sha256 });
+  pdf.attach(REPORT_FILE, jsonBytes, { mime: 'application/json', description: 'Report data covered by the report SHA-256' + (signer ? ' and signed in report.sig' : '') });
+  const sigId = signer ? pdf.attach(SIGNATURE_FILE, signaturePlaceholder(), { mime: 'application/json', description: 'Signature of report.json and of this PDF (TARYAM RTP Lab)' }) : null;
+  for (const i of session.inputs) if (i.attachment !== null) pdf.attach(i.attachment, i.bytes, { mime: i.mime || 'application/octet-stream', description: 'SHA-256 ' + i.sha256 });
+  const bytes = pdf.build();
+  if (signer) await sealReportPdf(bytes, pdf.dataOffset(sigId), signer, jsonBytes);
   onProgress(1);
-  return { bytes: pdf.build(), reportId, digest, json, pages: totalPages + 1, thumbnails };
+  return {
+    bytes, reportId, digest, json, pages: totalPages + 1, thumbnails,
+    signature: signer ? { alg: signer.alg, fingerprint: signer.fingerprint, storage: signer.storage } : null,
+  };
 }

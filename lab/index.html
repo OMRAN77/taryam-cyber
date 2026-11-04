@@ -28,7 +28,9 @@
     <button role="tab" id="tab-rng" aria-controls="panel-rng" aria-selected="false" data-t="tabRng"></button>
     <button role="tab" id="tab-fair" aria-controls="panel-fair" aria-selected="false" data-t="tabFair"></button>
     <button role="tab" id="tab-mc" aria-controls="panel-mc" aria-selected="false" data-t="tabMc"></button>
+    <button role="tab" id="tab-lut" aria-controls="panel-lut" aria-selected="false" data-t="tabLut"></button>
     <button role="tab" id="tab-report" aria-controls="panel-report" aria-selected="false" data-t="tabReport"></button>
+    <button role="tab" id="tab-verify" aria-controls="panel-verify" aria-selected="false" data-t="tabVerify"></button>
   </nav>
 
   <main>
@@ -38,8 +40,17 @@
         <button type="button" data-sample="desertGold" data-t="sampleDesert"></button>
         <button type="button" data-sample="rouletteEuropean" data-t="sampleEU"></button>
         <button type="button" data-sample="rouletteAmerican" data-t="sampleUS"></button>
+        <button type="button" data-sample="desertGoldWeighted" data-t="sampleDesertWeighted"></button>
+        <button type="button" data-sample="oasisCaravanWays" data-t="sampleWays"></button>
         <label class="file-btn"><input type="file" id="modelFile" accept=".json,.csv,application/json,text/csv" multiple><span data-t="uploadModel"></span></label>
         <button type="button" id="exportModel" data-t="exportJson"></button>
+      </div>
+      <!-- Weighted stops, reel sets, ways models and cascades: the form cannot show them, so such a model is edited as JSON. -->
+      <div id="modelJsonBox" hidden>
+        <p class="muted small" id="jsonModeNote" data-t="jsonModeNote"></p>
+        <p class="muted small" id="waysJsonNote" data-t="waysJsonNote" hidden></p>
+        <p class="muted small" id="cascadesJsonNote" data-t="cascadesJsonNote" hidden></p>
+        <label><span data-t="modelJson"></span><textarea id="f-json" rows="18" dir="ltr" spellcheck="false" wrap="off"></textarea></label>
       </div>
       <div class="grid two">
         <label><span data-t="name"></span><input id="f-name" autocomplete="off"></label>
@@ -68,11 +79,46 @@
           <label><span data-t="fsMultiplier"></span><input id="f-fsMultiplier" value="1" dir="ltr"></label>
           <label class="check"><input type="checkbox" id="f-fsRetrigger"><span data-t="fsRetrigger"></span></label>
         </div>
+        <!-- Free-spin caps (P0-8): with retrigger only. -->
+        <div class="grid two" id="fsCapFields">
+          <label><span data-t="fsMaxSpins"></span><input id="f-fsMaxSpins" type="number" min="1" dir="ltr" inputmode="numeric"></label>
+          <label><span data-t="fsMaxRetriggers"></span><input id="f-fsMaxRetriggers" type="number" min="0" dir="ltr" inputmode="numeric"></label>
+        </div>
         <label><span data-t="fsReels"></span><textarea id="f-fsReels" rows="3" dir="ltr" spellcheck="false"></textarea></label>
       </fieldset>
       <div class="actions"><button type="button" class="primary" id="run-theory" data-t="run"></button><progress id="prog-theory" max="1" value="0" hidden></progress></div>
       <div class="error" id="err-theory" hidden></div>
       <div class="results" id="res-theory"></div>
+
+      <!-- Whole-round distribution and max-win cap (P0-8) -->
+      <section class="dist round" id="round" aria-labelledby="round-title" hidden>
+        <h2 class="dist-title" id="round-title" data-t="roundTitle"></h2>
+        <p class="muted small" data-t="roundIntro"></p>
+        <div class="results" id="res-round"></div>
+        <h3 class="sub" data-t="roundCapTitle"></h3>
+        <div class="grid two">
+          <label><span data-t="roundCap"></span><input id="r-cap" dir="ltr" inputmode="decimal" autocomplete="off"></label>
+          <label class="check"><input type="checkbox" id="r-odds"><span data-t="roundOdds"></span></label>
+        </div>
+        <div class="actions"><button type="button" id="run-round" data-t="roundApply"></button><progress id="prog-round" max="1" value="0" hidden></progress></div>
+        <div class="error" id="err-round" hidden></div>
+        <div class="results" id="res-roundcap"></div>
+      </section>
+
+      <!-- Session funnel (P0-8) -->
+      <section class="dist session" id="session" aria-labelledby="session-title" hidden>
+        <h2 class="dist-title" id="session-title" data-t="sessTitle"></h2>
+        <p class="muted small" data-t="sessIntro"></p>
+        <div class="grid four">
+          <label><span data-t="sessRounds"></span><input id="s-rounds" type="number" min="1" value="1000" dir="ltr" inputmode="numeric"></label>
+          <label><span data-t="sessBet"></span><input id="s-bet" value="1" dir="ltr" inputmode="decimal" autocomplete="off"></label>
+          <label><span data-t="sessBudget"></span><input id="s-budget" value="100" dir="ltr" inputmode="decimal" autocomplete="off"></label>
+          <label><span data-t="seed"></span><input id="s-seed" value="taryam-session" dir="ltr" spellcheck="false"></label>
+        </div>
+        <div class="actions"><button type="button" class="primary" id="run-session" data-t="sessRun"></button><progress id="prog-session" max="1" value="0" hidden></progress></div>
+        <div class="error" id="err-session" hidden></div>
+        <div class="results" id="res-session"></div>
+      </section>
     </section>
 
     <section class="panel" id="panel-actual" role="tabpanel" hidden>
@@ -93,6 +139,32 @@
       <div class="actions"><button type="button" class="primary" id="run-actual" data-t="run"></button><progress id="prog-actual" max="1" value="0" hidden></progress></div>
       <div class="error" id="err-actual" hidden></div>
       <div class="results" id="res-actual"></div>
+
+      <section class="dist" id="dist" aria-labelledby="dist-title">
+        <h2 class="dist-title" id="dist-title" data-t="distTitle"></h2>
+        <p class="muted small" data-t="distIntro"></p>
+        <div class="toolbar">
+          <label class="check"><input type="checkbox" id="d-useTheory" checked><span data-t="distUseTheory"></span></label>
+          <label class="file-btn"><input type="file" id="pmfFile" accept=".csv,text/csv" multiple><span data-t="distUpload"></span></label>
+          <button type="button" id="sample-dist" data-t="distSample"></button>
+          <button type="button" id="clear-pmf" class="ghost" data-t="distClear" hidden></button>
+        </div>
+        <div class="muted small" id="dist-candidates"></div>
+        <div class="grid three">
+          <label><span data-t="distReference"></span><select id="d-ref"></select></label>
+          <label><span data-t="distMaxWin"></span><input id="d-maxWin" dir="ltr" inputmode="decimal" autocomplete="off"></label>
+          <label><span data-t="distAlpha"></span>
+            <select id="d-alpha"><option value="0.05">0.05</option><option value="0.01" selected>0.01</option><option value="0.001">0.001</option></select>
+          </label>
+          <label><span data-t="distGap"></span><input id="d-gap" value="2" dir="ltr" inputmode="decimal" autocomplete="off"></label>
+          <label><span data-t="distMode"></span><input id="d-mode" dir="ltr" autocomplete="off" spellcheck="false"></label>
+          <label><span data-t="seed"></span><input id="d-seed" value="taryam-audit" dir="ltr" spellcheck="false"></label>
+        </div>
+        <p class="muted small" data-t="distNote"></p>
+        <div class="actions"><button type="button" class="primary" id="run-dist" data-t="distRun"></button><progress id="prog-dist" max="1" value="0" hidden></progress></div>
+        <div class="error" id="err-dist" hidden></div>
+        <div class="results" id="res-dist"></div>
+      </section>
     </section>
 
     <section class="panel" id="panel-rng" role="tabpanel" hidden>
@@ -109,12 +181,36 @@
         <label><span data-t="rangeMax"></span><input id="r-max" dir="ltr" inputmode="numeric"></label>
       </div>
       <p class="muted small" data-t="rngNote"></p>
+      <label class="check"><input type="checkbox" id="r-twoLevel"><span data-t="twoLevel"></span></label>
+      <p class="muted small" data-t="twoLevelNote"></p>
       <div class="actions"><button type="button" class="primary" id="run-rng" data-t="run"></button><progress id="prog-rng" max="1" value="0" hidden></progress></div>
       <div class="error" id="err-rng" hidden></div>
       <div class="results" id="res-rng"></div>
     </section>
 
     <section class="panel" id="panel-fair" role="tabpanel" hidden>
+      <div class="grid two">
+        <label><span data-t="pfAdapter"></span><select id="p-adapter"><option value="custom" data-t="pfCustom"></option></select></label>
+        <label id="pfVersionLabel" hidden><span data-t="pfVersion"></span><select id="p-version" dir="ltr"></select></label>
+      </div>
+      <div class="box pf-info" id="pfInfo" hidden></div>
+      <div id="pfFields" hidden>
+        <div class="grid three">
+          <label id="pfGameLabel"><span data-t="pfGame"></span><select id="p-game" dir="ltr"></select></label>
+          <label id="pfLimboLabel" hidden><span data-t="pfLimbo"></span><select id="p-limbo"><option value="calc24" data-t="pfLimboCalc"></option><option value="docs" data-t="pfLimboDocs"></option></select></label>
+          <label id="pfTilesLabel" hidden><span data-t="pfTiles"></span><select id="p-tiles" dir="ltr"><option value="0">0 – 24</option><option value="1">1 – 25</option></select></label>
+          <label id="pfEraLabel" hidden><span data-t="pfEra"></span><select id="p-era" dir="ltr"></select></label>
+        </div>
+        <label class="check" id="pfExactLabel"><input type="checkbox" id="p-exact"><span data-t="pfExact"></span></label>
+        <div id="pfChainFields" hidden>
+          <label class="check"><input type="checkbox" id="p-walk"><span data-t="pfWalk"></span></label>
+          <label><span data-t="pfTerminating"></span><input id="p-terminating" dir="ltr" spellcheck="false" autocomplete="off"></label>
+        </div>
+        <label><span data-t="pfPaytable"></span><textarea id="p-paytable" rows="2" dir="ltr" spellcheck="false" placeholder='{"dice": {"rtp": 0.99}, "plinko": {"8": {"low": [5.6, 2.1, 1.1, 1, 0.5, 1, 1.1, 2.1, 5.6]}}}'></textarea></label>
+        <label class="check"><input type="checkbox" id="p-plant"><span data-t="pfPlant"></span></label>
+        <p class="muted small" data-t="pfColumns"></p>
+      </div>
+      <div id="customFields">
       <div class="grid two">
         <label><span data-t="fairScheme"></span>
           <select id="p-scheme"><option value="hmac" data-t="schemeHmac"></option><option value="chain" data-t="schemeChain"></option></select>
@@ -134,6 +230,7 @@
       <div id="chainFields" class="grid two" hidden>
         <label><span data-t="chainOrder"></span><select id="p-order"><option value="newest" data-t="newestFirst"></option><option value="oldest" data-t="oldestFirst"></option></select></label>
         <label><span data-t="chainInput"></span><select id="p-input"><option value="hex" data-t="hexText"></option><option value="bytes" data-t="rawBytes"></option></select></label>
+      </div>
       </div>
       <div class="toolbar">
         <label class="file-btn"><input type="file" id="fairFile" accept=".csv,.txt,text/csv,text/plain"><span data-t="fairFile"></span></label>
@@ -162,6 +259,20 @@
       <div class="results" id="res-mc"></div>
     </section>
 
+    <section class="panel" id="panel-lut" role="tabpanel" hidden>
+      <p class="muted" data-t="lutIntro"></p>
+      <div class="toolbar">
+        <label class="file-btn"><input type="file" id="lutFiles" accept=".json,.csv,application/json,text/csv" multiple><span data-t="lutUpload"></span></label>
+        <button type="button" id="sample-lut" data-t="lutSample"></button>
+        <span class="muted file-name" id="name-lut" data-t="noFile"></span>
+      </div>
+      <p class="lut-pf" id="lut-pf" data-t="lutNotPf"></p>
+      <p class="muted small" data-t="lutBooksNote"></p>
+      <div class="actions"><button type="button" class="primary" id="run-lut" data-t="run"></button><progress id="prog-lut" max="1" value="0" hidden></progress></div>
+      <div class="error" id="err-lut" hidden></div>
+      <div class="results" id="res-lut"></div>
+    </section>
+
     <section class="panel" id="panel-report" role="tabpanel" hidden>
       <div class="grid two">
         <label><span data-t="reportTitle"></span><input id="rep-title" autocomplete="off"></label>
@@ -169,9 +280,27 @@
       </div>
       <label><span data-t="notes"></span><textarea id="rep-notes" rows="3"></textarea></label>
       <div class="box"><span data-t="include"></span>: <span id="rep-sections"></span></div>
+      <div class="box key-box" id="sign-key"></div>
       <div class="actions"><button type="button" class="primary" id="run-report" data-t="makePdf"></button><progress id="prog-report" max="1" value="0" hidden></progress></div>
       <div class="error" id="err-report" hidden></div>
       <div class="results" id="res-report"></div>
+    </section>
+
+    <section class="panel" id="panel-verify" role="tabpanel" hidden>
+      <p class="muted" data-t="verifyIntro"></p>
+      <div class="dropzone" id="verify-drop">
+        <label class="file-btn"><input type="file" id="verifyFile" accept=".pdf,application/pdf"><span data-t="verifyFile"></span></label>
+        <span class="muted file-name" id="name-verify" data-t="noFile"></span>
+      </div>
+      <label><span data-t="trustedFingerprint"></span><input id="v-trusted" dir="ltr" autocomplete="off" spellcheck="false" placeholder="AB12 CD34 EF56 …"></label>
+      <p class="muted small" data-t="trustedHint"></p>
+      <div class="toolbar">
+        <label class="file-btn"><input type="file" id="verifyOriginals" multiple><span data-t="originalsFile"></span></label>
+        <span class="muted file-name" id="name-verifyOriginals"></span>
+      </div>
+      <div class="actions"><button type="button" class="primary" id="run-verify" data-t="verifyRun"></button><progress id="prog-verify" max="1" value="0" hidden></progress></div>
+      <div class="error" id="err-verify" hidden></div>
+      <div class="results" id="res-verify"></div>
     </section>
   </main>
 </div>

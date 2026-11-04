@@ -80,12 +80,21 @@ test('RTP lab: every tab works offline and nothing leaves the page', async (t) =
   await page.selectOption('#r-mode', 'bits');
   await page.click('#run-rng');
   await page.waitForSelector('#res-rng tbody tr');
-  const rows = await page.$$eval('#res-rng tbody tr', (r) => r.map((x) => ({ text: x.innerText, fail: !!x.querySelector('td.fail') })));
+  const rows = await page.$$eval('#res-rng tbody tr', (r) => r.map((x) => ({ text: x.innerText, fail: !!x.querySelector('td.fail'), flag: !!x.querySelector('td.warn') })));
   assert.strictEqual(rows.length, 17); // 15 NIST tests + chi-square + serial correlation
-  assert.ok(rows[7].text.includes('0.110434'), 'overlapping template P: ' + rows[7].text);
+  // Exact section 3.8 probabilities (the worked example's 0.110434 uses the reference code's approximation).
+  assert.ok(rows[7].text.includes('0.159037'), 'overlapping template P: ' + rows[7].text);
   assert.ok(rows[8].text.includes('0.282568'), 'universal P: ' + rows[8].text);
-  assert.ok(rows[13].text.includes('0.007779') && rows[13].fail, 'random excursions x = -1: ' + rows[13].text);
-  assert.deepStrictEqual(rows.slice(0, 15).filter((r) => r.fail).length, 1);
+  // One P-value below 0.01 among ~160 is expected by chance: flagged, not failed.
+  assert.ok(rows[13].text.includes('0.007779') && rows[13].flag && !rows[13].fail, 'random excursions x = -1: ' + rows[13].text);
+  assert.deepStrictEqual(rows.filter((r) => r.fail).length, 0);
+  assert.ok(await page.$('#res-rng .verdict.pass'), 'family verdict: no defect detected');
+  // Two-level mode (section 4.2) needs at least 10 sequences of 1,000,000 bits: one is refused with a clear message.
+  await page.check('#r-twoLevel');
+  await page.click('#run-rng');
+  await page.waitForSelector('#err-rng:not([hidden])');
+  assert.match(await page.textContent('#err-rng'), /10/);
+  await page.uncheck('#r-twoLevel');
   // The built-in sample generator produces a complete result table too.
   await page.click('#sample-rng');
   await page.waitForFunction(() => document.querySelector('#name-rng').textContent.includes('random-sample'));

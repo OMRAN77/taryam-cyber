@@ -115,7 +115,7 @@ progress { flex: 1; min-width: 160px; height: 8px; accent-color: var(--primary);
 
 .verdict { padding: 12px 16px; border-radius: 12px; font-weight: 700; border: 1px solid; }
 .verdict.normal, .verdict.pass { background: rgba(52, 211, 153, 0.08); border-color: rgba(52, 211, 153, 0.35); color: var(--green); }
-.verdict.review, .verdict.warn { background: rgba(251, 191, 36, 0.08); border-color: rgba(251, 191, 36, 0.35); color: var(--amber); }
+.verdict.review, .verdict.warn, .verdict.insufficient { background: rgba(251, 191, 36, 0.08); border-color: rgba(251, 191, 36, 0.35); color: var(--amber); }
 .verdict.suspicious, .verdict.fail { background: rgba(248, 113, 113, 0.08); border-color: rgba(248, 113, 113, 0.35); color: var(--red); }
 
 h3.sub { font-size: 15px; color: var(--primary-2); margin-top: 22px; }
@@ -189,3 +189,100 @@ td.na { color: var(--muted); }
 .table-view summary { cursor: pointer; color: var(--primary-2); font-size: 13.5px; margin: 10px 0 8px; }
 .help ul { margin: 0; padding-inline-start: 20px; }
 .help li + li { margin-top: 6px; }
+
+/* ---- Weighted stops and reel sets (P0-5) ---- */
+/* A weighted model is edited as JSON, so the form fields are hidden (not the
+   whole-round and session sections, .dist, which every model has). */
+#panel-theory.json-mode > :not(.toolbar):not(#modelJsonBox):not(.actions):not(.error):not(.results):not(.dist) { display: none !important; }
+#modelJsonBox > * + * { margin-top: 10px; }
+#f-json { min-height: 320px; }
+/* The cycle's total weight is one long run of digits and commas: let it wrap on phones. */
+.weight-total { overflow-wrap: anywhere; }
+
+/* Distribution tests (observed-RTP tab, core/audit-stats.js) */
+.dist { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--border); }
+.dist > * + * { margin-top: 14px; }
+.dist-title { font-size: 17px; }
+.echart-wrap { margin: 0; }
+.echart { width: 100%; max-width: 680px; }
+.echart .eline { fill: none; stroke: var(--primary-2); stroke-width: 2; stroke-linejoin: round; }
+.echart .ethr { stroke: var(--red); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.echart .ezero { stroke: rgba(255, 255, 255, 0.18); stroke-width: 1; }
+#res-dist .card .v, #res-dist .card .s { unicode-bidi: plaintext; }
+
+/* Outcome tables (LUT, P0-7) */
+.lut-pf { padding: 10px 14px; border-radius: 12px; background: rgba(251, 191, 36, 0.08); border: 1px solid rgba(251, 191, 36, 0.35); color: #fde68a; font-size: 13.5px; }
+h3.lut-mode { font-size: 16.5px; color: var(--text); margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+/* Card values mixing a number and a word ("1 in 333,161") take their direction from the word. */
+#res-lut .card .v, #res-lut .card .s { unicode-bidi: plaintext; }
+
+/* signed reports: signing key box and the "Verify a report" tab */
+.key-box .hash { margin-top: 6px; font-size: 13.5px; letter-spacing: 0.03em; }
+.key-box p { margin: 8px 0 0; }
+.key-box .verdict { margin-top: 8px; font-weight: 600; }
+.dropzone {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 18px;
+  border: 1.5px dashed rgba(92, 255, 190, 0.45); border-radius: 12px; background: rgba(0, 0, 0, 0.18);
+}
+.dropzone.drag { border-color: var(--primary-2); background: rgba(0, 255, 156, 0.12); }
+#res-verify td.pass, #res-verify td.fail { text-align: center; }
+#res-verify .card .v { unicode-bidi: plaintext; }
+/* Verify tab on a phone: the result columns stay on screen, text wraps instead. */
+@media (max-width: 760px) {
+  #res-verify th, #res-verify td { white-space: normal; padding: 7px 8px; }
+  #res-verify td:first-child, #res-verify td.mono { overflow-wrap: anywhere; }
+  #res-verify td.num { white-space: nowrap; }
+}
+
+/* Provably fair v2: adapter card, evidence badges, audit tables */
+.pf-info > * + * { margin-top: 6px; }
+.pf-info p { margin: 0; }
+.pf-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pf-src { overflow-wrap: anywhere; }
+.pf-src a { direction: ltr; unicode-bidi: isolate; }
+.ev { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid; }
+.ev-verified { color: var(--green); border-color: rgba(52, 211, 153, 0.45); background: rgba(52, 211, 153, 0.1); }
+.ev-reference { color: var(--cyan); border-color: rgba(34, 211, 238, 0.45); background: rgba(34, 211, 238, 0.08); }
+.ev-unconfirmed { color: var(--amber); border-color: rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.08); }
+.pf-selftest { color: var(--green); }
+.pf-selftest.verdict { color: var(--red); }
+td.warn { color: var(--amber); font-weight: 700; }
+#pfFields > * + * { margin-top: 12px; }
+/* long hashes wrap, but a column never shrinks below 12 characters (phones scroll the table instead) */
+#res-fair td.mono { white-space: normal; overflow-wrap: anywhere; min-width: 12ch; max-width: 260px; }
+
+/* Ways / Megaways (P0-6): the rules list under the window tables */
+.ways-rules { margin: 10px 0 6px; padding-inline-start: 20px; display: grid; gap: 4px; font-size: 14px; }
+.ways-rules li, #res-theory .ways-source { overflow-wrap: anywhere; }
+#first-drop-note { font-weight: 600; }
+#res-theory td.ways-h { white-space: normal; min-width: 18ch; }
+/* Ways cards mixing words and numbers take their direction from the words. */
+#res-theory .card.ways-text .v, #res-theory .card.ways-text .s, #res-mc .card.ways-text .s { unicode-bidi: plaintext; }
+/* Whole-round distribution, max-win cap and session funnel (P0-8) */
+#fsCapFields { margin-top: 12px; }
+#res-round .card .v, #res-round .card .s, #res-roundcap .card .s, #res-session .card .s { unicode-bidi: plaintext; }
+#res-round td.mono, #res-roundcap td.mono { white-space: nowrap; }
+.funnel-wrap { margin: 0; }
+.funnel { width: 100%; max-width: 680px; }
+.funnel .f90 { fill: rgba(92, 255, 190, 0.16); stroke: none; }
+.funnel .f50 { fill: rgba(92, 255, 190, 0.32); stroke: none; }
+.funnel .fzero { stroke: rgba(255, 255, 255, 0.22); stroke-width: 1; }
+.funnel .fmedian { fill: none; stroke: var(--primary-2); stroke-width: 2; stroke-linejoin: round; }
+.funnel .fmean { fill: none; stroke: var(--amber); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.funnel-wrap figcaption { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.fkey { display: inline-flex; align-items: center; gap: 6px; }
+.fkey i { display: inline-block; width: 18px; height: 10px; border-radius: 2px; }
+.fkey i.f90 { background: rgba(92, 255, 190, 0.16); }
+.fkey i.f50 { background: rgba(92, 255, 190, 0.32); }
+.fkey i.fmedian { height: 2px; background: var(--primary-2); }
+.fkey i.fmean { height: 0; border-top: 2px dashed var(--amber); }
+/* The odds rules wrap, so the verdict column stays on screen on a phone. */
+#round-odds td:first-child { white-space: normal; min-width: 14ch; }
+#round-odds td:last-child { width: 1%; }
+/* Review fixes (ways + whole-round): on a phone the big-wins table fits the screen, so its
+   "once every … rounds" and source columns are seen without scrolling sideways. */
+#round-big th, #round-big td:first-child, #round-big td:last-child { white-space: normal; }
+@media (max-width: 480px) {
+  #round-big th, #round-big td { padding: 7px 6px; }
+  #round-big td.mono, #round-big td.num { font-size: 11.5px; }
+}
