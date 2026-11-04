@@ -255,6 +255,22 @@ const S = {
   verifyEnd: ['انتهى التحقق خلال', 'Verification finished in'],
   yes: ['نعم', 'Yes'],
   no: ['لا', 'No'],
+
+  // ---- Weighted stops and reel sets (P0-5) ----
+  sampleDesertWeighted: ['ديزرت جولد الموزونة (مثال)', 'Desert Gold, weighted (example)'],
+  modelJson: ['النموذج بصيغة JSON', 'Model as JSON'],
+  jsonModeNote: ['في هذا النموذج أوزان للمواقع أو أكثر من مجموعة بكرات، ولا يعرضها النموذج المبسّط، فعدّله هنا بصيغة JSON. اختر مثالًا آخر للعودة إلى النموذج المبسّط.', 'This model has stop weights or more than one reel set, which the form cannot show, so edit it here as JSON. Pick another example to go back to the form.'],
+  weightedModel: ['أوزان البكرات', 'Reel weights'],
+  weightedYes: ['موزونة', 'Weighted'],
+  reelSetsCount: ['مجموعات البكرات', 'Reel sets'],
+  fsReelSetsCount: ['مجموعات بكرات اللفات المجانية', 'Free-spin reel sets'],
+  reelSetsTable: ['مجموعات بكرات الجولة الأساسية', 'Base-game reel sets'],
+  reelSet: ['المجموعة', 'Set'],
+  setWeight: ['وزن المجموعة', 'Set weight'],
+  reelTotals: ['مجموع الأوزان في كل بكرة', 'Total weight per reel'],
+  weightPerLine: ['الوزن لكل خط', 'Weight per line'],
+  totalWeight: ['مجموع أوزان الدورة الكاملة', 'Total weight of a full cycle'],
+  weightsNote: ['كل لفة تختار مجموعة بكرات باحتمال وزنها ÷ مجموع أوزان المجموعات، ثم موقعًا في كل بكرة باحتمال وزنه ÷ مجموع أوزان البكرة، وكل لفة مجانية تختار مجموعتها من جديد. الحساب دقيق لهذه الأوزان كما أُدخلت فقط: أوزان اللعبة الحقيقية لا تُعرف إلا من ورقة PAR المعتمدة أو من المزوّد، وهذه النتيجة ليست شهادة اعتماد.', 'Each spin picks a reel set with probability set weight ÷ sum of set weights, then a stop on each reel with probability stop weight ÷ reel total; each free spin picks its set again. The result is exact for these weights as entered: a game\'s real weights are known only from its certified PAR sheet or its supplier, and this result is not a certification.'],
 };
 
 export function getLang() {
