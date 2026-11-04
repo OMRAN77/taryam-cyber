@@ -11,6 +11,7 @@ import { simulate, generatorDescription } from './core/montecarlo.js';
 import { sampler, slotSampler, simulatePlayers } from './core/casino.js';
 import { auditDistribution, pmfFromExact, parsePmfCsv, examplePmf, pmfCsv, samplePmfLog, EXAMPLE_MAX_WIN } from './core/audit-stats.js';
 import { analyzeLutFiles, makeSampleLut } from './core/lut.js';
+import { verifyReportPdf } from './core/report-sign.js';
 
 const decode = (bytes) => new TextDecoder().decode(bytes);
 const encode = (text) => new TextEncoder().encode(text);
@@ -135,6 +136,9 @@ const TASKS = {
   // files: [{ name, bytes }]; book files arrive with bytes null and are only listed.
   lut: ({ files }, progress) => analyzeLutFiles(files.map((f) => ({ name: f.name, text: f.bytes ? decode(f.bytes) : null })), { onProgress: progress }),
   sampleLut: () => makeSampleLut().map((f) => ({ name: f.name, bytes: encode(f.text) })),
+
+  // ---- signed reports: check a report PDF (signatures, attached files) ----
+  verifyReport: ({ bytes, trusted, originals }) => verifyReportPdf(bytes, { trustedFingerprint: trusted, originals: originals || [] }),
 };
 
 self.onmessage = async (e) => {

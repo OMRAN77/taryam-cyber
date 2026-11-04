@@ -6,6 +6,7 @@ import { modelFromForm, formFromModel, applyCsv, parseModelJson, normalizeModel,
 import { sha256Hex } from './core/fair.js';
 import { Fraction } from './core/fraction.js';
 import { buildReport, compactJson } from './report.js';
+import { loadSigningKey, formatFingerprint, ALGORITHM_INFO } from './core/sign.js';
 import * as samples from './samples.js';
 import { lutFileKind } from './core/lut.js';
 
@@ -118,7 +119,7 @@ async function withTask(id, fn) {
 function selectTab(name) {
   document.querySelectorAll('[role="tab"]').forEach((b) => b.setAttribute('aria-selected', String(b.id === 'tab-' + name)));
   document.querySelectorAll('[role="tabpanel"]').forEach((p) => { p.hidden = p.id !== 'panel-' + name; });
-  if (name === 'report') renderReportSections();
+  if (name === 'report') { renderReportSections(); showSigningKey(); }
   if (name === 'mc') renderMcModel();
 }
 const fileNames = {};
@@ -877,11 +878,14 @@ async function runReport() {
   await withTask('report', async (progress) => {
     const used = new Set(Object.values(session.results).flatMap((r) => [r.inputId, ...(r.inputIds || [])]).filter(Boolean));
     if (session.results.montecarlo) used.add('model');
+    const signer = await getSigner();
+    signerState.key = signer;
+    renderSigningKey();
     const report = await buildReport({
       meta: { title: $('#rep-title').value.trim(), auditor: $('#rep-auditor').value.trim(), notes: $('#rep-notes').value.trim() },
       inputs: [...session.inputs.values()].filter((i) => used.has(i.id)),
       results: session.results,
-    }, { createCanvas: (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h }), onProgress: progress });
+    }, { createCanvas: (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h }), onProgress: progress, signer });
     session.extra.report = report;
     renderReport();
   });
@@ -894,18 +898,121 @@ function renderReport() {
   if (!r) return;
   const url = URL.createObjectURL(new Blob([r.bytes], { type: 'application/pdf' }));
   box.append(el('div', { class: 'verdict pass' }, tr('reportReady') + ' · ' + r.pages + ' ' + tr('pages')));
-  box.append(cards([{ k: 'reportId', v: r.reportId }, { k: 'size', v: (r.bytes.length / 1024).toFixed(0) + ' KB' }]));
+  box.append(cards([
+    { k: 'reportId', v: r.reportId },
+    { k: 'size', v: (r.bytes.length / 1024).toFixed(0) + ' KB' },
+    r.signature && { k: 'sigAlg', v: ALGORITHM_INFO[r.signature.alg].label, s: tr(r.signature.storage === 'persistent' ? 'keyPersistent' : 'keySession'), cls: r.signature.storage === 'persistent' ? '' : 'bad' },
+  ]));
   box.append(el('div', {}, el('span', { class: 'muted small' }, tr('digest')), el('div', { class: 'hash' }, r.digest)));
+  if (r.signature) box.append(el('div', {}, el('span', { class: 'muted small' }, tr('keyFingerprint')), el('div', { class: 'hash', id: 'report-fingerprint' }, formatFingerprint(r.signature.fingerprint))));
   box.append(el('a', { class: 'download', href: url, download: r.reportId + '.pdf', id: 'report-download' }, tr('download') + ' PDF'));
   const thumbs = el('div', { class: 'thumbs' });
   for (const th of r.thumbnails) thumbs.append(th);
   box.append(thumbs);
 }
 
+// ---------- signed reports: the signing key, and "Verify a report" ----------
+// The key is loaded (or created and stored) when first needed, then reused.
+const signerState = { promise: null, key: null, error: null };
+function getSigner() {
+  if (!signerState.promise) signerState.promise = loadSigningKey().catch((e) => { signerState.promise = null; throw e; });
+  return signerState.promise;
+}
+async function showSigningKey() {
+  if (!signerState.key && !signerState.error) renderSigningKey();
+  try { signerState.key = await getSigner(); signerState.error = null; } catch (e) { signerState.error = e; }
+  renderSigningKey();
+}
+function renderSigningKey() {
+  const box = $('#sign-key');
+  box.replaceChildren();
+  const k = signerState.key;
+  if (signerState.error && !k) { box.append(el('div', { class: 'error' }, pick([signerState.error.ar, signerState.error.en]) || signerState.error.message)); return; }
+  if (!k) { box.append(el('span', { class: 'muted small' }, tr('keyLoading'))); return; }
+  box.append(
+    el('div', { class: 'muted small' }, `${tr('signingKey')} · ${ALGORITHM_INFO[k.alg].label} · `, el('span', { id: 'sign-storage', 'data-storage': k.storage }, tr(k.storage === 'persistent' ? 'keyPersistent' : 'keySession'))),
+    el('div', { class: 'hash', id: 'sign-fingerprint', 'data-alg': k.alg }, formatFingerprint(k.fingerprint)),
+  );
+  if (k.storage !== 'persistent') box.append(el('div', { class: 'verdict warn' }, tr('sessionKeyNote')));
+  if (k.replaced) {
+    box.append(el('div', { class: 'verdict warn', id: 'sign-replaced' }, tr('keyReplaced')));
+    if (k.previousFingerprint) box.append(el('div', {}, el('span', { class: 'muted small' }, tr('previousFingerprint')), el('div', { class: 'hash', id: 'sign-previous' }, formatFingerprint(k.previousFingerprint))));
+  }
+  box.append(el('p', { class: 'muted small' }, tr('keyNote')));
+}
+
+const verifyState = { file: null, originals: [], result: null };
+async function loadVerifyFile(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  verifyState.file = { name: file.name, bytes };
+  fileNames.verify = file.name + ' · ' + bytes.length.toLocaleString('en-US') + ' ' + tr('bytes');
+  $('#name-verify').textContent = fileNames.verify;
+  await runVerify();
+}
+async function runVerify() {
+  await withTask('verify', async () => {
+    verifyState.result = null;
+    renderVerify();
+    if (!verifyState.file) throw { ar: tr('noFile'), en: t('noFile', 'en') };
+    verifyState.result = await runTask('verifyReport', { bytes: verifyState.file.bytes, trusted: $('#v-trusted').value, originals: verifyState.originals });
+    renderVerify();
+  });
+}
+
+const VERIFY_VIEW = { valid: ['pass', 'vValid'], invalid: ['fail', 'vInvalid'], 'wrong-key': ['fail', 'vWrongKey'], unsigned: ['warn', 'vUnsigned'], unverifiable: ['warn', 'vUnverifiable'] };
+const FILE_CLASS = { match: 'pass', 'original-match': 'pass', 'hash-only': 'na' };
+function figureText(f) {
+  const n = (x) => Number(x).toLocaleString('en-US');
+  if (f.section === 'actual') return [f.value, f.rounds !== null ? `${tr('roundsChecked')}: ${n(f.rounds)}` : null, f.verdict && VERDICT[f.verdict] ? pick(VERDICT[f.verdict]) : null].filter(Boolean).join(' · ');
+  if (f.section === 'rng') return [f.pass === null ? null : tr(f.pass ? 'familyPassShort' : 'familyFailShort'), f.value !== null ? `${tr('bitsCount')}: ${n(f.value)}` : null].filter(Boolean).join(' · ');
+  if (f.section === 'fair') return tr(f.pass ? 'allVerified' : 'someFailed');
+  if (f.section === 'montecarlo') return [f.value, f.spins !== null ? `${tr('spins')}: ${n(f.spins)}` : null].filter(Boolean).join(' · ');
+  return f.value ?? '—';
+}
+function renderVerify() {
+  const box = $('#res-verify');
+  box.replaceChildren();
+  const v = verifyState.result;
+  if (!v) return;
+  const [cls, key] = VERIFY_VIEW[v.status];
+  box.append(el('div', { class: 'verdict ' + cls, id: 'verify-verdict', 'data-status': v.status }, tr(key)));
+  const failedCheck = (id) => v.checks.some((c) => c.id === id && c.ok === false);
+  // Lines that explain the verdict; none of them softens a failing one.
+  if (failedCheck('signaturePresent')) box.append(el('p', { class: 'muted', id: 'verify-sig-removed' }, tr('vSignatureRemoved')));
+  if (v.status === 'wrong-key') box.append(el('p', { class: 'muted' }, tr(v.signer ? 'vOtherKey' : 'vNoSignatureTrusted')));
+  if (v.dataIntactPdfChanged) box.append(el('p', { class: 'muted' }, tr('vDataIntact')));
+  if (v.status === 'valid' && v.trusted && v.trusted.match) box.append(el('p', { class: 'muted' }, tr('vTrustedMatch')));
+  else if ((v.status === 'valid' || v.status === 'unverifiable') && v.signer && !v.trusted) box.append(el('p', { class: 'muted' }, tr('vCompareFingerprint')));
+  if (v.files.some((f) => f.status === 'original-mismatch')) box.append(el('div', { class: 'verdict warn', id: 'verify-original-mismatch' }, tr('vOriginalMismatch')));
+  const rp = v.report;
+  box.append(cards([
+    rp && { k: 'reportIdComputed', v: rp.id },
+    rp && rp.createdAt && { k: 'signedAt', v: rp.createdAt.replace('T', ' ').replace('Z', ' UTC') },
+    v.signer && { k: 'sigAlg', v: v.signer.label, s: v.signer.reference },
+    v.signer && v.signer.storage && { k: 'keyStorage', v: tr(v.signer.storage === 'persistent' ? 'signerKeyPersistent' : 'signerKeySession'), cls: v.signer.storage === 'persistent' ? '' : 'bad' },
+    rp && rp.labVersion && { k: 'labVersion', v: rp.labVersion },
+  ]));
+  if (v.signer) box.append(el('div', {}, el('span', { class: 'muted small' }, tr('keyFingerprint')), el('div', { class: 'hash', id: 'verify-fingerprint' }, formatFingerprint(v.signer.fingerprint))));
+  const mark = (ok) => (ok === true ? { v: '✓', cls: 'pass' } : ok === false ? { v: '✗', cls: 'fail' } : { v: tr('notChecked'), cls: 'na' });
+  box.append(sub('checksTitle'), table(['check', 'result'], v.checks.map((c) => [tr('chk_' + c.id), mark(c.ok)])));
+  if (v.files.length) {
+    box.append(sub('filesTitle'), table(['file', 'size', 'SHA-256', 'fileStatus'], v.files.map((f) => [
+      f.name, { v: f.size === null || f.size === undefined ? '—' : Number(f.size).toLocaleString('en-US'), cls: 'num' },
+      { v: f.sha256 || f.expected ? (f.sha256 || f.expected).slice(0, 16) + '…' : '—', cls: 'mono' }, { v: tr('fs_' + f.status), cls: FILE_CLASS[f.status] || 'fail' },
+    ])));
+  }
+  if (rp && rp.figures.length) {
+    box.append(sub(rp.signed ? 'figuresTitle' : 'figuresUnsigned'), table(['sectionWord', 'result'], rp.figures.map((f) => [tr(SECTION_KEYS[f.section]), figureText(f)])), el('p', { class: 'muted small' }, tr('figuresNote')));
+  }
+  box.append(el('p', { class: 'muted small' }, tr('signatureMeaning')));
+}
+
 function renderAll() {
   renderTheory(); renderActual(); renderRng(); renderFair(); renderMc(); renderMcModel(); renderLut(); renderReportSections(); renderReport();
   renderDistCandidates(); renderDist();
   syncFairFields();
+  if (signerState.key || signerState.error) renderSigningKey();
+  renderVerify();
 }
 
 // ---------- wiring ----------
@@ -1024,6 +1131,30 @@ function init() {
   $('#run-lut').addEventListener('click', runLut);
 
   $('#run-report').addEventListener('click', runReport);
+
+  $('#verifyFile').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) await loadVerifyFile(f); });
+  // A PDF dropped anywhere on the Verify panel is checked (the browser would
+  // otherwise open it in place of the lab); the originals picker keeps its own drop.
+  const panel = $('#panel-verify'), drop = $('#verify-drop');
+  const ownDrop = (e) => e.target && e.target.id === 'verifyOriginals';
+  panel.addEventListener('dragover', (e) => { if (ownDrop(e)) return; e.preventDefault(); drop.classList.add('drag'); });
+  panel.addEventListener('dragleave', (e) => { if (!panel.contains(e.relatedTarget)) drop.classList.remove('drag'); });
+  panel.addEventListener('drop', async (e) => {
+    if (ownDrop(e)) return;
+    e.preventDefault();
+    drop.classList.remove('drag');
+    const f = e.dataTransfer && e.dataTransfer.files[0];
+    if (f) await loadVerifyFile(f);
+  });
+  $('#verifyOriginals').addEventListener('change', async (e) => {
+    const files = [...e.target.files];
+    verifyState.originals = await Promise.all(files.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
+    fileNames.verifyOriginals = files.map((f) => f.name).join(', ');
+    $('#name-verifyOriginals').textContent = fileNames.verifyOriginals;
+    if (verifyState.file) await runVerify();
+  });
+  $('#v-trusted').addEventListener('change', () => { if (verifyState.file) runVerify(); });
+  $('#run-verify').addEventListener('click', runVerify);
 
   fillForm(samples.desertGold);
   applyLang();

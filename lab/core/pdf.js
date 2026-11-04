@@ -70,11 +70,18 @@ export class PdfBuilder {
     return page;
   }
 
+  // Returns the id of the embedded-file stream (see dataOffset).
   attach(name, bytes, { mime = 'application/octet-stream', description = '' } = {}) {
     const subtype = mime.replace('/', '#2F');
     const ef = this.stream(`/Type /EmbeddedFile /Subtype /${subtype} /Params << /Size ${bytes.length} >>`, bytes);
     const spec = this.add(`<< /Type /Filespec /F ${pdfString(name)} /UF ${textString(name)} /EF << /F ${ef} 0 R >> /Desc ${textString(description)} >>`);
     this.files.push({ name, spec });
+    return ef;
+  }
+
+  // Where the data of stream object `id` starts in the output of the last build().
+  dataOffset(id) {
+    return this.objectOffsets[id - 1] + `${id} 0 obj\n`.length + this.objects[id - 1][0].length;
   }
 
   build() {
@@ -102,6 +109,7 @@ export class PdfBuilder {
       chunks.push(head, ...parts, tail);
       offset += head.length + parts.reduce((a, p) => a + p.length, 0) + tail.length;
     });
+    this.objectOffsets = offsets;
     const xref = offset;
     let x = `xref\n0 ${this.objects.length + 1}\n0000000000 65535 f \n`;
     for (const o of offsets) x += String(o).padStart(10, '0') + ' 00000 n \n';
