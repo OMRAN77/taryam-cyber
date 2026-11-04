@@ -780,13 +780,34 @@ html.mobile-ui .resizer{display:none}
 .hdr-btn svg{width:15px;height:15px}
 .hdr-btn.primary{background:var(--grad);border:none;color:#fff}
 
-/* User badge */
-#authUserBadge{
-  display:none;align-items:center;gap:7px;padding:6px 11px;border-radius:10px;
-  background:var(--surface);border:1px solid var(--border);font-size:12px;
-  color:var(--text-2);font-weight:500;
-}
-#authUserBadge svg{width:14px;height:14px;color:var(--primary-2)}
+/* Account bar: bottom of the sidebar, menu opens upwards */
+#acctBar{position:relative;display:flex;align-items:center;gap:6px;padding:10px;border-top:1px solid var(--border)}
+.acct-btn{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;
+  background:transparent;border:1px solid transparent;color:var(--text);cursor:pointer;text-align:start;font-family:inherit;transition:all var(--transition)}
+.acct-btn:hover,.acct-btn[aria-expanded="true"]{background:var(--surface-2);border-color:var(--border)}
+.acct-avatar{width:30px;height:30px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;
+  background:#02140d;border:1px solid var(--border-3);color:var(--primary);font:700 13px var(--font-mono)}
+.acct-avatar svg{width:15px;height:15px}
+.acct-text{display:flex;flex-direction:column;min-width:0;line-height:1.3}
+.acct-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct-plan{font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct-chev{width:14px;height:14px;margin-inline-start:auto;color:var(--text-3);flex-shrink:0}
+.acct-gear{width:36px;height:36px;flex-shrink:0;display:grid;place-items:center;border-radius:8px;cursor:pointer;
+  background:transparent;border:1px solid transparent;color:var(--text-2);transition:all var(--transition)}
+.acct-gear:hover{background:var(--surface-2);border-color:var(--border);color:var(--primary)}
+.acct-gear svg{width:17px;height:17px}
+#acctMenu{position:absolute;bottom:calc(100% + 6px);inset-inline:10px;z-index:40;display:none;flex-direction:column;padding:6px;
+  background:rgba(4,12,10,.97);border:1px solid var(--border-2);border-radius:10px;box-shadow:var(--shadow-3),0 0 24px rgba(0,255,156,.08)}
+#acctMenu.show{display:flex;animation:cmdIn .18s ease}
+#acctMenu .acct-who{padding:8px 10px 6px;font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#acctMenu .mi{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border-radius:6px;background:none;border:0;
+  color:var(--text);font-family:inherit;font-size:13px;cursor:pointer;text-align:start}
+#acctMenu .mi:hover{background:var(--surface-2)}
+#acctMenu .mi svg{width:16px;height:16px;flex-shrink:0;color:var(--text-2)}
+#acctMenu .mi kbd{margin-inline-start:auto;font:11px var(--font-mono);color:var(--text-3);direction:ltr}
+#acctMenu .mi.danger,#acctMenu .mi.danger svg{color:var(--red)}
+#acctMenu hr{border:0;border-top:1px solid var(--border);margin:5px 4px}
+#btnAcctMobile{display:none}
 
 /* Clock dialog */
 #clockDialog{width:520px}
@@ -960,6 +981,7 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
 @keyframes caretBlink{50%{opacity:0}}
 @media (prefers-reduced-motion:reduce){.sys-chip i,.caret{animation:none}}
 @media (max-width:860px){
+  #btnAcctMobile{display:inline-flex}
   .sys-chip{padding:2px 7px;font-size:9px}
   #messages:empty ~ #socHome{padding:16px 14px 8px}
 }
@@ -1084,11 +1106,7 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
       <svg><use href="#i-clock"/></svg>
       <span id="headerClockTime" style="direction:ltr;font-weight:600;font-family:var(--font-mono);font-size:11.5px">--:--:--</span>
     </button>
-    <span id="authUserBadge">
-      <svg><use href="#i-user"/></svg>
-      <span id="authUserLabel"></span>
-    </span>
-    <button class="hdr-btn" id="btnSettings"><svg><use href="#i-settings"/></svg> <span data-i18n="settings">الإعدادات</span></button>
+    <button class="hdr-btn icon" id="btnAcctMobile" title="الحساب"><svg><use href="#i-user"/></svg></button>
     <div id="headerMenuWrap">
       <button class="hdr-btn icon" id="btnHeaderMenu" style="padding:8px"><svg><use href="#i-more-v"/></svg></button>
       <div id="headerMenuDropdown">
@@ -1098,7 +1116,6 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
         <a class="btn" id="linkCasino" href="lab/casino.html" style="text-decoration:none"><svg><use href="#i-shield"/></svg> <span data-i18n="casinoTitle">كيف يكسب الكازينو</span></a>
         <a class="btn" id="linkRtpLab" href="lab/index.html" style="text-decoration:none"><svg><use href="#i-preview"/></svg> <span data-i18n="rtpLabTitle">مختبر RTP</span></a>
         <button class="btn" id="btnInstall"><svg><use href="#i-install"/></svg> <span data-i18n="install">تثبيت التطبيق</span></button>
-        <button class="btn" id="btnLogout" style="display:none;color:var(--red)"><svg><use href="#i-logout"/></svg> <span data-i18n="logout">خروج</span></button>
       </div>
     </div>
   </div>
@@ -1115,6 +1132,24 @@ dialog::backdrop{background:rgba(0,6,4,.72)}
       </button>
     </div>
     <div id="history"></div>
+    <div id="acctBar">
+      <div id="acctMenu" role="menu">
+        <div class="acct-who" id="acctWho" dir="auto"></div>
+        <button type="button" class="mi" id="miSettings" role="menuitem"><svg><use href="#i-settings"/></svg><span data-i18n="settings">الإعدادات</span><kbd>Ctrl+,</kbd></button>
+        <button type="button" class="mi" id="miLang" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg><span data-i18n="acctLang">اللغة</span><kbd id="miLangNext"></kbd></button>
+        <hr>
+        <button type="button" class="mi" id="miInstall" role="menuitem"><svg><use href="#i-install"/></svg><span data-i18n="install">تثبيت التطبيق</span></button>
+        <hr>
+        <button type="button" class="mi" id="btnAcctLogin" role="menuitem"><svg><use href="#i-user"/></svg><span data-i18n="acctLogin">تسجيل الدخول</span></button>
+        <button type="button" class="mi danger" id="btnLogout" role="menuitem" style="display:none"><svg><use href="#i-logout"/></svg><span data-i18n="logout">خروج</span></button>
+      </div>
+      <button type="button" class="acct-btn" id="btnAcct" aria-haspopup="menu">
+        <span class="acct-avatar" id="acctAvatar"></span>
+        <span class="acct-text"><span class="acct-name" id="acctName" dir="auto"></span><span class="acct-plan" id="acctPlan"></span></span>
+        <svg class="acct-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+      </button>
+      <button type="button" class="acct-gear" id="btnSettings" title="الإعدادات"><svg><use href="#i-settings"/></svg></button>
+    </div>
   </div>
 
   <div class="resizer" id="resizer1"></div>
@@ -1387,8 +1422,8 @@ const PROVIDER_ORDER = ['deepseek','claude','openai','gemini','groq','openrouter
 
 /* ═══ i18n ═══ */
 const I18N = {
-  ar:{dir:'rtl',pageTitle:'TARYAM Cyber — أدوات الأمن السيبراني',appTitle:'تريم سايبر',offlineBanner:'⚠️ أنت غير متصل بالإنترنت',backOnlineBanner:'✅ عاد الاتصال',authTitle:'مرحبًا بك',authSubtitle:'سجّل الدخول أو أنشئ حسابًا جديدًا',authTabLogin:'دخول',authTabSignup:'حساب جديد',authUsernameLabel:'اسم المستخدم',authPasswordLabel:'كلمة المرور',authNewPasswordLabel:'كلمة مرور جديدة',authRecoveryLabel:'رمز الاسترجاع',authForgotLink:'نسيت كلمة المرور؟',authRememberMe:'تذكرني',authBackToLogin:'رجوع',authSubmitReset:'إعادة تعيين',authRecoveryModalTitle:'🔑 احتفظ برمز الاسترجاع',authRecoveryModalDesc:'هذا الرمز الوحيد لاستعادة حسابك إذا نسيت كلمة المرور.',authSubmitLogin:'دخول',authSubmitSignup:'إنشاء الحساب',guestMode:'الدخول كضيف (20 رسالة يوميًا)',guestLimitMsg:'🎉 استخدمت رسائلك المجانية! سجّل الدخول للمتابعة.',logout:'خروج',settings:'الإعدادات',download:'تنزيل',newProject:'مشروع جديد',send:'إرسال',preview:'المعاينة',code:'الكود',promptPlaceholder:'صف ما تريد... مثال: اشرح ثغرة XSS',emptyTitle:'مساحة العمل جاهزة',emptyDesc:'اكتب طلبك في المحادثة أو افتح أداة أمنية؛ الأكواد والتقارير تظهر هنا.',socTitle:'مركز العمليات الأمنية',socSub:'اختر أداة، أو اكتب طلبك تحت: فحص، تحليل، تشفير، تحقيق.',socLink:'اتصال مشفّر',socLinkPlain:'اتصال غير مشفّر',socTools:'أدوات جاهزة',socAll:'كل الأدوات',settingsTitle:'إعدادات الاتصال',langSectionTitle:'🌐 اللغة',apiKeysSectionTitle:'🔑 مفاتيح API',themeSectionLabel:'🎨 المظهر',voiceSectionLabel:'🔊 الصوت',aboutSectionTitle:'ℹ️ عن البرنامج',provider:'المزوّد الافتراضي',apiKeyLabel:'مفتاح API',modelLabel:'اسم النموذج',cancel:'إلغاء',save:'حفظ',close:'إغلاق',askAllLabel:'🎯 اسأل كل المزوّدين',mergeLabel:'🧠 دمج ذكي',building:'جارٍ العمل...',scoring:'📊 تقييم جودة الإجابات...',synthesizing:'🎨 توليف الجواب الموحّد...',verifying:'✅ التحقق النهائي...',merging:'🧠 دمج ذكي 3 مراحل...',mergedLabel:'🧠 الجواب الموحّد',mergeContributors:'دُمِجت إجابات: ',mergeFailedNote:'⚠️ لم يستجب: ',mergeSourcesLabel:'عرض الإجابات الفردية',buildSuccess:'تم ✅',defaultProjectTitle:'مشروع جديد',confirmDeleteProject:'حذف "{name}"؟',install:'تثبيت التطبيق',speakBtn:'استماع',stopSpeakBtn:'إيقاف',providerError:'خطأ من المزوّد: ',quotaError:'⏳ الحصة المجانية انتهت مؤقتًا',authError:'🔑 مفتاح API غير صحيح',apiKeyMissing:'أدخل مفتاح API أولاً',acctSectionTitle:'👤 حسابي',acctUsernameLabel:'اسم المستخدم',themeAccentLabel:'اللون الأساسي',themeTextLabel:'لون النص',themeBgLabel:'لون الخلفية',projectsListTitle:'المشاريع',secToolsTitle:'أدوات الأمن',rtpLabTitle:'مختبر RTP',casinoTitle:'كيف يكسب الكازينو',clockDialogTitle:'🕐 التقويم والوقت'},
-  en:{dir:'ltr',pageTitle:'TARYAM Cyber — Cybersecurity Tools',appTitle:'TARYAM Cyber',offlineBanner:"⚠️ You're offline",backOnlineBanner:'✅ Back online',authTitle:'Welcome',authSubtitle:'Log in or create an account',authTabLogin:'Log In',authTabSignup:'Sign Up',authUsernameLabel:'Username',authPasswordLabel:'Password',authNewPasswordLabel:'New password',authRecoveryLabel:'Recovery code',authForgotLink:'Forgot password?',authRememberMe:'Remember me',authBackToLogin:'Back',authSubmitReset:'Reset',authRecoveryModalTitle:'🔑 Save this recovery code',authRecoveryModalDesc:'The only code to recover your account if you forget your password.',authSubmitLogin:'Log In',authSubmitSignup:'Create Account',guestMode:'Continue as guest (20 messages/day)',guestLimitMsg:'🎉 Free messages used! Log in to continue.',logout:'Log out',settings:'Settings',download:'Download',newProject:'New Project',send:'Send',preview:'Preview',code:'Code',promptPlaceholder:'Describe what you want... e.g. explain XSS',emptyTitle:'Workspace ready',emptyDesc:'Ask in the chat or open a security tool; code and reports show up here.',socTitle:'Security Operations Center',socSub:'Pick a tool, or type your request below: scan, analyze, encrypt, investigate.',socLink:'Encrypted connection',socLinkPlain:'Unencrypted connection',socTools:'tools ready',socAll:'All tools',settingsTitle:'Connection Settings',langSectionTitle:'🌐 Language',apiKeysSectionTitle:'🔑 API Keys',themeSectionLabel:'🎨 Appearance',voiceSectionLabel:'🔊 Voice',aboutSectionTitle:'ℹ️ About',provider:'Default provider',apiKeyLabel:'API Key',modelLabel:'Model name',cancel:'Cancel',save:'Save',close:'Close',askAllLabel:'🎯 Ask all providers',mergeLabel:'🧠 Smart merge',building:'Working...',scoring:'📊 Scoring answer quality...',synthesizing:'🎨 Synthesizing unified answer...',verifying:'✅ Final verification...',merging:'🧠 3-stage smart merge...',mergedLabel:'🧠 Unified Answer',mergeContributors:'Merged from: ',mergeFailedNote:'⚠️ Did not respond: ',mergeSourcesLabel:'Show individual answers',buildSuccess:'Done ✅',defaultProjectTitle:'New Project',confirmDeleteProject:'Delete "{name}"?',install:'Install App',speakBtn:'Listen',stopSpeakBtn:'Stop',providerError:'Provider error: ',quotaError:'⏳ Free quota temporarily exhausted',authError:'🔑 Invalid API key',apiKeyMissing:'Enter your API key first',acctSectionTitle:'👤 My account',acctUsernameLabel:'Username',themeAccentLabel:'Accent color',themeTextLabel:'Text color',themeBgLabel:'Background color',projectsListTitle:'Projects',secToolsTitle:'Security Tools',rtpLabTitle:'RTP Lab',casinoTitle:'How the casino wins',clockDialogTitle:'🕐 Calendar & Time'}
+  ar:{dir:'rtl',pageTitle:'TARYAM Cyber — أدوات الأمن السيبراني',appTitle:'تريم سايبر',offlineBanner:'⚠️ أنت غير متصل بالإنترنت',backOnlineBanner:'✅ عاد الاتصال',authTitle:'مرحبًا بك',authSubtitle:'سجّل الدخول أو أنشئ حسابًا جديدًا',authTabLogin:'دخول',authTabSignup:'حساب جديد',authUsernameLabel:'اسم المستخدم',authPasswordLabel:'كلمة المرور',authNewPasswordLabel:'كلمة مرور جديدة',authRecoveryLabel:'رمز الاسترجاع',authForgotLink:'نسيت كلمة المرور؟',authRememberMe:'تذكرني',authBackToLogin:'رجوع',authSubmitReset:'إعادة تعيين',authRecoveryModalTitle:'🔑 احتفظ برمز الاسترجاع',authRecoveryModalDesc:'هذا الرمز الوحيد لاستعادة حسابك إذا نسيت كلمة المرور.',authSubmitLogin:'دخول',authSubmitSignup:'إنشاء الحساب',guestMode:'الدخول كضيف (20 رسالة يوميًا)',guestLimitMsg:'🎉 استخدمت رسائلك المجانية! سجّل الدخول للمتابعة.',logout:'خروج',settings:'الإعدادات',download:'تنزيل',newProject:'مشروع جديد',send:'إرسال',preview:'المعاينة',code:'الكود',promptPlaceholder:'صف ما تريد... مثال: اشرح ثغرة XSS',emptyTitle:'مساحة العمل جاهزة',emptyDesc:'اكتب طلبك في المحادثة أو افتح أداة أمنية؛ الأكواد والتقارير تظهر هنا.',socTitle:'مركز العمليات الأمنية',socSub:'اختر أداة، أو اكتب طلبك تحت: فحص، تحليل، تشفير، تحقيق.',socLink:'اتصال مشفّر',socLinkPlain:'اتصال غير مشفّر',socTools:'أدوات جاهزة',socAll:'كل الأدوات',acctGuest:'ضيف',acctGuestPlan:'20 رسالة يوميًا',acctPlan:'حساب مسجّل',acctLogin:'تسجيل الدخول',acctLang:'اللغة',settingsTitle:'إعدادات الاتصال',langSectionTitle:'🌐 اللغة',apiKeysSectionTitle:'🔑 مفاتيح API',themeSectionLabel:'🎨 المظهر',voiceSectionLabel:'🔊 الصوت',aboutSectionTitle:'ℹ️ عن البرنامج',provider:'المزوّد الافتراضي',apiKeyLabel:'مفتاح API',modelLabel:'اسم النموذج',cancel:'إلغاء',save:'حفظ',close:'إغلاق',askAllLabel:'🎯 اسأل كل المزوّدين',mergeLabel:'🧠 دمج ذكي',building:'جارٍ العمل...',scoring:'📊 تقييم جودة الإجابات...',synthesizing:'🎨 توليف الجواب الموحّد...',verifying:'✅ التحقق النهائي...',merging:'🧠 دمج ذكي 3 مراحل...',mergedLabel:'🧠 الجواب الموحّد',mergeContributors:'دُمِجت إجابات: ',mergeFailedNote:'⚠️ لم يستجب: ',mergeSourcesLabel:'عرض الإجابات الفردية',buildSuccess:'تم ✅',defaultProjectTitle:'مشروع جديد',confirmDeleteProject:'حذف "{name}"؟',install:'تثبيت التطبيق',speakBtn:'استماع',stopSpeakBtn:'إيقاف',providerError:'خطأ من المزوّد: ',quotaError:'⏳ الحصة المجانية انتهت مؤقتًا',authError:'🔑 مفتاح API غير صحيح',apiKeyMissing:'أدخل مفتاح API أولاً',acctSectionTitle:'👤 حسابي',acctUsernameLabel:'اسم المستخدم',themeAccentLabel:'اللون الأساسي',themeTextLabel:'لون النص',themeBgLabel:'لون الخلفية',projectsListTitle:'المشاريع',secToolsTitle:'أدوات الأمن',rtpLabTitle:'مختبر RTP',casinoTitle:'كيف يكسب الكازينو',clockDialogTitle:'🕐 التقويم والوقت'},
+  en:{dir:'ltr',pageTitle:'TARYAM Cyber — Cybersecurity Tools',appTitle:'TARYAM Cyber',offlineBanner:"⚠️ You're offline",backOnlineBanner:'✅ Back online',authTitle:'Welcome',authSubtitle:'Log in or create an account',authTabLogin:'Log In',authTabSignup:'Sign Up',authUsernameLabel:'Username',authPasswordLabel:'Password',authNewPasswordLabel:'New password',authRecoveryLabel:'Recovery code',authForgotLink:'Forgot password?',authRememberMe:'Remember me',authBackToLogin:'Back',authSubmitReset:'Reset',authRecoveryModalTitle:'🔑 Save this recovery code',authRecoveryModalDesc:'The only code to recover your account if you forget your password.',authSubmitLogin:'Log In',authSubmitSignup:'Create Account',guestMode:'Continue as guest (20 messages/day)',guestLimitMsg:'🎉 Free messages used! Log in to continue.',logout:'Log out',settings:'Settings',download:'Download',newProject:'New Project',send:'Send',preview:'Preview',code:'Code',promptPlaceholder:'Describe what you want... e.g. explain XSS',emptyTitle:'Workspace ready',emptyDesc:'Ask in the chat or open a security tool; code and reports show up here.',socTitle:'Security Operations Center',socSub:'Pick a tool, or type your request below: scan, analyze, encrypt, investigate.',socLink:'Encrypted connection',socLinkPlain:'Unencrypted connection',socTools:'tools ready',socAll:'All tools',acctGuest:'Guest',acctGuestPlan:'20 messages a day',acctPlan:'Signed-in account',acctLogin:'Log in',acctLang:'Language',settingsTitle:'Connection Settings',langSectionTitle:'🌐 Language',apiKeysSectionTitle:'🔑 API Keys',themeSectionLabel:'🎨 Appearance',voiceSectionLabel:'🔊 Voice',aboutSectionTitle:'ℹ️ About',provider:'Default provider',apiKeyLabel:'API Key',modelLabel:'Model name',cancel:'Cancel',save:'Save',close:'Close',askAllLabel:'🎯 Ask all providers',mergeLabel:'🧠 Smart merge',building:'Working...',scoring:'📊 Scoring answer quality...',synthesizing:'🎨 Synthesizing unified answer...',verifying:'✅ Final verification...',merging:'🧠 3-stage smart merge...',mergedLabel:'🧠 Unified Answer',mergeContributors:'Merged from: ',mergeFailedNote:'⚠️ Did not respond: ',mergeSourcesLabel:'Show individual answers',buildSuccess:'Done ✅',defaultProjectTitle:'New Project',confirmDeleteProject:'Delete "{name}"?',install:'Install App',speakBtn:'Listen',stopSpeakBtn:'Stop',providerError:'Provider error: ',quotaError:'⏳ Free quota temporarily exhausted',authError:'🔑 Invalid API key',apiKeyMissing:'Enter your API key first',acctSectionTitle:'👤 My account',acctUsernameLabel:'Username',themeAccentLabel:'Accent color',themeTextLabel:'Text color',themeBgLabel:'Background color',projectsListTitle:'Projects',secToolsTitle:'Security Tools',rtpLabTitle:'RTP Lab',casinoTitle:'How the casino wins',clockDialogTitle:'🕐 Calendar & Time'}
 };
 let lang = localStorage.getItem('aiapp_lang') || 'ar';
 const t = k => I18N[lang][k] || k;
@@ -1430,9 +1465,7 @@ window.requireLogin = (reason) => { setAuthMode('login'); if(reason === 'guestLi
 function onAuthed(username){
   authSet('aiapp_username', username);
   hideAuth();
-  $('#btnLogout').style.display = '';
-  $('#authUserLabel').textContent = username;
-  $('#authUserBadge').style.display = 'inline-flex';
+  renderAcct();
 }
 $('#authTabLogin').onclick = () => setAuthMode('login');
 $('#authTabSignup').onclick = () => setAuthMode('signup');
@@ -1440,7 +1473,31 @@ $('#authForgotLink').onclick = e => { e.preventDefault(); setAuthMode('reset'); 
 $('#authBackToLoginLink').onclick = e => { e.preventDefault(); setAuthMode('login'); };
 $('#authTogglePassBtn').onclick = () => { const p = $('#authPassword'); p.type = p.type === 'text' ? 'password' : 'text'; };
 $('#btnGuestMode').onclick = () => hideAuth();
-$('#btnLogout').onclick = () => { authRemove('aiapp_auth_token'); authRemove('aiapp_username'); $('#btnLogout').style.display = 'none'; $('#authUserBadge').style.display = 'none'; showAuth(); };
+$('#btnLogout').onclick = () => { authRemove('aiapp_auth_token'); authRemove('aiapp_username'); closeAcctMenu(); renderAcct(); showAuth(); };
+
+/* ═══ Account bar ═══ */
+function renderAcct(){
+  const name = authGet('aiapp_username'), signedIn = Boolean(name && authGet('aiapp_auth_token'));
+  const avatar = $('#acctAvatar');
+  if(signedIn) avatar.textContent = name.trim().charAt(0).toUpperCase(); else avatar.innerHTML = '<svg><use href="#i-user"/></svg>';
+  $('#acctName').textContent = signedIn ? name : t('acctGuest');
+  $('#acctPlan').textContent = signedIn ? t('acctPlan') : t('acctGuestPlan');
+  $('#acctWho').textContent = signedIn ? name : t('acctGuest');
+  $('#miLangNext').textContent = lang === 'ar' ? 'English' : 'العربية';
+  $('#btnLogout').style.display = signedIn ? '' : 'none';
+  $('#btnAcctLogin').style.display = signedIn ? 'none' : '';
+}
+window.renderAcct = renderAcct;
+function closeAcctMenu(){ $('#acctMenu').classList.remove('show'); $('#btnAcct').setAttribute('aria-expanded', 'false'); }
+function toggleAcctMenu(){ const open = $('#acctMenu').classList.toggle('show'); $('#btnAcct').setAttribute('aria-expanded', String(open)); }
+$('#btnAcct').onclick = e => { e.stopPropagation(); toggleAcctMenu(); };
+document.addEventListener('click', e => { if($('#acctMenu').classList.contains('show') && !e.target.closest('#acctBar')) closeAcctMenu(); });
+$('#miSettings').onclick = () => { closeAcctMenu(); $('#btnSettings').click(); };
+$('#miLang').onclick = () => { closeAcctMenu(); setLang(lang === 'ar' ? 'en' : 'ar'); };
+$('#miInstall').onclick = () => { closeAcctMenu(); $('#btnInstall').click(); };
+$('#btnAcctLogin').onclick = () => { closeAcctMenu(); setAuthMode('login'); showAuth(); };
+// Phones: the sidebar is a drawer, so the header button opens it with the menu showing.
+$('#btnAcctMobile').onclick = e => { e.stopPropagation(); if(!$('#sidebar').classList.contains('open')) openDrawer($('#sidebar')); $('#acctMenu').classList.add('show'); $('#btnAcct').setAttribute('aria-expanded', 'true'); };
 
 async function authSubmit(){
   const username = $('#authUsername').value.trim();
@@ -1487,6 +1544,7 @@ function applyLanguage(){
   localStorage.setItem('aiapp_lang', lang);
   if(window.renderBgPicker) window.renderBgPicker();
   if(window.renderSocHome) window.renderSocHome();
+  if(window.renderAcct) window.renderAcct();
 }
 function setLang(n){ if(lang === n) return; lang = n; applyLanguage(); renderAll(true); }
 $('#btnLangAr').onclick = () => setLang('ar');
@@ -2382,7 +2440,7 @@ $('#btnResetColors').onclick = () => { localStorage.removeItem('aiapp_theme'); a
 $('#acctUsernameSaveBtn').onclick = async () => {
   const newU = $('#acctUsername').value.trim(); const msg = $('#acctUsernameMsg');
   if(!newU || newU.length < 3){ msg.textContent = 'اسم قصير جداً'; msg.style.color = 'var(--red)'; return; }
-  try { const res = await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'changeUsername', token:authGet('aiapp_auth_token'), newUsername:newU})}); const data = await res.json(); if(!res.ok||data.error){ msg.textContent = data.error||'خطأ'; msg.style.color = 'var(--red)'; return; } authSet('aiapp_auth_token', data.token); authSet('aiapp_username', data.username); $('#authUserLabel').textContent = data.username; msg.textContent = '✓ تم الحفظ'; msg.style.color = 'var(--green)'; } catch(e){ msg.textContent = 'خطأ'; msg.style.color = 'var(--red)'; }
+  try { const res = await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'changeUsername', token:authGet('aiapp_auth_token'), newUsername:newU})}); const data = await res.json(); if(!res.ok||data.error){ msg.textContent = data.error||'خطأ'; msg.style.color = 'var(--red)'; return; } authSet('aiapp_auth_token', data.token); authSet('aiapp_username', data.username); renderAcct(); msg.textContent = '✓ تم الحفظ'; msg.style.color = 'var(--green)'; } catch(e){ msg.textContent = 'خطأ'; msg.style.color = 'var(--red)'; }
 };
 $('#acctPasswordSaveBtn').onclick = async () => {
   const cur = $('#acctCurrentPassword').value, nw = $('#acctNewPassword').value; const msg = $('#acctPasswordMsg');
@@ -3097,6 +3155,7 @@ $('#cmdInput').addEventListener('keydown', e => {
 });
 document.addEventListener('keydown', e => {
   if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k'){ e.preventDefault(); openCmdPalette(); }
+  if((e.ctrlKey || e.metaKey) && e.key === ','){ e.preventDefault(); $('#btnSettings').click(); }
   if(e.key === 'Escape' && $('#cmdPalette').classList.contains('show')) closeCmdPalette();
 });
 
@@ -3112,6 +3171,7 @@ $('#btnInstall').onclick = async () => { if(deferredPrompt){ deferredPrompt.prom
 applyLanguage();
 buildSecTools();
 renderSocHome();
+renderAcct();
 if(!state.projects.length){
   const id = 'p_' + Date.now();
   state.projects.push({id, title: t('defaultProjectTitle'), messages: [], code:''});

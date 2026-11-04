@@ -57,9 +57,12 @@ test('header buttons wired at the end of the script respond', async (t) => {
   await page.goto(server.url + '/', { waitUntil: 'load' });
   await page.click('#btnGuestMode');
 
-  await page.click('#btnSettings');
+  // Phones: the account button opens the sidebar drawer with the account menu.
+  await page.click('#btnAcctMobile');
+  await page.click('#miSettings');
   assert.ok(await page.evaluate(() => document.querySelector('#settingsDialog').open), 'settings did not open');
   await page.click('#btnCancelSettings');
+  await page.evaluate(() => closeDrawers());
 
   await page.click('#btnHeaderMenu');
   await page.click('#btnSecTools');
@@ -85,4 +88,33 @@ test('security operations home: shown on an empty chat, its tiles open the match
   await page.click('#socHome [data-soc-tool="jwt"]');
   assert.ok(await page.evaluate(() => document.querySelector('#secToolsDialog').open), 'tools dialog did not open');
   assert.strictEqual(await page.getAttribute('.secToolNavBtn.active', 'data-tool'), 'jwt');
+});
+
+test('account bar: settings, language and log in sit at the bottom of the sidebar', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const page = await browser.newPage({ viewport: { width: 1366, height: 820 } });
+  page.setDefaultTimeout(5000);
+  await page.goto(server.url + '/');
+  await page.click('#btnGuestMode');
+  assert.strictEqual(await page.$('header #btnSettings'), null, 'settings still in the header');
+  const bar = await page.$eval('#acctBar', (b) => { const r = b.getBoundingClientRect(); const s = document.querySelector('#sidebar').getBoundingClientRect(); return { gap: s.bottom - r.bottom }; });
+  assert.ok(bar.gap < 2, 'account bar is not at the bottom of the sidebar');
+  assert.strictEqual(await page.textContent('#acctName'), 'ضيف');
+  await page.click('#btnSettings');
+  assert.ok(await page.evaluate(() => document.querySelector('#settingsDialog').open), 'gear did not open settings');
+  await page.click('#btnCancelSettings');
+  await page.keyboard.press('Control+,');
+  assert.ok(await page.evaluate(() => document.querySelector('#settingsDialog').open), 'Ctrl+, did not open settings');
+  await page.click('#btnCancelSettings');
+  await page.click('#btnAcct');
+  assert.ok(await page.isVisible('#acctMenu'), 'menu did not open');
+  assert.ok(await page.isVisible('#btnAcctLogin') && !(await page.isVisible('#btnLogout')), 'guest sees log in, not log out');
+  await page.click('#miLang');
+  assert.strictEqual(await page.getAttribute('html', 'dir'), 'ltr');
+  assert.strictEqual(await page.textContent('#acctName'), 'Guest');
+  await page.click('#btnAcct');
+  await page.click('#btnAcctLogin');
+  assert.ok(await page.isVisible('#authOverlay'), 'log in did not open the login screen');
 });
