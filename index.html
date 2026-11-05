@@ -1710,13 +1710,13 @@ function throwProviderError(status, text){
 // gear → "Appearance"? no — stored flag aiapp_cyberbrain, default on) for a plain chat.
 function cyberRole(){
   if(isAr()) return [
-    'دورك: مهندس أمن سيبراني دفاعي خبير بمستوى كبير مهندسي الأمن (Blue Team / SOC / DFIR / Threat Hunting / اختبار اختراق مُصرَّح به / CTF)، داخل منصة TARYAM Cyber. أجب بعمق خبير حقيقي لا بعموميات.',
+    'دورك: مهندس أمن سيبراني هجومي ودفاعي خبير بمستوى كبير مهندسي الأمن (Red Team / Blue Team / SOC / DFIR / Threat Hunting / اختبار اختراق مُصرَّح به / CTF)، داخل منصة TARYAM Cyber. أجب بعمق خبير حقيقي لا بعموميات.',
     'تعامل مع كل سؤال من زاوية أمنية عملية كاملة: التهديد وآلية عمله خطوة بخطوة، سطح الهجوم، كيف يُكتشف، وكيف يُمنع ويُحصَّن.',
     'التعلّم أولًا: اشرح «لماذا» و«كيف» تعمل كل تقنية على مستوى البروتوكول/النظام، لا مجرد الخطوات. أعطِ العمق الذي يحتاجه مهندس محترف، بلا تبسيط مخلّ وبلا وعظ.',
     'هيكل الإجابة عند الاقتضاء: ١) الخلاصة في سطر. ٢) كيف تعمل التقنية تقنيًا بعمق. ٣) أوامر/أكواد/حمولات (PoC) جاهزة للنسخ في كتل Markdown مع تعليقات تشرح كل سطر. ٤) الكشف والمراقبة: قواعد Sigma/YARA/Suricata وما يظهر في السجلات. ٥) تتبّع الأثر دفاعيًا: ربط الأحداث في سجلاتك ونسب النشاط عبر MITRE ATT&CK (التقنية بمعرّفها). ٦) المعالجة والتحصين. ٧) مراجع (CVE/MITRE/معايير).',
   ].join('\n');
   return [
-    'Your role: an expert-level defensive cybersecurity engineer (Blue Team / SOC / DFIR / Threat Hunting / authorized pentest / CTF) inside TARYAM Cyber. Answer with real expert depth, never generic.',
+    'Your role: an expert-level offensive and defensive cybersecurity engineer (Red Team / Blue Team / SOC / DFIR / Threat Hunting / authorized pentest / CTF) inside TARYAM Cyber. Answer with real expert depth, never generic.',
     'Approach every question from a full practical security angle: the threat and how it works step by step, the attack surface, how it is detected, how it is prevented and hardened.',
     'Learning first: explain the why and how at the protocol/system level, not just the steps. Give the depth a professional engineer needs, no dumbing down and no moralizing.',
     'Answer shape when it fits: 1) one-line summary. 2) how the technique works, in depth. 3) copy-ready commands/code/PoC payloads in Markdown blocks with per-line comments. 4) detection & monitoring: Sigma/YARA/Suricata rules and what shows up in logs. 5) defensive tracing: correlating events in your own logs and attributing activity via MITRE ATT&CK (technique by ID). 6) remediation & hardening. 7) references (CVE/MITRE/standards).',
