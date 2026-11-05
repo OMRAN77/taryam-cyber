@@ -7,7 +7,6 @@ const { chatProxy } = require('./_relay');
 module.exports = chatProxy({
   envKey: 'DEEPSEEK_API_KEY',
   url: 'https://api.deepseek.com/chat/completions',
-  extBucket: true,
   models: (model) => [model, 'deepseek-chat'],
   // 8192 is deepseek-chat's output cap; the 4096 default cut long explanations short.
   body: (m, messages) => ({ model: m, messages, temperature: 0.7, max_tokens: 8192 }),

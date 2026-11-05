@@ -17,10 +17,6 @@ const GUEST_LIMIT = 20;
 const LIMITS = {
   chat: { account: DAILY_LIMIT, guest: GUEST_LIMIT },
   tts: { account: 30, guest: 10 },
-  // The owner's TARYAM browser extension (asks Claude/GPT/DeepSeek once per roulette
-  // round). Its own bucket so it never eats the site's chat quota; the high cap
-  // only protects the owner's API keys from a runaway loop or a stranger.
-  ext: { account: 1000, guest: 1000 },
 };
 
 function todayStr() {
@@ -58,8 +54,10 @@ async function checkAndConsume(token, req, bucket = 'chat') {
   try {
     await store.writeSecret(path, usage);
   } catch (e) {
-    // Best-effort: if this fails, worst case is one extra free message slips
-    // through today — never block the actual AI request over a bookkeeping write.
+    // Fail closed. If the counter cannot be saved, the allowance cannot be enforced and
+    // every later request looks like the first one of the day, so a storage fault must
+    // refuse the request instead of quietly removing the limit from the owner's key.
+    return { allowed: false, reason: 'config', username, limit };
   }
   return { allowed: true, username, remaining: limit - usage.count };
 }

@@ -34,7 +34,9 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const usage = await checkAndConsume(token, req, body.client === 'taryam-ext' ? 'ext' : 'chat');
+    // Never derive the allowance from a body field: the owner's account is already
+    // exempt from every limit, so a request body has no bucket to choose.
+    const usage = await checkAndConsume(token, req, 'chat');
     if (!usage.allowed) {
       rejectUsage(res, usage);
       return;
