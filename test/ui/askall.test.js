@@ -253,6 +253,8 @@ test('cyber brain: providers get the security system prompt; merge fuses with a 
     const sys = sysOf(b);
     assert.match(sys, /أمن سيبراني|cybersecurity/i, `${b.key} got the security role`);
     assert.match(sys, /إذن|authoriz/i, `${b.key} kept the ethics guard`);
+    assert.match(sys, /ATT&CK/, `${b.key} got the deep role (MITRE)`);
+    assert.match(sys, /Sigma/i, `${b.key} got detection depth`);
   }
 
   // The synthesizer request (the one carrying the fuse prompt) asks for the security shape.
