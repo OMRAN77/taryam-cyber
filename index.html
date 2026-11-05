@@ -1392,6 +1392,19 @@ html.mobile-ui .panel-toggle{display:inline-flex}
     </div>
   </div>
 
+  <div class="settings-section" id="brainSection">
+    <div class="head" onclick="toggleSection('brainSection')">
+      <h3 data-i18n="brainSectionLabel">الدماغ الأمني</h3><span class="arrow" id="brainSectionArrow">▶</span>
+    </div>
+    <div class="content" id="brainSectionContent">
+      <label class="toggle-chip" id="chip-cyberbrain" style="display:inline-flex">
+        <input type="checkbox" id="chkCyberBrain">
+        <i class="sw" aria-hidden="true"></i><span data-i18n="brainToggle">اجعل كل المزوّدين خبراء أمن سيبراني</span>
+      </label>
+      <p class="muted small" data-i18n="brainHint" style="margin-top:10px"></p>
+    </div>
+  </div>
+
   <div class="settings-section" id="voiceSection">
     <div class="head" onclick="toggleSection('voiceSection')">
       <h3 data-i18n="voiceSectionLabel">الصوت</h3><span class="arrow" id="voiceSectionArrow">▶</span>
@@ -1517,8 +1530,8 @@ const PROVIDER_ORDER = ['deepseek','claude','openai','gemini','groq','openrouter
 
 /* ═══ i18n ═══ */
 const I18N = {
-  ar:{dir:'rtl',pageTitle:'TARYAM Cyber — أدوات الأمن السيبراني',appTitle:'تريم سايبر',offlineBanner:'أنت غير متصل بالإنترنت',backOnlineBanner:'عاد الاتصال',authTitle:'مرحبًا بك',authSubtitle:'سجّل الدخول أو أنشئ حسابًا جديدًا',authTabLogin:'دخول',authTabSignup:'حساب جديد',authUsernameLabel:'اسم المستخدم',authPasswordLabel:'كلمة المرور',authNewPasswordLabel:'كلمة مرور جديدة',authRecoveryLabel:'رمز الاسترجاع',authForgotLink:'نسيت كلمة المرور؟',authRememberMe:'تذكرني',authBackToLogin:'رجوع',authSubmitReset:'إعادة تعيين',authRecoveryModalTitle:'احتفظ برمز الاسترجاع',authRecoveryModalDesc:'هذا الرمز الوحيد لاستعادة حسابك إذا نسيت كلمة المرور.',authSubmitLogin:'دخول',authSubmitSignup:'إنشاء الحساب',guestMode:'الدخول كضيف (20 رسالة يوميًا)',guestLimitMsg:'استخدمت رسائلك المجانية! سجّل الدخول للمتابعة.',logout:'خروج',settings:'الإعدادات',download:'تنزيل',newProject:'مشروع جديد',send:'إرسال',preview:'المعاينة',code:'الكود',promptPlaceholder:'صف ما تريد... مثال: اشرح ثغرة XSS',emptyTitle:'مساحة العمل جاهزة',emptyDesc:'اكتب طلبك في المحادثة أو افتح أداة أمنية؛ الأكواد والتقارير تظهر هنا.',socTitle:'مركز العمليات الأمنية',socSub:'اختر أداة، أو اكتب طلبك تحت: فحص، تحليل، تشفير، تحقيق.',socLink:'اتصال مشفّر',socLinkPlain:'اتصال غير مشفّر',socTools:'أدوات جاهزة',socAll:'كل الأدوات',chatHint:'اكتب أمرك أو سؤالك الأمني بالأسفل، أو اختر أداة من مركز العمليات.',projKicker:'المشاريع',hintSend:'للإرسال',hintNewline:'سطر جديد',acctGuest:'ضيف',acctGuestPlan:'20 رسالة يوميًا',acctPlan:'حساب مسجّل',acctLogin:'تسجيل الدخول',acctLang:'اللغة',settingsTitle:'إعدادات الاتصال',langSectionTitle:'اللغة',apiKeysSectionTitle:'مفاتيح API',themeSectionLabel:'المظهر',voiceSectionLabel:'الصوت',aboutSectionTitle:'ℹ عن البرنامج',provider:'المزوّد الافتراضي',apiKeyLabel:'مفتاح API',modelLabel:'اسم النموذج',cancel:'إلغاء',save:'حفظ',close:'إغلاق',askAllLabel:'اسأل كل المزوّدين',mergeLabel:'دمج ذكي',building:'جارٍ العمل...',scoring:'تقييم جودة الإجابات...',synthesizing:'توليف الجواب الموحّد...',verifying:'التحقق النهائي...',merging:'دمج ذكي 3 مراحل...',mergedLabel:'الجواب الموحّد',mergeContributors:'دُمِجت إجابات: ',mergeFailedNote:'لم يستجب: ',mergeSourcesLabel:'عرض الإجابات الفردية',buildSuccess:'تم ',defaultProjectTitle:'مشروع جديد',confirmDeleteProject:'حذف "{name}"؟',install:'تثبيت التطبيق',speakBtn:'استماع',stopSpeakBtn:'إيقاف',providerError:'خطأ من المزوّد: ',quotaError:'الحصة المجانية انتهت مؤقتًا',authError:'مفتاح API غير صحيح',apiKeyMissing:'أدخل مفتاح API أولاً',acctSectionTitle:'حسابي',acctUsernameLabel:'اسم المستخدم',themeAccentLabel:'اللون الأساسي',themeTextLabel:'لون النص',themeBgLabel:'لون الخلفية',projectsListTitle:'المشاريع',secToolsTitle:'أدوات الأمن',rtpLabTitle:'مختبر RTP',casinoTitle:'كيف يكسب الكازينو',clockDialogTitle:'التقويم والوقت'},
-  en:{dir:'ltr',pageTitle:'TARYAM Cyber — Cybersecurity Tools',appTitle:'TARYAM Cyber',offlineBanner:"You're offline",backOnlineBanner:'Back online',authTitle:'Welcome',authSubtitle:'Log in or create an account',authTabLogin:'Log In',authTabSignup:'Sign Up',authUsernameLabel:'Username',authPasswordLabel:'Password',authNewPasswordLabel:'New password',authRecoveryLabel:'Recovery code',authForgotLink:'Forgot password?',authRememberMe:'Remember me',authBackToLogin:'Back',authSubmitReset:'Reset',authRecoveryModalTitle:'Save this recovery code',authRecoveryModalDesc:'The only code to recover your account if you forget your password.',authSubmitLogin:'Log In',authSubmitSignup:'Create Account',guestMode:'Continue as guest (20 messages/day)',guestLimitMsg:'Free messages used! Log in to continue.',logout:'Log out',settings:'Settings',download:'Download',newProject:'New Project',send:'Send',preview:'Preview',code:'Code',promptPlaceholder:'Describe what you want... e.g. explain XSS',emptyTitle:'Workspace ready',emptyDesc:'Ask in the chat or open a security tool; code and reports show up here.',socTitle:'Security Operations Center',socSub:'Pick a tool, or type your request below: scan, analyze, encrypt, investigate.',socLink:'Encrypted connection',socLinkPlain:'Unencrypted connection',socTools:'tools ready',socAll:'All tools',chatHint:'Type a command or a security question below, or pick a tool from the operations center.',projKicker:'Projects',hintSend:'to send',hintNewline:'new line',acctGuest:'Guest',acctGuestPlan:'20 messages a day',acctPlan:'Signed-in account',acctLogin:'Log in',acctLang:'Language',settingsTitle:'Connection Settings',langSectionTitle:'Language',apiKeysSectionTitle:'API Keys',themeSectionLabel:'Appearance',voiceSectionLabel:'Voice',aboutSectionTitle:'ℹ About',provider:'Default provider',apiKeyLabel:'API Key',modelLabel:'Model name',cancel:'Cancel',save:'Save',close:'Close',askAllLabel:'Ask all providers',mergeLabel:'Smart merge',building:'Working...',scoring:'Scoring answer quality...',synthesizing:'Synthesizing unified answer...',verifying:'Final verification...',merging:'3-stage smart merge...',mergedLabel:'Unified Answer',mergeContributors:'Merged from: ',mergeFailedNote:'Did not respond: ',mergeSourcesLabel:'Show individual answers',buildSuccess:'Done ',defaultProjectTitle:'New Project',confirmDeleteProject:'Delete "{name}"?',install:'Install App',speakBtn:'Listen',stopSpeakBtn:'Stop',providerError:'Provider error: ',quotaError:'Free quota temporarily exhausted',authError:'Invalid API key',apiKeyMissing:'Enter your API key first',acctSectionTitle:'My account',acctUsernameLabel:'Username',themeAccentLabel:'Accent color',themeTextLabel:'Text color',themeBgLabel:'Background color',projectsListTitle:'Projects',secToolsTitle:'Security Tools',rtpLabTitle:'RTP Lab',casinoTitle:'How the casino wins',clockDialogTitle:'Calendar & Time'}
+  ar:{dir:'rtl',pageTitle:'TARYAM Cyber — أدوات الأمن السيبراني',appTitle:'تريم سايبر',offlineBanner:'أنت غير متصل بالإنترنت',backOnlineBanner:'عاد الاتصال',authTitle:'مرحبًا بك',authSubtitle:'سجّل الدخول أو أنشئ حسابًا جديدًا',authTabLogin:'دخول',authTabSignup:'حساب جديد',authUsernameLabel:'اسم المستخدم',authPasswordLabel:'كلمة المرور',authNewPasswordLabel:'كلمة مرور جديدة',authRecoveryLabel:'رمز الاسترجاع',authForgotLink:'نسيت كلمة المرور؟',authRememberMe:'تذكرني',authBackToLogin:'رجوع',authSubmitReset:'إعادة تعيين',authRecoveryModalTitle:'احتفظ برمز الاسترجاع',authRecoveryModalDesc:'هذا الرمز الوحيد لاستعادة حسابك إذا نسيت كلمة المرور.',authSubmitLogin:'دخول',authSubmitSignup:'إنشاء الحساب',guestMode:'الدخول كضيف (20 رسالة يوميًا)',guestLimitMsg:'استخدمت رسائلك المجانية! سجّل الدخول للمتابعة.',logout:'خروج',settings:'الإعدادات',download:'تنزيل',newProject:'مشروع جديد',send:'إرسال',preview:'المعاينة',code:'الكود',promptPlaceholder:'صف ما تريد... مثال: اشرح ثغرة XSS',emptyTitle:'مساحة العمل جاهزة',emptyDesc:'اكتب طلبك في المحادثة أو افتح أداة أمنية؛ الأكواد والتقارير تظهر هنا.',socTitle:'مركز العمليات الأمنية',socSub:'اختر أداة، أو اكتب طلبك تحت: فحص، تحليل، تشفير، تحقيق.',socLink:'اتصال مشفّر',socLinkPlain:'اتصال غير مشفّر',socTools:'أدوات جاهزة',socAll:'كل الأدوات',brainSectionLabel:'الدماغ الأمني',brainToggle:'اجعل كل المزوّدين خبراء أمن سيبراني',brainHint:'كل مزوّد يجيب كمهندس أمن دفاعي بهيكل تقرير (تهديد · أوامر · كشف · تحصين)، وعند «دمج ذكي» تُدمج الإجابات في جواب أمني واحد أقوى. يعمل ضمن الأنظمة المصرّح بها فقط.',chatHint:'اكتب أمرك أو سؤالك الأمني بالأسفل، أو اختر أداة من مركز العمليات.',projKicker:'المشاريع',hintSend:'للإرسال',hintNewline:'سطر جديد',acctGuest:'ضيف',acctGuestPlan:'20 رسالة يوميًا',acctPlan:'حساب مسجّل',acctLogin:'تسجيل الدخول',acctLang:'اللغة',settingsTitle:'إعدادات الاتصال',langSectionTitle:'اللغة',apiKeysSectionTitle:'مفاتيح API',themeSectionLabel:'المظهر',voiceSectionLabel:'الصوت',aboutSectionTitle:'ℹ عن البرنامج',provider:'المزوّد الافتراضي',apiKeyLabel:'مفتاح API',modelLabel:'اسم النموذج',cancel:'إلغاء',save:'حفظ',close:'إغلاق',askAllLabel:'اسأل كل المزوّدين',mergeLabel:'دمج ذكي',building:'جارٍ العمل...',scoring:'تقييم جودة الإجابات...',synthesizing:'توليف الجواب الموحّد...',verifying:'التحقق النهائي...',merging:'دمج ذكي 3 مراحل...',mergedLabel:'الجواب الموحّد',mergeContributors:'دُمِجت إجابات: ',mergeFailedNote:'لم يستجب: ',mergeSourcesLabel:'عرض الإجابات الفردية',buildSuccess:'تم ',defaultProjectTitle:'مشروع جديد',confirmDeleteProject:'حذف "{name}"؟',install:'تثبيت التطبيق',speakBtn:'استماع',stopSpeakBtn:'إيقاف',providerError:'خطأ من المزوّد: ',quotaError:'الحصة المجانية انتهت مؤقتًا',authError:'مفتاح API غير صحيح',apiKeyMissing:'أدخل مفتاح API أولاً',acctSectionTitle:'حسابي',acctUsernameLabel:'اسم المستخدم',themeAccentLabel:'اللون الأساسي',themeTextLabel:'لون النص',themeBgLabel:'لون الخلفية',projectsListTitle:'المشاريع',secToolsTitle:'أدوات الأمن',rtpLabTitle:'مختبر RTP',casinoTitle:'كيف يكسب الكازينو',clockDialogTitle:'التقويم والوقت'},
+  en:{dir:'ltr',pageTitle:'TARYAM Cyber — Cybersecurity Tools',appTitle:'TARYAM Cyber',offlineBanner:"You're offline",backOnlineBanner:'Back online',authTitle:'Welcome',authSubtitle:'Log in or create an account',authTabLogin:'Log In',authTabSignup:'Sign Up',authUsernameLabel:'Username',authPasswordLabel:'Password',authNewPasswordLabel:'New password',authRecoveryLabel:'Recovery code',authForgotLink:'Forgot password?',authRememberMe:'Remember me',authBackToLogin:'Back',authSubmitReset:'Reset',authRecoveryModalTitle:'Save this recovery code',authRecoveryModalDesc:'The only code to recover your account if you forget your password.',authSubmitLogin:'Log In',authSubmitSignup:'Create Account',guestMode:'Continue as guest (20 messages/day)',guestLimitMsg:'Free messages used! Log in to continue.',logout:'Log out',settings:'Settings',download:'Download',newProject:'New Project',send:'Send',preview:'Preview',code:'Code',promptPlaceholder:'Describe what you want... e.g. explain XSS',emptyTitle:'Workspace ready',emptyDesc:'Ask in the chat or open a security tool; code and reports show up here.',socTitle:'Security Operations Center',socSub:'Pick a tool, or type your request below: scan, analyze, encrypt, investigate.',socLink:'Encrypted connection',socLinkPlain:'Unencrypted connection',socTools:'tools ready',socAll:'All tools',brainSectionLabel:'Security brain',brainToggle:'Make every provider a cybersecurity expert',brainHint:'Each provider answers as a defensive-security engineer in a report shape (threat · commands · detection · hardening), and Smart merge fuses the answers into one stronger security answer. Authorized systems only.',chatHint:'Type a command or a security question below, or pick a tool from the operations center.',projKicker:'Projects',hintSend:'to send',hintNewline:'new line',acctGuest:'Guest',acctGuestPlan:'20 messages a day',acctPlan:'Signed-in account',acctLogin:'Log in',acctLang:'Language',settingsTitle:'Connection Settings',langSectionTitle:'Language',apiKeysSectionTitle:'API Keys',themeSectionLabel:'Appearance',voiceSectionLabel:'Voice',aboutSectionTitle:'ℹ About',provider:'Default provider',apiKeyLabel:'API Key',modelLabel:'Model name',cancel:'Cancel',save:'Save',close:'Close',askAllLabel:'Ask all providers',mergeLabel:'Smart merge',building:'Working...',scoring:'Scoring answer quality...',synthesizing:'Synthesizing unified answer...',verifying:'Final verification...',merging:'3-stage smart merge...',mergedLabel:'Unified Answer',mergeContributors:'Merged from: ',mergeFailedNote:'Did not respond: ',mergeSourcesLabel:'Show individual answers',buildSuccess:'Done ',defaultProjectTitle:'New Project',confirmDeleteProject:'Delete "{name}"?',install:'Install App',speakBtn:'Listen',stopSpeakBtn:'Stop',providerError:'Provider error: ',quotaError:'Free quota temporarily exhausted',authError:'Invalid API key',apiKeyMissing:'Enter your API key first',acctSectionTitle:'My account',acctUsernameLabel:'Username',themeAccentLabel:'Accent color',themeTextLabel:'Text color',themeBgLabel:'Background color',projectsListTitle:'Projects',secToolsTitle:'Security Tools',rtpLabTitle:'RTP Lab',casinoTitle:'How the casino wins',clockDialogTitle:'Calendar & Time'}
 };
 let lang = localStorage.getItem('aiapp_lang') || 'ar';
 const t = k => I18N[lang][k] || k;
@@ -1691,11 +1704,32 @@ function throwProviderError(status, text){
   }
   throw new Error(t('providerError') + status + ' — ' + (said || (text||'').slice(0,150)));
 }
+// The security persona every provider wears inside TARYAM Cyber. It makes each model
+// answer like a senior defensive-security engineer, with a fixed report shape, while the
+// ethics guard keeps it to authorized / educational work. It can be turned off (the
+// gear → "Appearance"? no — stored flag aiapp_cyberbrain, default on) for a plain chat.
+function cyberRole(){
+  if(isAr()) return [
+    'دورك: مهندس أمن سيبراني دفاعي خبير (Blue Team / SOC / اختبار اختراق مُصرَّح به / CTF)، داخل منصة TARYAM Cyber.',
+    'تعامل مع كل سؤال من زاوية أمنية عملية: التهديد، وكيف يُكتشف، وكيف يُمنع.',
+    'هيكل الإجابة عند الاقتضاء: ١) الخلاصة في سطر. ٢) التفاصيل التقنية. ٣) أوامر/أكواد جاهزة للنسخ في كتل Markdown مع تعليقات. ٤) الكشف والمراقبة (قواعد/سجلات). ٥) المعالجة والتحصين. ٦) مراجع (CVE/MITRE ATT&CK/معايير) إن وُجدت.',
+    'كن دقيقًا تقنيًا، بلا حشو، وصحّح أي معلومة خاطئة في السؤال.'
+  ].join('\n');
+  return [
+    'Your role: a senior defensive cybersecurity engineer (Blue Team / SOC / authorized pentest / CTF), inside the TARYAM Cyber platform.',
+    'Approach every question from a practical security angle: the threat, how it is detected, how it is prevented.',
+    'Answer shape when it fits: 1) one-line summary. 2) technical detail. 3) copy-ready commands/code in Markdown blocks with comments. 4) detection & monitoring (rules/logs). 5) remediation & hardening. 6) references (CVE/MITRE ATT&CK/standards) when they exist.',
+    'Be technically precise, no filler, and silently correct any wrong premise in the question.'
+  ].join('\n');
+}
+function cyberBrainOn(){ try { return localStorage.getItem('aiapp_cyberbrain') !== '0'; } catch(e){ return true; } }
 function buildIdentity(key){
   const p = PROVIDERS[key]; if(!p) return '';
   const id = isAr() ? p.identity_ar : p.identity_en;
   const langRule = isAr() ? 'أجب دائمًا بالعربية الفصحى المبسطة.' : 'Always reply in English.';
-  return `${id}\n${langRule}\nقاعدة أخلاقية صارمة: لا تساعد في اختراق/تتبّع/مراقبة أي طرف ثالث بدون إذن صريح.`;
+  const ethics = isAr() ? 'قاعدة أخلاقية صارمة: لا تساعد في اختراق/تتبّع/مراقبة أي طرف ثالث بدون إذن صريح. ساعد فقط في الأنظمة التي يملكها المستخدم أو لديه إذن مكتوب بفحصها، وفي التعليم والدفاع وتحليل CTF.' : 'Strict ethics: never help attack/track/surveil any third party without explicit authorization. Help only with systems the user owns or is authorized in writing to test, and with education, defense and CTF analysis.';
+  const role = cyberBrainOn() ? '\n'+cyberRole() : '';
+  return `${id}\n${langRule}${role}\n${ethics}`;
 }
 // The history as providers get it: images whose data was purged are dropped, turns left
 // with neither text nor an image are skipped, and back-to-back turns of the same role are
@@ -1875,7 +1909,7 @@ function longestCommon(a, b){
 function buildSynthPrompt(question, scored){
   const top = scored.slice(0, 4);
   const answers = top.map((r, i) => `### ${isAr()?'إجابة':'Answer'} ${i+1} — ${r.label} (${isAr()?'جودة':'quality'}: ${r.score>=80?'عالية جدًا':r.score>=60?'عالية':r.score>=40?'متوسطة':'منخفضة'})\n${r.text}`).join('\n\n---\n\n');
-  if(isAr()) return `أنت "DeepSeek Synthesis Engine" — مُركِّب خبير لإجابات ذكاء اصطناعي متعددة.
+  if(isAr()) return `أنت "TARYAM Fusion Core" — مُركِّب خبير أمن سيبراني يدمج عدة إجابات ذكاء اصطناعي في إجابة أمنية واحدة خارقة.
 
 ## سؤال المستخدم
 ${question}
@@ -1884,15 +1918,15 @@ ${question}
 ${answers}
 
 ## قواعد الدمج
-1. الدقة أولاً: عند التعارض اختر الأصحّ تقنيًا.
-2. احذف التكرار: كل جملة تضيف قيمة.
-3. لا تذكر المصادر ("كلود قال" ممنوع).
-4. صحّح الأخطاء بصمت.
-5. هيكل Markdown نظيف (عناوين، قوائم، كود).
-6. كود واحد نهائي موحّد إذا وُجد.
-7. لا مقدمة — ابدأ الجواب مباشرة.
-8. أجب بنفس لغة السؤال.`;
-  return `You are "DeepSeek Synthesis Engine" — an expert merger of multiple AI answers.
+1. الدقة أولاً: عند التعارض اختر الأصحّ تقنيًا، لا الأكثر شيوعًا.
+2. ادمج ولا تختصر: اجمع كل أمر/كود/قاعدة كشف صحيحة من كل الإجابات في جواب واحد أقوى منها جميعًا، واحذف التكرار فقط.
+3. حافظ على الهيكل الأمني إن ناسب السؤال: خلاصة سطر · تفاصيل تقنية · أوامر/أكواد في كتل مع تعليقات · الكشف والمراقبة · المعالجة والتحصين · مراجع (CVE/MITRE ATT&CK).
+4. لا تذكر المصادر ("كلود قال" ممنوع).
+5. صحّح الأخطاء بصمت، واحذف أي جملة تعتذر أو تتهرّب.
+6. كود واحد نهائي موحّد وجاهز للتشغيل إذا وُجد.
+7. التزم بالأمن الدفاعي والأنظمة المصرّح بها فقط.
+8. لا مقدمة — ابدأ الجواب مباشرة، بنفس لغة السؤال.`;
+  return `You are "TARYAM Fusion Core" — an expert cybersecurity merger that fuses several AI answers into one superior security answer.
 
 ## User's Question
 ${question}
@@ -1901,14 +1935,14 @@ ${question}
 ${answers}
 
 ## Merging Rules
-1. Accuracy first: on conflict, choose the technically correct answer.
-2. Remove redundancy: every sentence adds value.
-3. Never mention sources.
-4. Fix errors silently.
-5. Clean Markdown structure.
-6. One unified final code version if any.
-7. No preamble — start directly.
-8. Same language as question.`;
+1. Accuracy first: on conflict, choose the technically correct answer, not the most common.
+2. Fuse, don't trim: combine every correct command/code/detection rule from all answers into one answer stronger than any of them; drop only true duplicates.
+3. Keep the security shape when it fits: one-line summary · technical detail · commands/code in commented blocks · detection & monitoring · remediation & hardening · references (CVE/MITRE ATT&CK).
+4. Never mention sources.
+5. Fix errors silently; delete any sentence that apologizes or dodges.
+6. One unified, runnable final code version if any.
+7. Stay within defensive security and authorized systems only.
+8. No preamble — start directly, in the question's language.`;
 }
 async function consensusMerge(question, good, failed, apiMsgs){
   if(!good.length) return {content: isAr()?'لم يستجب أي مزوّد.':'No provider responded.',sources:[],contributors:[],failed};
@@ -1929,7 +1963,7 @@ async function consensusMerge(question, good, failed, apiMsgs){
   let finalDraft = draft, verifierUsed = null;
   if(verifierKey && scored.length >= 3){
     try {
-      const vp = isAr() ? `راجع الجواب التالي لأخطاء تقنية أو معلومات ناقصة. أعد الجواب مصححًا بلا مقدمة.\n\n## السؤال\n${question}\n\n## الجواب\n${draft}` : `Review for technical errors or missing info. Return corrected verbatim, no preamble.\n\n## Q\n${question}\n\n## A\n${draft}`;
+      const vp = isAr() ? `بصفتك كبير مدقّقي الأمن السيبراني، راجع الجواب التالي: صحّح أي أمر أو كود أو معلومة خاطئة، أضف أي خطوة كشف أو تحصين ناقصة ومهمة، واحذف أي حشو أو تهرّب. حافظ على نفس اللغة والهيكل. أعد الجواب النهائي فقط بلا مقدمة.\n\n## السؤال\n${question}\n\n## الجواب\n${draft}` : `As a lead cybersecurity reviewer, review the answer below: correct any wrong command/code/fact, add any missing important detection or hardening step, and delete any filler or dodging. Keep the same language and structure. Return only the final answer, no preamble.\n\n## Q\n${question}\n\n## A\n${draft}`;
       const v = await callProvider(verifierKey, [{role:'user', content:vp}], {timeoutMs: askAllTimeoutMs()});
       if(v && v.trim().length > draft.length * 0.5){ finalDraft = v; verifierUsed = verifierKey; }
     } catch(e){}
@@ -2371,6 +2405,7 @@ $('#chkMerge').checked = localStorage.getItem('aiapp_merge') !== 'false';
   sync();
   if(window.ResizeObserver) new ResizeObserver(sync).observe(dock);
 })();
+$('#chkCyberBrain').addEventListener('change', e => $('#chip-cyberbrain').classList.toggle('on', e.target.checked));
 function updateChipStates(){
   $('#chip-askall').classList.toggle('on', $('#chkAskAll').checked);
   $('#chip-merge').classList.toggle('on', $('#chkMerge').checked);
@@ -2398,7 +2433,7 @@ window.toggleSection = function(id){
   const c = document.getElementById(id+'Content'); const a = document.getElementById(id+'Arrow');
   if(!c) return;
   const open = c.classList.contains('open');
-  ['langSection','accountSection','apiKeysSection','themeSection','voiceSection','aboutSection'].forEach(s => {
+  ['langSection','accountSection','apiKeysSection','themeSection','brainSection','voiceSection','aboutSection'].forEach(s => {
     const cc = document.getElementById(s+'Content'); const aa = document.getElementById(s+'Arrow');
     if(cc) cc.classList.remove('open'); if(aa) aa.classList.remove('open');
   });
@@ -2498,7 +2533,7 @@ function buildProviderCards(){
 }
 
 $('#btnSettings').onclick = () => {
-  ['langSection','accountSection','apiKeysSection','themeSection','voiceSection','aboutSection'].forEach(s => { const c = document.getElementById(s+'Content'); if(c) c.classList.remove('open'); });
+  ['langSection','accountSection','apiKeysSection','themeSection','brainSection','voiceSection','aboutSection'].forEach(s => { const c = document.getElementById(s+'Content'); if(c) c.classList.remove('open'); });
   $('#provider').innerHTML = PROVIDER_ORDER.map(k => `<option value="${k}">${PROVIDERS[k].name}${k==='deepseek'?' ':''}</option>`).join('');
   $('#provider').value = localStorage.getItem('aiapp_provider') || 'deepseek';
   buildProviderCards();
@@ -2506,6 +2541,8 @@ $('#btnSettings').onclick = () => {
   $('#themeAccent').value = th.accent; $('#themeText').value = th.text; $('#themeBg').value = th.bg;
   $('#voiceGenderPref').value = localStorage.getItem('aiapp_voice_gender') || '';
   $('#chkCloudVoice').checked = localStorage.getItem('aiapp_cloud_voice') === 'true';
+  $('#chkCyberBrain').checked = cyberBrainOn();
+  $('#chip-cyberbrain').classList.toggle('on', $('#chkCyberBrain').checked);
   $('#cloudVoicePick').value = localStorage.getItem('aiapp_cloud_voice_name') || 'onyx';
   $('#acctUsername').value = authGet('aiapp_username') || '';
   openDialogSafe($('#settingsDialog'));
@@ -2524,6 +2561,7 @@ $('#btnSaveSettings').onclick = () => {
   localStorage.setItem('aiapp_theme', JSON.stringify(th)); applyTheme();
   localStorage.setItem('aiapp_voice_gender', $('#voiceGenderPref').value);
   localStorage.setItem('aiapp_cloud_voice', $('#chkCloudVoice').checked?'true':'false');
+  localStorage.setItem('aiapp_cyberbrain', $('#chkCyberBrain').checked ? '1' : '0');
   localStorage.setItem('aiapp_cloud_voice_name', $('#cloudVoicePick').value);
   closeDialogSafe($('#settingsDialog')); renderMessages(true);
   toast('تم الحفظ ✓', 'success');

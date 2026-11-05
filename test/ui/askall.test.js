@@ -222,3 +222,71 @@ test('failure bubbles offer no "continue with this provider"; tapping the chosen
   await sendMore(page, 'سؤال 2');
   assert.ok(round.reqs.filter((r) => r.round === 2).length > 1, 'back to asking every provider');
 });
+
+// The cyber brain: every provider receives the defensive-security system prompt, and
+// Smart merge sends the synthesizer a security-structured fuse prompt.
+test('cyber brain: providers get the security system prompt; merge fuses with a security structure', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const { page } = await open(browser, server, { merge: true });
+
+  const bodies = [];
+  await page.route('**/api/*', (route) => {
+    const key = new URL(route.request().url()).pathname.split('/').pop();
+    if (key === 'auth') return json(route, 200, {});
+    bodies.push({ key, body: JSON.parse(route.request().postData() || '{}') });
+    return answer(route, key);
+  });
+
+  await send(page, server, 'كيف أأمّن خادم SSH؟');
+
+  // Every provider call carries a system message, and it names the defensive-security role.
+  const sysOf = (b) => {
+    if (b.key === 'gemini') return b.body.systemInstruction ? JSON.stringify(b.body.systemInstruction) : '';
+    if (b.key === 'claude') return b.body.system || '';
+    return (b.body.messages || []).filter((m) => m.role === 'system').map((m) => m.content).join('\n');
+  };
+  const providerCalls = bodies.filter((b) => ['deepseek', 'openai', 'claude', 'gemini', 'groq'].includes(b.key));
+  assert.ok(providerCalls.length >= 2, 'several providers were called');
+  for (const b of providerCalls) {
+    const sys = sysOf(b);
+    assert.match(sys, /أمن سيبراني|cybersecurity/i, `${b.key} got the security role`);
+    assert.match(sys, /إذن|authoriz/i, `${b.key} kept the ethics guard`);
+  }
+
+  // The synthesizer request (the one carrying the fuse prompt) asks for the security shape.
+  const fuse = bodies.map((b) => (b.body.messages || []).map((m) => m.content).join('\n')).find((t2) => /Fusion Core|قواعد الدمج|Merging Rules/.test(t2));
+  assert.ok(fuse, 'a fuse prompt was sent');
+  assert.match(fuse, /الكشف|detection/i, 'the fuse prompt keeps the detection section');
+
+  // Turning the brain off drops the role but keeps the ethics guard.
+  await page.evaluate(() => localStorage.setItem('aiapp_cyberbrain', '0'));
+  bodies.length = 0;
+  await sendMore(page, 'سؤال عادي');
+  const plain = bodies.filter((b) => b.key !== 'auth');
+  assert.ok(plain.length >= 1);
+  for (const b of plain) {
+    const sys = sysOf(b);
+    assert.doesNotMatch(sys, /مهندس أمن سيبراني دفاعي|defensive cybersecurity engineer/i, `${b.key} dropped the role when off`);
+    assert.match(sys, /إذن|authoriz/i, `${b.key} kept the ethics guard when off`);
+  }
+});
+
+test('cyber brain switch in Settings shows its state and saves it', async (t) => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  t.after(async () => { await browser.close(); await server.close(); });
+  const page = await browser.newPage();
+  page.setDefaultTimeout(10000);
+  await page.goto(server.url + '/');
+  await page.click('#btnGuestMode');
+  await page.click('#btnSettings');
+  await page.click('#brainSection .head');
+  assert.ok(await page.isChecked('#chkCyberBrain'), 'on by default');
+  assert.match(await page.getAttribute('#chip-cyberbrain', 'class'), /\bon\b/, 'the switch shows on');
+  await page.click('#chip-cyberbrain');
+  assert.doesNotMatch(await page.getAttribute('#chip-cyberbrain', 'class'), /\bon\b/, 'the switch shows off');
+  await page.click('#btnSaveSettings');
+  assert.strictEqual(await page.evaluate(() => localStorage.getItem('aiapp_cyberbrain')), '0');
+});
