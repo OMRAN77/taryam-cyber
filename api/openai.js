@@ -7,7 +7,6 @@ const { chatProxy, discoverModel, rejectsTemperature } = require('./_relay');
 module.exports = chatProxy({
   envKey: 'OPENAI_API_KEY',
   url: 'https://api.openai.com/v1/chat/completions',
-  extBucket: true,
   models: (model) => [model, 'gpt-5.6', 'gpt-5.6-luna', 'gpt-4.1-mini', 'gpt-4o-mini'],
   // Reasoning models (o-series, gpt-5 and later) reject any temperature but the default.
   body: (m, messages) => ({ model: m, messages, ...(rejectsTemperature(m) ? {} : { temperature: 0.7 }) }),

@@ -157,7 +157,6 @@ function parseBody(req) {
 //   models(model)   candidate ids for the requested model (first = requested)
 //   body(m, msgs)   upstream JSON body for model m
 //   stream          whether this provider may stream SSE back (default true)
-//   extBucket       count requests from the TARYAM extension in their own quota bucket
 //   prepare(model)  optional: map a requested id to another (e.g. retired -> current)
 //   discover(key)   optional: resolves a live model id when every candidate is gone
 function chatProxy(cfg) {
@@ -179,7 +178,10 @@ function chatProxy(cfg) {
       if (cfg.prepare) model = cfg.prepare(model);
       if (!messages) { res.status(400).json({ error: 'Missing messages' }); return; }
 
-      const bucket = cfg.extBucket && body.client === 'taryam-ext' ? 'ext' : 'chat';
+      // The allowance must not depend on anything the caller can type. The owner's
+      // account is already exempt from every limit (_quota.js isOwner), so a request
+      // body has no separate bucket to select.
+      const bucket = 'chat';
       const usage = await checkAndConsume(token, req, bucket);
       if (!usage.allowed) { rejectUsage(res, usage); return; }
 

@@ -207,18 +207,44 @@ test('TTS only forwards known voices', async () => {
   } finally { restore(); }
 });
 
-test('the TARYAM extension has its own bucket: it does not use up the 20 chat messages', async () => {
+test('a body field cannot buy a higher allowance: client=taryam-ext is just the chat bucket', async () => {
+  // Regression: the bucket used to be chosen from body.client, so an unauthenticated
+  // caller sending "taryam-ext" got the 1000/day extension bucket instead of 20/day.
   const { upstream, restore } = setup();
   try {
-    for (const name of ['claude', 'openai', 'deepseek']) {
-      const h = require('../../api/' + name);
-      for (let i = 0; i < 25; i++) assert.strictEqual((await chat(h, '198.51.100.40', { client: 'taryam-ext' })).status, 200, name + ' #' + i);
+    const names = ['claude', 'openai', 'deepseek'];
+    for (let n = 0; n < names.length; n++) {
+      const h = require('../../api/' + names[n]);
+      const ip = '198.51.100.7' + n;   // one address per provider, so each starts clean
+      for (let i = 0; i < 20; i++) {
+        assert.strictEqual((await chat(h, ip, { client: 'taryam-ext' })).status, 200, names[n] + ' #' + i);
+      }
+      assert.strictEqual((await chat(h, ip, { client: 'taryam-ext' })).status, 402,
+        names[n] + ': the body field earns nothing past the guest limit');
     }
-    // 75 extension calls later, the same IP still has its full chat quota.
+    assert.strictEqual(upstream.calls, 60);
+  } finally { restore(); }
+});
+
+test('a counter that cannot be saved denies the request instead of granting unlimited free ones', async () => {
+  // Regression: the write was wrapped in a swallow-all try/catch, so a storage fault
+  // left the count at zero and every request looked like the first of the day.
+  const blob = createBlobFake();
+  const inner = blob.fetchImpl(async () => new Response('{"choices":[{"message":{"content":"hi"}}]}', { status: 200 }));
+  const restore = installFetch(async (url, opts = {}) => {
+    const u = new URL(String(url));
+    if (u.hostname === 'blob.vercel-storage.com' && String(opts.method || 'GET').toUpperCase() === 'PUT') {
+      return new Response('{"error":"storage down"}', { status: 500 });
+    }
+    return inner(url, opts);
+  });
+  try {
+    loadApi('_usage', { AUTH_SECRET: STRONG_SECRET, BLOB_READ_WRITE_TOKEN: blob.token, ...PROVIDER_KEYS });
+    require('../../api/_store').config.retryDelayMs = 0;
     const ds = require('../../api/deepseek');
-    for (let i = 0; i < 20; i++) assert.strictEqual((await chat(ds, '198.51.100.40')).status, 200);
-    assert.strictEqual((await chat(ds, '198.51.100.40')).status, 402);
-    assert.strictEqual(upstream.calls, 95);
+    const r = await chat(ds, '198.51.100.60');
+    assert.strictEqual(r.status, 503, 'an unrecordable allowance is refused, not granted');
+    assert.match(String(r.body && r.body.error), /غير مهيأ/, 'reported as a configuration problem');
   } finally { restore(); }
 });
 
